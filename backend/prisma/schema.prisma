@@ -1,0 +1,105 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  active
+  completed
+  abandoned
+}
+
+enum Phase {
+  plan
+  build
+  validate
+  wrap
+}
+
+model Session {
+  id              String        @id @default(uuid()) @db.Uuid
+  prompt          String
+  rubricVersion   String        @map("rubric_version")
+  projectPath     String        @map("project_path")
+  startedAt       DateTime      @default(now()) @map("started_at")
+  endedAt         DateTime?     @map("ended_at")
+  status          SessionStatus @default(active)
+  overallScore    Decimal?      @map("overall_score") @db.Decimal(3, 2)
+  overallFeedback String?       @map("overall_feedback")
+
+  snapshots         Snapshot[]
+  phaseEvaluations  PhaseEvaluation[]
+  aiInteractions    AIInteraction[]
+  finalArtifacts    FinalArtifacts?
+
+  @@map("sessions")
+}
+
+model Snapshot {
+  id              String   @id @default(uuid()) @db.Uuid
+  sessionId       String   @map("session_id") @db.Uuid
+  takenAt         DateTime @default(now()) @map("taken_at")
+  elapsedMinutes  Int      @map("elapsed_minutes")
+  inferredPhase   String?  @map("inferred_phase")
+  artifacts       Json
+  judgeNote       Json?    @map("judge_note")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("snapshots")
+}
+
+model PhaseEvaluation {
+  id                  String   @id @default(uuid()) @db.Uuid
+  sessionId           String   @map("session_id") @db.Uuid
+  phase               Phase
+  score               Decimal  @db.Decimal(3, 2)
+  signalResults       Json     @map("signal_results")
+  feedbackText        String   @map("feedback_text")
+  topActionableItems  Json     @map("top_actionable_items")
+  evaluatedAt         DateTime @default(now()) @map("evaluated_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, phase])
+  @@index([signalResults], type: Gin)
+  @@map("phase_evaluations")
+}
+
+model AIInteraction {
+  id                      String   @id @default(uuid()) @db.Uuid
+  sessionId               String   @map("session_id") @db.Uuid
+  occurredAt              DateTime @map("occurred_at")
+  elapsedMinutes          Int      @map("elapsed_minutes")
+  inferredPhase           String?  @map("inferred_phase")
+  prompt                  String
+  response                String
+  modelUsed               String   @map("model_used")
+  tokensIn                Int      @map("tokens_in")
+  tokensOut               Int      @map("tokens_out")
+  artifactStateAtPrompt   Json     @map("artifact_state_at_prompt")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([inferredPhase])
+  @@map("ai_interactions")
+}
+
+model FinalArtifacts {
+  sessionId     String  @id @map("session_id") @db.Uuid
+  planMd        String? @map("plan_md")
+  gitLog        String? @map("git_log")
+  aiPromptsLog  String? @map("ai_prompts_log")
+  reflection    String?
+  codeFiles     Json    @map("code_files")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("final_artifacts")
+}

@@ -8,17 +8,6 @@ This document captures the *why* behind key architectural choices. For the *what
 
 ### Decision: NestJS (Node.js, TypeScript) for backend
 
-**Why:**
-- experience with Node.js/TypeScript, not Python.
-- NestJS provides built-in DI, modules, and decorators — easier to scale than plain Express as the codebase grows.
-- TypeScript end-to-end (frontend + backend) reduces context switching.
-
-**Alternatives rejected:**
-- Plain Express: too low-level, more boilerplate as features grow.
-- Python + FastAPI: would require learning new stack.
-
----
-
 ### Decision: PostgreSQL with JSONB columns for storage
 
 **Why:**
@@ -122,16 +111,20 @@ End of session
 ```
 
 **Limit:**
-- Don't go further into multi-agent within a phase (e.g., separate "scope agent" inside planning). The rubric is small enough that one agent per phase handles it cleanly. More agents = more coordination overhead = diminishing returns.
+- Not going further into multi-agent within a phase (e.g., separate "scope agent" inside planning). The rubric is small enough that one agent per phase handles it cleanly. More agents = more coordination overhead = diminishing returns.
 
 ---
 
-### Decision: HTTP/Promise.all for agent communication, not a queue
+### Decision: In-process Promise.all orchestration, not a queue
 
 **Why:**
 - Single user, bounded workload, known set of agents — none of the conditions that make queues valuable.
 - Backend orchestrator fires LLM calls in parallel via `Promise.all`, awaits all, then runs synthesizer.
 - Adding a queue (Redis, SQS, BullMQ) would be over-engineering at this scale.
+
+**Agent <-> orchestrator transport:**
+- The phase agents and synthesizer are NestJS singletons in the same Node process. `await agent.evaluate(...)` is an in-process method call; the returned `PhaseEvaluationResult` is an object reference in the same V8 heap, not an HTTP response.
+- The only HTTP on the evaluation path is each agent's outbound call to the Anthropic API. Inputs (artifacts, tagged JSONL entries, rubric) are gathered once by the orchestrator and passed to each agent by reference — no copying, no serialization.
 
 **When this would change:**
 - Multiple users with backpressure needs.
