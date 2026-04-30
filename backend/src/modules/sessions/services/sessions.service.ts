@@ -1,28 +1,64 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
 import { SessionsRepository } from '../repositories/sessions.repository';
-import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 import { CreateSessionDto } from '../models/create-session.dto';
+import { EndSessionDto } from '../models/end-session.dto';
+import { EvaluationsService } from '../../evaluations/services/evaluations.service';
+
+export interface EndSessionResult {
+  session: Session;
+  evaluations: PhaseEvaluation[];
+  evalError: string | null;
+}
 
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(
     private readonly sessionsRepository: SessionsRepository,
+    private readonly config: ConfigService,
+    @Inject(forwardRef(() => EvaluationsService))
     private readonly evaluationsService: EvaluationsService,
   ) {}
 
-  start(_dto: CreateSessionDto) {
-    throw new Error('Not implemented');
+  start(dto: CreateSessionDto) {
+    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
+    return this.sessionsRepository.create({ prompt: dto.prompt, rubricVersion });
   }
 
-  end(_sessionId: string) {
-    throw new Error('Not implemented');
-  }
-
-  get(_sessionId: string) {
-    throw new Error('Not implemented');
+  async get(sessionId: string) {
+    const session = await this.sessionsRepository.findById(sessionId);
+    if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+    return session;
   }
 
   list() {
-    throw new Error('Not implemented');
+    return this.sessionsRepository.findAll();
+  }
+
+  async end(sessionId: string, dto: EndSessionDto): Promise<EndSessionResult> {
+    const existing = await this.sessionsRepository.findById(sessionId);
+    if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
+    const status = dto.status ?? SessionStatus.completed;
+    const ended = await this.sessionsRepository.markEnded(sessionId, status);
+
+    // Only auto-evaluate when the session completes naturally. Cancelled
+    // (abandoned) sessions skip evaluation entirely.
+    if (status !== SessionStatus.completed) {
+      return { session: ended, evaluations: [], evalError: null };
+    }
+
+    try {
+      const evaluations = await this.evaluationsService.runForSession(sessionId);
+      return { session: ended, evaluations, evalError: null };
+    } catch (err) {
+      const message = (err as Error).message ?? String(err);
+      this.logger.error(`Evaluation failed for ${sessionId}: ${message}`);
+      // Session stays `completed` — losing the evaluation shouldn't hold the
+      // session hostage. Frontend will surface the error and offer a retry.
+      return { session: ended, evaluations: [], evalError: message };
+    }
   }
 }

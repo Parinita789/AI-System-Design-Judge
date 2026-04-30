@@ -11,6 +11,11 @@ export class SnapshotsController {
     return this.snapshotsService.capture(sessionId, dto);
   }
 
+  @Get('latest')
+  latest(@Param('sessionId') sessionId: string) {
+    return this.snapshotsService.latest(sessionId);
+  }
+
   @Get()
   list(@Param('sessionId') sessionId: string) {
     return this.snapshotsService.list(sessionId);

@@ -1,20 +1,33 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { SnapshotsRepository } from '../repositories/snapshots.repository';
-import { ArtifactsService } from '../../artifacts/services/artifacts.service';
 import { CaptureSnapshotDto } from '../models/capture-snapshot.dto';
+import { SnapshotArtifacts } from '../models/snapshot.types';
 
 @Injectable()
 export class SnapshotsService {
-  constructor(
-    private readonly snapshotsRepository: SnapshotsRepository,
-    private readonly artifactsService: ArtifactsService,
-  ) {}
+  constructor(private readonly snapshotsRepository: SnapshotsRepository) {}
 
-  capture(_sessionId: string, _dto: CaptureSnapshotDto) {
-    throw new Error('Not implemented');
+  capture(sessionId: string, dto: CaptureSnapshotDto) {
+    const artifacts: SnapshotArtifacts = {
+      planMd: dto.artifacts?.planMd ?? null,
+      codeFiles: {},
+      gitLog: null,
+      newJsonlEntries: [],
+    };
+    return this.snapshotsRepository.create({
+      sessionId,
+      elapsedMinutes: dto.elapsedMinutes,
+      inferredPhase: null,
+      artifacts: artifacts as unknown as Prisma.InputJsonValue,
+    });
   }
 
-  list(_sessionId: string) {
-    throw new Error('Not implemented');
+  list(sessionId: string) {
+    return this.snapshotsRepository.findBySession(sessionId);
+  }
+
+  latest(sessionId: string) {
+    return this.snapshotsRepository.findLatest(sessionId);
   }
 }

@@ -1,21 +1,32 @@
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 
 @Injectable()
 export class SnapshotsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(_data: {
+  create(data: {
     sessionId: string;
     elapsedMinutes: number;
     inferredPhase: string | null;
-    artifacts: unknown;
+    artifacts: Prisma.InputJsonValue;
   }) {
-    throw new Error('Not implemented');
+    return this.prisma.snapshot.create({ data });
   }
 
-  findBySession(_sessionId: string) {
-    throw new Error('Not implemented');
+  findBySession(sessionId: string) {
+    return this.prisma.snapshot.findMany({
+      where: { sessionId },
+      orderBy: { takenAt: 'desc' },
+    });
+  }
+
+  findLatest(sessionId: string) {
+    return this.prisma.snapshot.findFirst({
+      where: { sessionId },
+      orderBy: { takenAt: 'desc' },
+    });
   }
 
   latestJsonlOffset(_sessionId: string): Promise<number> {

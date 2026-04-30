@@ -1,24 +1,28 @@
 import { Injectable } from '@nestjs/common';
+import { SessionStatus } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 
 @Injectable()
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(_data: { prompt: string; projectPath: string; rubricVersion: string }) {
-    throw new Error('Not implemented');
+  create(data: { prompt: string; rubricVersion: string }) {
+    return this.prisma.session.create({ data });
   }
 
-  findById(_id: string) {
-    throw new Error('Not implemented');
+  findById(id: string) {
+    return this.prisma.session.findUnique({ where: { id } });
   }
 
   findAll() {
-    throw new Error('Not implemented');
+    return this.prisma.session.findMany({ orderBy: { startedAt: 'desc' } });
   }
 
-  markEnded(_id: string) {
-    throw new Error('Not implemented');
+  markEnded(id: string, status: SessionStatus) {
+    return this.prisma.session.update({
+      where: { id },
+      data: { status, endedAt: new Date() },
+    });
   }
 
   updateOverall(_id: string, _score: number, _feedback: string) {

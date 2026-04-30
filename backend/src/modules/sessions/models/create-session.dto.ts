@@ -4,8 +4,4 @@ export class CreateSessionDto {
   @IsString()
   @MinLength(1)
   prompt!: string;
-
-  @IsString()
-  @MinLength(1)
-  projectPath!: string;
 }
