@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { OrchestratorService } from './orchestrator.service';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
 
@@ -6,19 +6,22 @@ import { EvaluationsRepository } from '../repositories/evaluations.repository';
 export class EvaluationsService {
   constructor(
     private readonly orchestrator: OrchestratorService,
-    private readonly evaluationsRepository: EvaluationsRepository,
+    private readonly evalsRepo: EvaluationsRepository,
   ) {}
 
-  // Kicks off the async evaluation pipeline; returns the in-progress evaluation id.
-  enqueueForSession(_sessionId: string): Promise<{ evaluationId: string }> {
-    throw new Error('Not implemented');
+  // Run the evaluator synchronously. Currently scoped to the plan phase only;
+  // other phase agents are still stubbed.
+  runForSession(sessionId: string) {
+    return this.orchestrator.run(sessionId, ['plan']);
   }
 
-  getStatus(_evaluationId: string) {
-    throw new Error('Not implemented');
+  getBySession(sessionId: string) {
+    return this.evalsRepo.findBySession(sessionId);
   }
 
-  getResult(_evaluationId: string) {
-    throw new Error('Not implemented');
+  async getById(evaluationId: string) {
+    const row = await this.evalsRepo.findById(evaluationId);
+    if (!row) throw new NotFoundException(`Evaluation ${evaluationId} not found`);
+    return row;
   }
 }

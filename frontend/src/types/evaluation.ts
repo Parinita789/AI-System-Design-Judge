@@ -5,24 +5,14 @@ export interface SignalResult {
   evidence: string;
 }
 
+// Matches the Prisma `PhaseEvaluation` row returned by the backend.
 export interface PhaseEvaluation {
+  id: string;
+  sessionId: string;
   phase: Phase;
   score: number;
   signalResults: Record<string, SignalResult>;
   feedbackText: string;
   topActionableItems: string[];
-}
-
-export type EvaluationStatus =
-  | { state: 'pending' }
-  | { state: 'running'; completedPhases: Phase[] }
-  | { state: 'complete' }
-  | { state: 'failed'; error: string };
-
-export interface EvaluationResult {
-  id: string;
-  sessionId: string;
-  phaseEvaluations: PhaseEvaluation[];
-  overallScore: number;
-  overallFeedback: string;
+  evaluatedAt: string;
 }
