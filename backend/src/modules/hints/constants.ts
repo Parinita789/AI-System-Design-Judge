@@ -1,0 +1,2 @@
+export const HINT_REPLY_MAX_TOKENS = 1024;
+export const HINT_MESSAGE_MAX_CHARS = 2000;

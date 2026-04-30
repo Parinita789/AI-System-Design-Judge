@@ -8,6 +8,7 @@ import { EvaluationsModule } from './modules/evaluations/evaluations.module';
 import { LlmModule } from './modules/llm/llm.module';
 import { PhaseTaggerModule } from './modules/phase-tagger/phase-tagger.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { HintsModule } from './modules/hints/hints.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     EvaluationsModule,
     SessionsModule,
     DashboardModule,
+    HintsModule,
   ],
 })
 export class AppModule {}
