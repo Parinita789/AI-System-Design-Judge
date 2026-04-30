@@ -8,17 +8,19 @@ import { PhaseEvaluationResult } from '../models/evaluation.types';
 export class EvaluationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  upsertPhaseEvaluation(sessionId: string, phase: Phase, result: PhaseEvaluationResult) {
-    const data = {
-      score: result.score,
-      signalResults: result.signalResults as unknown as Prisma.InputJsonValue,
-      feedbackText: result.feedbackText,
-      topActionableItems: result.topActionableItems as unknown as Prisma.InputJsonValue,
-    };
-    return this.prisma.phaseEvaluation.upsert({
-      where: { sessionId_phase: { sessionId, phase } },
-      create: { sessionId, phase, ...data },
-      update: { ...data, evaluatedAt: new Date() },
+  // Each call inserts a new row. Multiple evaluations of the same
+  // (sessionId, phase) are preserved as history (no @@unique constraint
+  // any more). Use `findBySession` to read them newest-first.
+  createPhaseEvaluation(sessionId: string, phase: Phase, result: PhaseEvaluationResult) {
+    return this.prisma.phaseEvaluation.create({
+      data: {
+        sessionId,
+        phase,
+        score: result.score,
+        signalResults: result.signalResults as unknown as Prisma.InputJsonValue,
+        feedbackText: result.feedbackText,
+        topActionableItems: result.topActionableItems as unknown as Prisma.InputJsonValue,
+      },
     });
   }
 

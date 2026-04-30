@@ -16,14 +16,6 @@ import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
-const RESULT_FILL: Record<ResultKind, string> = {
-  hit: '#10b981', // emerald-500
-  partial: '#f59e0b', // amber-500
-  miss: '#9ca3af', // gray-400
-  cannot_evaluate: '#d1d5db', // gray-300
-  not_evaluated: '#a78bfa', // violet-400
-};
-
 const RESULT_LABEL: Record<ResultKind, string> = {
   hit: 'Hit',
   partial: 'Partial',
@@ -77,12 +69,18 @@ function tierStats(
       cannot_evaluate: 0,
       not_evaluated: 0,
       earned: 0,
-      max: tierSignals.length * weightValues[tier],
+      max: 0,
     };
     for (const sig of tierSignals) {
       const kind = classifyResult(sig, results);
       stats[kind]++;
       stats.earned += pointsFor(kind, weightValues[tier]);
+      // Skipped signals (LLM said "not applicable to this question") don't
+      // contribute to max — they're excluded from the % so they don't
+      // unfairly drag the score down.
+      if (kind !== 'cannot_evaluate') {
+        stats.max += weightValues[tier];
+      }
     }
     return stats;
   });
@@ -125,39 +123,87 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   const badMaxPenalty = badTiers.reduce((acc, t) => acc + t.max, 0);
   const badPenalty = badTiers.reduce((acc, t) => acc + t.earned, 0);
 
-  // Pie data — overall judgment distribution across ALL signals
+  const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
+  const badPartial = badTiers.reduce((acc, t) => acc + t.partial, 0);
+  const totalPartial = goodPartial + badPartial;
+
+  // Pie data — buckets aligned with the bar chart's color rules so the
+  // two charts tell a consistent story:
+  //   green  = good signal credited (HIT/PARTIAL, weight ≠ medium)
+  //   red    = bad signal fired     (HIT/PARTIAL, weight ≠ medium)
+  //   yellow = medium-weight fired  (HIT/PARTIAL, any polarity)
+  //   gray   = not credited / not fired (MISS / N/A / not-evaluated)
   const pieData = useMemo(() => {
-    const counts: Record<ResultKind, number> = {
-      hit: 0,
-      partial: 0,
-      miss: 0,
-      cannot_evaluate: 0,
-      not_evaluated: 0,
+    const buckets = {
+      goodCredited: 0,
+      badFired: 0,
+      mediumFired: 0,
+      notCredited: 0,
     };
     for (const sig of rubric.signals) {
-      counts[classifyResult(sig, evaluation.signalResults)]++;
+      const kind = classifyResult(sig, evaluation.signalResults);
+      const fired = kind === 'hit' || kind === 'partial';
+      if (!fired) {
+        buckets.notCredited++;
+        continue;
+      }
+      if (sig.weight === 'medium') buckets.mediumFired++;
+      else if (sig.polarity === 'good') buckets.goodCredited++;
+      else buckets.badFired++;
     }
-    return (Object.keys(counts) as ResultKind[])
-      .map((k) => ({ name: RESULT_LABEL[k], value: counts[k], fill: RESULT_FILL[k] }))
-      .filter((d) => d.value > 0);
+    return [
+      { name: 'Good credited', value: buckets.goodCredited, fill: '#16a34a' },
+      { name: 'Bad fired', value: buckets.badFired, fill: '#dc2626' },
+      { name: 'Medium-weight fired', value: buckets.mediumFired, fill: '#eab308' },
+      { name: 'Not credited / missed', value: buckets.notCredited, fill: '#d1d5db' },
+    ].filter((d) => d.value > 0);
   }, [rubric.signals, evaluation.signalResults]);
 
-  const goodBarData = goodTiers.map((t) => ({
-    tier: t.tier.toUpperCase(),
-    Hit: t.hit,
-    Partial: t.partial,
-    Miss: t.miss,
-    'N/A': t.cannot_evaluate,
-    'Not Evaluated': t.not_evaluated,
-  }));
-  const badBarData = badTiers.map((t) => ({
-    tier: t.tier.toUpperCase(),
-    Hit: t.hit,
-    Partial: t.partial,
-    Miss: t.miss,
-    'N/A': t.cannot_evaluate,
-    'Not Evaluated': t.not_evaluated,
-  }));
+  // Per-signal grouped bar data: ALL rubric criteria (good + bad).
+  // Color rules for the "earned" bar (HIT and PARTIAL share a color —
+  // bar height already conveys partial vs full credit):
+  //   - medium-weight signal, judged HIT or PARTIAL → yellow (any polarity)
+  //   - good polarity, HIT or PARTIAL, weight ≠ medium → green
+  //   - bad  polarity, HIT or PARTIAL, weight ≠ medium → red
+  //   - MISS / N/A / not-evaluated → neutral gray
+  const perSignalData = useMemo(() => {
+    const colorFor = (
+      polarity: 'good' | 'bad',
+      weight: WeightTier,
+      kind: ResultKind,
+    ): string => {
+      if (kind !== 'hit' && kind !== 'partial') return '#d1d5db'; // gray-300
+      if (weight === 'medium') return '#eab308'; // yellow-500
+      return polarity === 'good' ? '#16a34a' : '#dc2626';
+    };
+
+    const all = rubric.signals.map((s) => {
+      const result = evaluation.signalResults[s.id] as SignalResult | undefined;
+      const kind = classifyResult(s, evaluation.signalResults);
+      const max = rubric.weightValues[s.weight];
+      const earned = pointsFor(kind, max);
+      return {
+        id: s.id,
+        shortId: s.id.length > 22 ? s.id.slice(0, 20) + '…' : s.id,
+        polarity: s.polarity,
+        weight: s.weight as WeightTier,
+        max,
+        earned,
+        kind,
+        earnedColor: colorFor(s.polarity, s.weight as WeightTier, kind),
+        judgmentLabel: RESULT_LABEL[kind],
+        description: s.description,
+        evidence: result?.evidence ?? '',
+      };
+    });
+    // Sort: good first, then bad. Within each polarity: heaviest weight first,
+    // then alphabetical for stable ordering.
+    return all.sort((a, b) => {
+      if (a.polarity !== b.polarity) return a.polarity === 'good' ? -1 : 1;
+      if (a.max !== b.max) return b.max - a.max;
+      return a.id.localeCompare(b.id);
+    });
+  }, [rubric.signals, evaluation.signalResults, rubric.weightValues]);
 
   return (
     <section className="space-y-4">
@@ -165,161 +211,201 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
         Score breakdown
       </h3>
 
-      {/* Totals card */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <Card title="LLM Final Score" subtitle={`${rubric.scoring.scaleMin}–${rubric.scoring.scaleMax} scale`}>
-          <div className="text-3xl font-semibold tabular-nums">
-            {Number(evaluation.score).toFixed(2)}
-            <span className="text-base text-gray-400 font-normal"> / {rubric.scoring.scaleMax}</span>
-          </div>
-        </Card>
-        <Card
-          title="Good signals — earned / max"
-          subtitle={`${goodSignals.length} signals, weight values H=${rubric.weightValues.high} M=${rubric.weightValues.medium} L=${rubric.weightValues.low}`}
-        >
-          <div className="text-3xl font-semibold tabular-nums text-emerald-700">
-            {goodTotal.earned.toFixed(1)}
-            <span className="text-base text-gray-400 font-normal"> / {goodTotal.max}</span>
-            <span className="ml-2 text-sm text-gray-500 font-normal">({goodPct.toFixed(0)}%)</span>
-          </div>
-        </Card>
-        <Card
-          title="Bad signals — penalties"
-          subtitle={`${badSignals.length} possible. fired = HIT or PARTIAL on a bad signal`}
-        >
-          <div className="text-3xl font-semibold tabular-nums text-rose-700">
-            {badFiredCount}
-            <span className="text-base text-gray-400 font-normal"> fired</span>
-            <span className="ml-2 text-sm text-gray-500 font-normal">
-              ({badPenalty.toFixed(1)} / {badMaxPenalty} max penalty)
-            </span>
-          </div>
-        </Card>
-      </div>
+      {/* Top row: score cards on the left, pie chart on the right. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3">
+          <Card
+            title="Good signals — earned / max"
+            subtitle={`${goodSignals.length} signals, weight values H=${rubric.weightValues.high} M=${rubric.weightValues.medium} L=${rubric.weightValues.low}`}
+          >
+            <div className="text-3xl font-semibold tabular-nums text-emerald-700">
+              {goodTotal.earned.toFixed(1)}
+              <span className="text-base text-gray-400 font-normal"> / {goodTotal.max}</span>
+              <span className="ml-2 text-sm text-gray-500 font-normal">({goodPct.toFixed(0)}%)</span>
+            </div>
+          </Card>
+          <Card
+            title="Bad signals — penalties"
+            subtitle={`${badSignals.length} possible. fired = HIT or PARTIAL on a bad signal`}
+          >
+            <div className="text-3xl font-semibold tabular-nums text-rose-700">
+              {badFiredCount}
+              <span className="text-base text-gray-400 font-normal"> fired</span>
+              <span className="ml-2 text-sm text-gray-500 font-normal">
+                ({badPenalty.toFixed(1)} / {badMaxPenalty} max penalty)
+              </span>
+            </div>
+          </Card>
+          <Card
+            title="Partial hits"
+            subtitle="signals judged PARTIAL — half credit (good) or half penalty (bad)"
+          >
+            <div className="text-3xl font-semibold tabular-nums text-yellow-700">
+              {totalPartial}
+              <span className="ml-2 text-sm text-gray-500 font-normal">
+                ({goodPartial} good · {badPartial} bad)
+              </span>
+            </div>
+          </Card>
+        </div>
 
-      {/* Pie + good-tier bar */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="rounded border border-gray-300 bg-white p-3">
+        <div className="rounded border border-gray-300 bg-white p-3 flex flex-col">
           <div className="text-xs font-medium text-gray-700 mb-1">
-            Judgment distribution (all {rubric.signals.length} signals)
+            Coverage — how the LLM judged each of the {rubric.signals.length} rubric signals
           </div>
           {pieData.length === 0 ? (
-            <div className="text-xs text-gray-500 py-8 text-center">No data</div>
+            <div className="text-xs text-gray-500 py-8 text-center flex-1">No data</div>
           ) : (
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={80}
-                  label={(entry) => `${entry.name}: ${entry.value}`}
-                >
-                  {pieData.map((d, i) => (
-                    <Cell key={i} fill={d.fill} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="flex-1 min-h-[280px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={(entry) => `${entry.name}: ${entry.value}`}
+                  >
+                    {pieData.map((d, i) => (
+                      <Cell key={i} fill={d.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
-        <div className="rounded border border-gray-300 bg-white p-3">
-          <div className="text-xs font-medium text-gray-700 mb-1">
-            Good signals by weight tier
-          </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={goodBarData}>
-              <XAxis dataKey="tier" />
-              <YAxis allowDecimals={false} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="Hit" stackId="a" fill={RESULT_FILL.hit} />
-              <Bar dataKey="Partial" stackId="a" fill={RESULT_FILL.partial} />
-              <Bar dataKey="Miss" stackId="a" fill={RESULT_FILL.miss} />
-              <Bar dataKey="N/A" stackId="a" fill={RESULT_FILL.cannot_evaluate} />
-              <Bar dataKey="Not Evaluated" stackId="a" fill={RESULT_FILL.not_evaluated} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
       </div>
 
-      {/* Per-tier table */}
-      <div className="rounded border border-gray-300 bg-white overflow-hidden">
-        <div className="text-xs font-medium text-gray-700 px-3 py-2 border-b border-gray-200">
-          Per-tier scoring (good signals)
-        </div>
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-600">
-            <tr>
-              <th className="text-left px-3 py-1.5 font-medium">Tier</th>
-              <th className="text-right px-3 py-1.5 font-medium">Signals</th>
-              <th className="text-right px-3 py-1.5 font-medium">Hit</th>
-              <th className="text-right px-3 py-1.5 font-medium">Partial</th>
-              <th className="text-right px-3 py-1.5 font-medium">Miss</th>
-              <th className="text-right px-3 py-1.5 font-medium">Skipped</th>
-              <th className="text-right px-3 py-1.5 font-medium">Earned</th>
-              <th className="text-right px-3 py-1.5 font-medium">Max</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 tabular-nums">
-            {goodTiers.map((t) => (
-              <tr key={t.tier}>
-                <td className="px-3 py-1.5 font-medium uppercase">{t.tier}</td>
-                <td className="text-right px-3 py-1.5">{t.count}</td>
-                <td className="text-right px-3 py-1.5 text-emerald-700">{t.hit}</td>
-                <td className="text-right px-3 py-1.5 text-amber-700">{t.partial}</td>
-                <td className="text-right px-3 py-1.5 text-gray-500">{t.miss}</td>
-                <td className="text-right px-3 py-1.5 text-purple-700">{t.not_evaluated}</td>
-                <td className="text-right px-3 py-1.5 font-semibold">{t.earned.toFixed(1)}</td>
-                <td className="text-right px-3 py-1.5 text-gray-500">{t.max}</td>
-              </tr>
-            ))}
-            <tr className="bg-gray-50 font-semibold">
-              <td className="px-3 py-1.5">TOTAL</td>
-              <td className="text-right px-3 py-1.5">{goodSignals.length}</td>
-              <td className="text-right px-3 py-1.5 text-emerald-700">
-                {goodTiers.reduce((a, t) => a + t.hit, 0)}
-              </td>
-              <td className="text-right px-3 py-1.5 text-amber-700">
-                {goodTiers.reduce((a, t) => a + t.partial, 0)}
-              </td>
-              <td className="text-right px-3 py-1.5 text-gray-500">
-                {goodTiers.reduce((a, t) => a + t.miss, 0)}
-              </td>
-              <td className="text-right px-3 py-1.5 text-purple-700">
-                {goodTiers.reduce((a, t) => a + t.not_evaluated, 0)}
-              </td>
-              <td className="text-right px-3 py-1.5">{goodTotal.earned.toFixed(1)}</td>
-              <td className="text-right px-3 py-1.5 text-gray-500">{goodTotal.max}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {/* Bad-tier bar */}
+      {/* Per-criterion: ALL good + bad signals, full-width row. */}
       <div className="rounded border border-gray-300 bg-white p-3">
         <div className="text-xs font-medium text-gray-700 mb-1">
-          Bad signals by weight tier (any HIT/PARTIAL is a penalty)
+          Per-criterion: weight vs earned ({rubric.signals.length} rubric criteria)
         </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={badBarData}>
-            <XAxis dataKey="tier" />
-            <YAxis allowDecimals={false} />
-            <Tooltip />
+        <div className="text-[11px] text-gray-500 mb-2 leading-snug">
+          Each signal has two bars. The gray bar = full weight (what's at stake).
+          The colored bar = what was earned/incurred — height is the full weight on
+          HIT, half on PARTIAL, 0 on MISS. Color rules:{' '}
+          <span className="font-semibold text-emerald-700">green</span> = good
+          signal credited (HIT or PARTIAL),{' '}
+          <span className="font-semibold text-rose-700">red</span> = bad signal
+          fired (HIT or PARTIAL),{' '}
+          <span className="font-semibold text-yellow-700">yellow</span> =
+          medium-weight signal credited/fired (any polarity),{' '}
+          <span className="font-semibold text-gray-500">gray</span> = miss / not
+          evaluated.
+        </div>
+        <ResponsiveContainer width="100%" height={360}>
+          <BarChart
+            data={perSignalData}
+            margin={{ top: 8, right: 16, left: 0, bottom: 8 }}
+          >
+            <XAxis
+              dataKey="shortId"
+              angle={-50}
+              textAnchor="end"
+              interval={0}
+              tick={({ x, y, payload }) => {
+                const d = perSignalData.find((p) => p.shortId === payload.value);
+                const isBad = d?.polarity === 'bad';
+                return (
+                  <g transform={`translate(${x},${y})`}>
+                    <text
+                      x={0}
+                      y={0}
+                      dy={4}
+                      textAnchor="end"
+                      transform="rotate(-50)"
+                      fontSize={10}
+                      fill={isBad ? '#be123c' : '#374151'}
+                    >
+                      {isBad ? `↓ ${payload.value}` : payload.value}
+                    </text>
+                  </g>
+                );
+              }}
+              height={100}
+            />
+            <YAxis
+              allowDecimals
+              tick={{ fontSize: 11 }}
+              label={{ value: 'Points', angle: -90, position: 'insideLeft', fontSize: 11 }}
+            />
+            <Tooltip content={<PerSignalTooltip />} />
             <Legend />
-            <Bar dataKey="Hit" stackId="a" fill={RESULT_FILL.hit} />
-            <Bar dataKey="Partial" stackId="a" fill={RESULT_FILL.partial} />
-            <Bar dataKey="Miss" stackId="a" fill={RESULT_FILL.miss} />
-            <Bar dataKey="N/A" stackId="a" fill={RESULT_FILL.cannot_evaluate} />
-            <Bar dataKey="Not Evaluated" stackId="a" fill={RESULT_FILL.not_evaluated} />
+            <Bar dataKey="max" name="Max possible" fill="#d1d5db" />
+            <Bar dataKey="earned" name="Earned / incurred">
+              {perSignalData.map((d, i) => (
+                <Cell key={i} fill={d.earnedColor} />
+              ))}
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
     </section>
   );
+}
+
+// Custom tooltip for the per-signal grouped bar — surfaces the rubric
+// description + LLM judgment + evidence quote on hover.
+function PerSignalTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: PerSignalDatum }>;
+}) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const isBad = d.polarity === 'bad';
+  return (
+    <div className="bg-white border border-gray-300 rounded shadow p-2 text-xs max-w-xs">
+      <div className="font-medium font-mono text-gray-900">{d.id}</div>
+      <div className="text-gray-500 mt-0.5">
+        polarity:{' '}
+        <span className={`font-medium ${isBad ? 'text-rose-700' : 'text-emerald-700'}`}>
+          {d.polarity}
+        </span>{' '}
+        · weight: <span className="uppercase">{d.weight}</span> ({d.max} pts) ·{' '}
+        judgment:{' '}
+        <span className="font-medium" style={{ color: d.earnedColor }}>
+          {d.judgmentLabel}
+        </span>
+      </div>
+      <div className="mt-1 text-gray-800">
+        {isBad ? 'Penalty incurred' : 'Earned'}{' '}
+        <span className="font-semibold">{d.earned}</span> of {d.max}
+        {isBad && d.kind === 'miss' && (
+          <span className="ml-1 text-emerald-700">(penalty avoided ✓)</span>
+        )}
+      </div>
+      {d.description && (
+        <div className="mt-1 text-gray-600 leading-snug">{d.description}</div>
+      )}
+      {d.evidence && (
+        <div className="mt-1 italic text-gray-600 leading-snug border-l-2 border-gray-200 pl-2">
+          {d.evidence}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface PerSignalDatum {
+  id: string;
+  shortId: string;
+  polarity: 'good' | 'bad';
+  weight: WeightTier;
+  max: number;
+  earned: number;
+  kind: ResultKind;
+  earnedColor: string;
+  judgmentLabel: string;
+  description: string;
+  evidence: string;
 }
 
 function Card({

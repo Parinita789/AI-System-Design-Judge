@@ -20,7 +20,7 @@ export class HintsService {
   ) {}
 
   async send(sessionId: string, message: string) {
-    const session = await this.sessionsService.get(sessionId); // throws 404 if missing
+    const session = await this.sessionsService.getWithQuestion(sessionId); // throws 404 if missing
     const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const planMd = (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
@@ -43,7 +43,7 @@ export class HintsService {
     const llmResponse = await this.llmService.call(messages, {
       system: [
         { text: HINT_SYSTEM_PROMPT, cacheable: true },
-        { text: `## Session question\n${session.prompt}`, cacheable: true },
+        { text: `## Session question\n${session.question.prompt}`, cacheable: true },
       ],
       maxTokens: HINT_REPLY_MAX_TOKENS,
     });

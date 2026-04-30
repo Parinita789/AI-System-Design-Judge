@@ -16,13 +16,11 @@ describe('SessionsRepository', () => {
   });
 
   describe('create', () => {
-    it('inserts a session row with the provided fields', async () => {
+    it('inserts a session row keyed by questionId', async () => {
       session.create.mockResolvedValue({ id: 'sid-1' });
-      const result = await repo.create({ prompt: 'Design X', rubricVersion: 'v1.0' });
+      const result = await repo.create({ questionId: 'qid-1' });
 
-      expect(session.create).toHaveBeenCalledWith({
-        data: { prompt: 'Design X', rubricVersion: 'v1.0' },
-      });
+      expect(session.create).toHaveBeenCalledWith({ data: { questionId: 'qid-1' } });
       expect(result).toEqual({ id: 'sid-1' });
     });
   });
@@ -38,6 +36,18 @@ describe('SessionsRepository', () => {
     it('returns null when not found', async () => {
       session.findUnique.mockResolvedValue(null);
       expect(await repo.findById('missing')).toBeNull();
+    });
+  });
+
+  describe('findByIdWithQuestion', () => {
+    it('includes the parent question', async () => {
+      session.findUnique.mockResolvedValue({ id: 'sid-1', question: { prompt: 'X' } });
+      await repo.findByIdWithQuestion('sid-1');
+
+      expect(session.findUnique).toHaveBeenCalledWith({
+        where: { id: 'sid-1' },
+        include: { question: true },
+      });
     });
   });
 

@@ -1,16 +1,14 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { SessionsService } from '../services/sessions.service';
-import { CreateSessionDto } from '../models/create-session.dto';
 import { EndSessionDto } from '../models/end-session.dto';
 
 @Controller('sessions')
 export class SessionsController {
   constructor(private readonly sessionsService: SessionsService) {}
 
-  @Post()
-  start(@Body() dto: CreateSessionDto) {
-    return this.sessionsService.start(dto);
-  }
+  // Note: starting a session and creating a new attempt of an existing
+  // question both happen via the QuestionsController. A Session never
+  // exists without a parent Question.
 
   @Post(':id/end')
   end(@Param('id') id: string, @Body() dto: EndSessionDto) {
@@ -19,7 +17,9 @@ export class SessionsController {
 
   @Get(':id')
   get(@Param('id') id: string) {
-    return this.sessionsService.get(id);
+    // Always include the parent question so the UI can render the prompt
+    // without a second round-trip.
+    return this.sessionsService.getWithQuestion(id);
   }
 
   @Get()

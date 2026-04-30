@@ -24,12 +24,16 @@ export class OrchestratorService {
   ) {}
 
   async run(sessionId: string, phases: Phase[] = ['plan']): Promise<PhaseEvaluation[]> {
-    const session = await this.sessionsService.get(sessionId);
+    const session = await this.sessionsService.getWithQuestion(sessionId);
     const allSnapshots = await this.snapshotsService.list(sessionId);
     const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const hints = await this.aiInteractionsRepo.findBySession(sessionId);
 
-    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
+    // Question owns the rubric version; fall back to env default for safety.
+    const rubricVersion =
+      session.question.rubricVersion ??
+      this.config.get<string>('RUBRIC_VERSION') ??
+      'v1.0';
 
     const planMd =
       (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
@@ -37,7 +41,7 @@ export class OrchestratorService {
     const input: PhaseEvalInput = {
       session: {
         id: session.id,
-        prompt: session.prompt,
+        prompt: session.question.prompt,
         startedAt: session.startedAt,
         endedAt: session.endedAt,
       },
@@ -64,7 +68,7 @@ export class OrchestratorService {
       }
       this.logger.log(`Running ${phase} agent for session ${sessionId}`);
       const result = await this.planAgent.evaluate(input);
-      const persisted = await this.evalsRepo.upsertPhaseEvaluation(sessionId, phase, result);
+      const persisted = await this.evalsRepo.createPhaseEvaluation(sessionId, phase, result);
       out.push(persisted);
     }
     return out;

@@ -20,10 +20,20 @@ enum Phase {
   wrap
 }
 
+model Question {
+  id            String   @id @default(uuid()) @db.Uuid
+  prompt        String
+  rubricVersion String   @map("rubric_version")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions Session[]
+
+  @@map("questions")
+}
+
 model Session {
   id              String        @id @default(uuid()) @db.Uuid
-  prompt          String
-  rubricVersion   String        @map("rubric_version")
+  questionId      String        @map("question_id") @db.Uuid
   projectPath     String?       @map("project_path")
   startedAt       DateTime      @default(now()) @map("started_at")
   endedAt         DateTime?     @map("ended_at")
@@ -31,11 +41,14 @@ model Session {
   overallScore    Decimal?      @map("overall_score") @db.Decimal(3, 2)
   overallFeedback String?       @map("overall_feedback")
 
+  question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+
   snapshots         Snapshot[]
   phaseEvaluations  PhaseEvaluation[]
   aiInteractions    AIInteraction[]
   finalArtifacts    FinalArtifacts?
 
+  @@index([questionId])
   @@map("sessions")
 }
 
@@ -66,7 +79,9 @@ model PhaseEvaluation {
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
-  @@unique([sessionId, phase])
+  // Each Re-evaluate inserts a new row (no upsert); history is preserved.
+  // Ordered index makes "latest plan eval for session X" a single seek.
+  @@index([sessionId, phase, evaluatedAt(sort: Desc)])
   @@index([signalResults], type: Gin)
   @@map("phase_evaluations")
 }

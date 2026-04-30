@@ -9,6 +9,7 @@ import { LlmModule } from './modules/llm/llm.module';
 import { PhaseTaggerModule } from './modules/phase-tagger/phase-tagger.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HintsModule } from './modules/hints/hints.module';
+import { QuestionsModule } from './modules/questions/questions.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { HintsModule } from './modules/hints/hints.module';
     SnapshotsModule,
     EvaluationsModule,
     SessionsModule,
+    QuestionsModule,
     DashboardModule,
     HintsModule,
   ],

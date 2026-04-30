@@ -1,8 +1,6 @@
 import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
 import { SessionsRepository } from '../repositories/sessions.repository';
-import { CreateSessionDto } from '../models/create-session.dto';
 import { EndSessionDto } from '../models/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 
@@ -18,18 +16,18 @@ export class SessionsService {
 
   constructor(
     private readonly sessionsRepository: SessionsRepository,
-    private readonly config: ConfigService,
     @Inject(forwardRef(() => EvaluationsService))
     private readonly evaluationsService: EvaluationsService,
   ) {}
 
-  start(dto: CreateSessionDto) {
-    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
-    return this.sessionsRepository.create({ prompt: dto.prompt, rubricVersion });
-  }
-
   async get(sessionId: string) {
     const session = await this.sessionsRepository.findById(sessionId);
+    if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+    return session;
+  }
+
+  async getWithQuestion(sessionId: string) {
+    const session = await this.sessionsRepository.findByIdWithQuestion(sessionId);
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
     return session;
   }

@@ -40,6 +40,7 @@ export function ActiveSessionPage() {
   const [now, setNow] = useState(() => Date.now());
   const [content, setContent] = useState('');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const lastSavedContentRef = useRef<string | null>(null);
   const seededRef = useRef(false);
 
@@ -140,14 +141,15 @@ export function ActiveSessionPage() {
 
   const handleCancel = () => {
     if (endMutation.isPending) return;
-    const dirtyNow = seededRef.current && content !== lastSavedContentRef.current;
-    const message = dirtyNow
-      ? 'Cancel this session? Unsaved changes will be discarded.'
-      : 'Cancel this session?';
-    if (window.confirm(message)) {
-      endMutation.mutate('abandoned');
-    }
+    setCancelDialogOpen(true);
   };
+
+  const confirmCancel = () => {
+    setCancelDialogOpen(false);
+    endMutation.mutate('abandoned');
+  };
+
+  const dirtyNow = seededRef.current && content !== lastSavedContentRef.current;
 
   // Tick clock for elapsed/relative times. Skip while paused — display is frozen.
   useEffect(() => {
@@ -298,7 +300,7 @@ export function ActiveSessionPage() {
               Question
             </h3>
             <div className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm whitespace-pre-wrap font-mono max-h-28 overflow-y-auto">
-              {session.prompt}
+              {session.question.prompt}
             </div>
           </section>
 
@@ -354,6 +356,75 @@ export function ActiveSessionPage() {
         <aside className="w-[360px] shrink-0">
           <HintChatPanel sessionId={id} />
         </aside>
+      </div>
+
+      {cancelDialogOpen && (
+        <ConfirmCancelDialog
+          dirty={dirtyNow}
+          pending={endMutation.isPending}
+          onConfirm={confirmCancel}
+          onDismiss={() => setCancelDialogOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmCancelDialog({
+  dirty,
+  pending,
+  onConfirm,
+  onDismiss,
+}: {
+  dirty: boolean;
+  pending: boolean;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-sm rounded-lg bg-white shadow-xl border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-2">
+          <h2 className="text-base font-semibold text-gray-900">Cancel this session?</h2>
+          <p className="mt-1 text-sm text-gray-600">
+            {dirty
+              ? 'Unsaved changes will be discarded. The attempt will be marked abandoned and won’t be evaluated.'
+              : 'The attempt will be marked abandoned and won’t be evaluated.'}
+          </p>
+        </div>
+        <div className="flex justify-end gap-2 px-5 py-3 bg-gray-50 rounded-b-lg">
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+          >
+            Keep working
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={pending}
+            className="rounded bg-rose-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {pending ? 'Cancelling…' : 'Cancel session'}
+          </button>
+        </div>
       </div>
     </div>
   );

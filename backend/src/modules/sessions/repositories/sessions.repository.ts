@@ -6,12 +6,21 @@ import { PrismaService } from '../../../database/prisma.service';
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { prompt: string; rubricVersion: string }) {
+  create(data: { questionId: string }) {
     return this.prisma.session.create({ data });
   }
 
   findById(id: string) {
     return this.prisma.session.findUnique({ where: { id } });
+  }
+
+  // Most callers (orchestrator, hints) need the parent Question's prompt
+  // and rubricVersion; this single round-trip fetches both.
+  findByIdWithQuestion(id: string) {
+    return this.prisma.session.findUnique({
+      where: { id },
+      include: { question: true },
+    });
   }
 
   findAll() {

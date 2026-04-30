@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { sessionsService } from '@/services/sessions.service';
+import { questionsService } from '@/services/questions.service';
 import { useSessionStore } from '@/store/sessionStore';
 
 const MIN_PROMPT_LENGTH = 10;
@@ -13,9 +13,9 @@ export function SessionStartPage() {
   const [prompt, setPrompt] = useState('');
 
   const mutation = useMutation({
-    mutationFn: (p: string) => sessionsService.start({ prompt: p }),
-    onSuccess: (session) => {
-      queryClient.invalidateQueries({ queryKey: ['sessions'] });
+    mutationFn: (p: string) => questionsService.create({ prompt: p }),
+    onSuccess: ({ session }) => {
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
       setActive(session.id, session.startedAt);
       navigate(`/sessions/${session.id}/active`);
     },

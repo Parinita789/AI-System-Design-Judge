@@ -5,7 +5,7 @@ import { HINT_REPLY_MAX_TOKENS } from '../constants';
 describe('HintsService', () => {
   let service: HintsService;
 
-  const sessionsService = { get: jest.fn() };
+  const sessionsService = { get: jest.fn(), getWithQuestion: jest.fn() };
   const snapshotsService = { latest: jest.fn() };
   const llmService = { call: jest.fn() };
   const aiInteractionsRepo = {
@@ -26,7 +26,7 @@ describe('HintsService', () => {
   describe('send', () => {
     const session = {
       id: 'sid-1',
-      prompt: 'Design a URL shortener',
+      question: { id: 'qid-1', prompt: 'Design a URL shortener' },
       startedAt: new Date(Date.now() - 7 * 60_000).toISOString(), // 7 min ago
     };
     const llmReply = {
@@ -39,7 +39,7 @@ describe('HintsService', () => {
     };
 
     it('builds a chat-history messages array, then appends the new user message with plan.md context', async () => {
-      sessionsService.get.mockResolvedValue(session);
+      sessionsService.getWithQuestion.mockResolvedValue(session);
       snapshotsService.latest.mockResolvedValue({
         artifacts: { planMd: '# Plan\n- scope' },
       });
@@ -65,7 +65,7 @@ describe('HintsService', () => {
     });
 
     it('marks the system blocks as cacheable and includes the session question', async () => {
-      sessionsService.get.mockResolvedValue(session);
+      sessionsService.getWithQuestion.mockResolvedValue(session);
       snapshotsService.latest.mockResolvedValue(null);
       aiInteractionsRepo.findBySession.mockResolvedValue([]);
       llmService.call.mockResolvedValue(llmReply);
@@ -82,7 +82,7 @@ describe('HintsService', () => {
     });
 
     it('uses a "[plan.md is empty]" preamble when no snapshot exists', async () => {
-      sessionsService.get.mockResolvedValue(session);
+      sessionsService.getWithQuestion.mockResolvedValue(session);
       snapshotsService.latest.mockResolvedValue(null);
       aiInteractionsRepo.findBySession.mockResolvedValue([]);
       llmService.call.mockResolvedValue(llmReply);
@@ -96,7 +96,7 @@ describe('HintsService', () => {
     });
 
     it('persists an AIInteraction row capturing prompt, response, tokens, and plan state', async () => {
-      sessionsService.get.mockResolvedValue(session);
+      sessionsService.getWithQuestion.mockResolvedValue(session);
       snapshotsService.latest.mockResolvedValue({ artifacts: { planMd: '# Plan' } });
       aiInteractionsRepo.findBySession.mockResolvedValue([]);
       llmService.call.mockResolvedValue(llmReply);
@@ -120,7 +120,7 @@ describe('HintsService', () => {
     });
 
     it('propagates session-not-found from SessionsService', async () => {
-      sessionsService.get.mockRejectedValue(new Error('Session missing not found'));
+      sessionsService.getWithQuestion.mockRejectedValue(new Error('Session missing not found'));
       await expect(service.send('missing', 'hi')).rejects.toThrow(/not found/);
       expect(llmService.call).not.toHaveBeenCalled();
     });

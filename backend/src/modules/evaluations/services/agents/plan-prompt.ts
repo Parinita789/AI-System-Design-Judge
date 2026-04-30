@@ -81,10 +81,33 @@ ${calibrationBlock}
 
 ${aiUsageBlock}
 
+## Relevance gating (IMPORTANT — read before judging)
+Some signals only apply to questions in a specific domain. If a signal is
+domain-specific and the SESSION QUESTION does not invoke that domain, mark
+the signal "cannot_evaluate" with evidence "not applicable to this question
+(<one-sentence reason>)". Do NOT score it as "miss" — a missed signal
+implies the candidate had the chance to address it and didn't, which
+unfairly penalizes designs for an unrelated topic.
+
+Use this rule for AI / LLM / agentic signals when the question is a
+non-AI design problem (e.g., URL shortener, rate limiter, chat app
+without an LLM, log pipeline). Examples of signals to skip in that
+case: any signal whose description references AI, LLMs, agents,
+prompts, model selection, or RAG. The same rule applies to other
+domain-specific signals (e.g., real-time/streaming concerns on a
+batch-only problem) — if the question never opens the door to that
+concern, skip rather than miss.
+
+When in doubt, prefer "miss" over "cannot_evaluate" — only skip when
+the question genuinely has no surface area for the signal.
+
+Aggregate scoring: skipped ("cannot_evaluate") signals are excluded
+from both earned and max totals so they do not change the score.
+
 ## OUTPUT FORMAT (strict)
 Return ONLY a single valid JSON object. No prose. No markdown fences. No explanations outside the JSON.
 Every signal listed above (both good and bad) must appear as a key in the "signals" object with one of: "hit", "miss", "partial", "cannot_evaluate".
-"evidence" should quote or paraphrase the specific text from plan.md or activity logs that justifies your judgment (≤500 chars).
+"evidence" should quote or paraphrase the specific text from plan.md or activity logs that justifies your judgment (≤500 chars). For "cannot_evaluate", evidence must explain why the signal is not applicable to this question.
 
 The JSON MUST match this schema:
 ${JSON.stringify(rubric.outputSchema, null, 2)}`;
