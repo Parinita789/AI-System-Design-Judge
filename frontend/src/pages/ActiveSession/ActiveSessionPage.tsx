@@ -151,12 +151,16 @@ export function ActiveSessionPage() {
 
   const dirtyNow = seededRef.current && content !== lastSavedContentRef.current;
 
-  // Tick clock for elapsed/relative times. Skip while paused — display is frozen.
+  // Tick clock for elapsed/relative times. Skip while paused or once the
+  // session is ending/ended so the displayed timer freezes the moment
+  // End/Cancel is pressed instead of continuing to advance during the
+  // backend round-trip and final eval.
+  const timerStopped = isPaused || endMutation.isPending || endMutation.isSuccess;
   useEffect(() => {
-    if (isPaused) return;
+    if (timerStopped) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [isPaused]);
+  }, [timerStopped]);
 
   // Initialize pause state for this session on mount.
   useEffect(() => {

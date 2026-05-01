@@ -77,13 +77,35 @@ model PhaseEvaluation {
   topActionableItems  Json     @map("top_actionable_items")
   evaluatedAt         DateTime @default(now()) @map("evaluated_at")
 
-  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  audit   EvaluationAudit?
 
   // Each Re-evaluate inserts a new row (no upsert); history is preserved.
   // Ordered index makes "latest plan eval for session X" a single seek.
   @@index([sessionId, phase, evaluatedAt(sort: Desc)])
   @@index([signalResults], type: Gin)
   @@map("phase_evaluations")
+}
+
+// 1:1 audit row per PhaseEvaluation. Captures the exact prompt sent to the
+// LLM and the raw response text — not duplicated metadata, but the bytes
+// the parser ate. Useful for debugging hallucinations, parse failures, and
+// diffing how prompt edits shift judgments over time.
+model EvaluationAudit {
+  id                  String   @id @default(uuid()) @db.Uuid
+  phaseEvaluationId   String   @unique @map("phase_evaluation_id") @db.Uuid
+  prompt              String
+  rawResponse         String   @map("raw_response")
+  modelUsed           String   @map("model_used")
+  tokensIn            Int      @map("tokens_in")
+  tokensOut           Int      @map("tokens_out")
+  cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
+  cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
+
+  @@map("evaluation_audits")
 }
 
 model AIInteraction {

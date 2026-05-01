@@ -1,0 +1,18 @@
+description: "Mid-quality rate limiter plan: scopes well but skips capacity NFRs and validation. Should score Average."
+question: "Design a token-bucket rate limiter for a multi-tenant API."
+rubricVersion: v1.0
+
+expectedScore:
+  min: 2.5
+  max: 3.5
+
+expectedSignals:
+  credited:
+    - scope_specificity
+    - shape_and_seams
+  miss:
+    - validation_plan_concrete
+    - dual_scale_nfrs
+  hit: []
+  skipped:
+    - ai_strategy_explicit

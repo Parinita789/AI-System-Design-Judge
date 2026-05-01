@@ -1,0 +1,19 @@
+description: "Well-scoped URL shortener with capacity, data model, and validation. Should score Good."
+question: "Design a URL shortener for 10K req/s and 200M URLs."
+rubricVersion: v1.0
+
+expectedScore:
+  min: 3.5
+  max: 5.0
+
+expectedSignals:
+  credited:
+    - scope_specificity
+    - dual_scale_nfrs
+    - data_model_committed
+    - validation_plan_concrete
+    - shape_and_seams
+  miss: []
+  hit: []
+  skipped:
+    - ai_strategy_explicit

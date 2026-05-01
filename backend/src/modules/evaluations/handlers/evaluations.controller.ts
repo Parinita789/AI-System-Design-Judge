@@ -46,4 +46,9 @@ export class EvaluationsController {
   get(@Param('id') id: string) {
     return this.evaluationsService.getById(id);
   }
+
+  @Get('evaluations/:id/audit')
+  getAudit(@Param('id') id: string) {
+    return this.evaluationsService.getAudit(id);
+  }
 }

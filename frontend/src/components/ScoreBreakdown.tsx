@@ -41,6 +41,43 @@ function pointsFor(kind: ResultKind, weight: number): number {
   return 0;
 }
 
+// Per-polarity pie slices. Colors:
+//   GOOD polarity — shades of green for credited, gray for missed/skipped.
+//   BAD  polarity — shades of red for fired, gray for didn't-fire/skipped.
+//                   ("Bad MISS" is a positive outcome — the bad pattern
+//                   didn't appear — so we keep it neutral gray rather
+//                   than tinting it red.)
+function buildPolarityPie(
+  signals: RubricSignal[],
+  results: Record<string, SignalResult>,
+  polarity: 'good' | 'bad',
+): Array<{ name: string; value: number; fill: string }> {
+  const counts: Record<ResultKind, number> = {
+    hit: 0,
+    partial: 0,
+    miss: 0,
+    cannot_evaluate: 0,
+    not_evaluated: 0,
+  };
+  for (const s of signals) counts[classifyResult(s, results)]++;
+  const skipped = counts.cannot_evaluate + counts.not_evaluated;
+
+  if (polarity === 'good') {
+    return [
+      { name: 'Hit', value: counts.hit, fill: '#15803d' }, // green-700
+      { name: 'Partial', value: counts.partial, fill: '#86efac' }, // green-300
+      { name: 'Miss', value: counts.miss, fill: '#9ca3af' }, // gray-400
+      { name: 'N/A', value: skipped, fill: '#e5e7eb' }, // gray-200
+    ].filter((d) => d.value > 0);
+  }
+  return [
+    { name: 'Fired (HIT)', value: counts.hit, fill: '#b91c1c' }, // red-700
+    { name: 'Partial fire', value: counts.partial, fill: '#fca5a5' }, // red-300
+    { name: 'Didn’t fire', value: counts.miss, fill: '#9ca3af' }, // gray-400
+    { name: 'N/A', value: skipped, fill: '#e5e7eb' }, // gray-200
+  ].filter((d) => d.value > 0);
+}
+
 interface TierStats {
   tier: WeightTier;
   count: number;
@@ -119,45 +156,35 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   );
   const goodPct = goodTotal.max > 0 ? (goodTotal.earned / goodTotal.max) * 100 : 0;
 
-  const badFiredCount = badTiers.reduce((acc, t) => acc + t.hit + t.partial, 0);
+  // Count-based aggregates so all three cards report in the same units
+  // (number of signals, not weighted scores). Weighted earned/max stay
+  // available below the headline as small captions.
+  const goodHitCount = goodTiers.reduce((acc, t) => acc + t.hit, 0);
+  const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
+  const goodCreditedCount = goodHitCount + goodPartial;
+  const goodTotalCount = goodSignals.length;
+
+  const badHitCount = badTiers.reduce((acc, t) => acc + t.hit, 0);
+  const badPartial = badTiers.reduce((acc, t) => acc + t.partial, 0);
+  const badFiredCount = badHitCount + badPartial;
+  const badTotalCount = badSignals.length;
   const badMaxPenalty = badTiers.reduce((acc, t) => acc + t.max, 0);
   const badPenalty = badTiers.reduce((acc, t) => acc + t.earned, 0);
 
-  const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
-  const badPartial = badTiers.reduce((acc, t) => acc + t.partial, 0);
   const totalPartial = goodPartial + badPartial;
 
-  // Pie data — buckets aligned with the bar chart's color rules so the
-  // two charts tell a consistent story:
-  //   green  = good signal credited (HIT/PARTIAL, weight ≠ medium)
-  //   red    = bad signal fired     (HIT/PARTIAL, weight ≠ medium)
-  //   yellow = medium-weight fired  (HIT/PARTIAL, any polarity)
-  //   gray   = not credited / not fired (MISS / N/A / not-evaluated)
-  const pieData = useMemo(() => {
-    const buckets = {
-      goodCredited: 0,
-      badFired: 0,
-      mediumFired: 0,
-      notCredited: 0,
-    };
-    for (const sig of rubric.signals) {
-      const kind = classifyResult(sig, evaluation.signalResults);
-      const fired = kind === 'hit' || kind === 'partial';
-      if (!fired) {
-        buckets.notCredited++;
-        continue;
-      }
-      if (sig.weight === 'medium') buckets.mediumFired++;
-      else if (sig.polarity === 'good') buckets.goodCredited++;
-      else buckets.badFired++;
-    }
-    return [
-      { name: 'Good credited', value: buckets.goodCredited, fill: '#16a34a' },
-      { name: 'Bad fired', value: buckets.badFired, fill: '#dc2626' },
-      { name: 'Medium-weight fired', value: buckets.mediumFired, fill: '#eab308' },
-      { name: 'Not credited / missed', value: buckets.notCredited, fill: '#d1d5db' },
-    ].filter((d) => d.value > 0);
-  }, [rubric.signals, evaluation.signalResults]);
+  // Two pie datasets, scoped by polarity. Each shows the per-judgment
+  // breakdown within its polarity (HIT / PARTIAL / MISS / N/A) so the
+  // user sees both *how many* good (or bad) signals exist and *what
+  // happened* to each. Side-by-side rendering below.
+  const goodPieData = useMemo(
+    () => buildPolarityPie(goodSignals, evaluation.signalResults, 'good'),
+    [goodSignals, evaluation.signalResults],
+  );
+  const badPieData = useMemo(
+    () => buildPolarityPie(badSignals, evaluation.signalResults, 'bad'),
+    [badSignals, evaluation.signalResults],
+  );
 
   // Per-signal grouped bar data: ALL rubric criteria (good + bad).
   // Color rules for the "earned" bar (HIT and PARTIAL share a color —
@@ -215,33 +242,42 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="grid grid-cols-1 gap-3">
           <Card
-            title="Good signals — earned / max"
-            subtitle={`${goodSignals.length} signals, weight values H=${rubric.weightValues.high} M=${rubric.weightValues.medium} L=${rubric.weightValues.low}`}
+            title="Good signals — credited / total"
+            subtitle="credited = signals judged HIT or PARTIAL"
           >
             <div className="text-3xl font-semibold tabular-nums text-emerald-700">
-              {goodTotal.earned.toFixed(1)}
-              <span className="text-base text-gray-400 font-normal"> / {goodTotal.max}</span>
-              <span className="ml-2 text-sm text-gray-500 font-normal">({goodPct.toFixed(0)}%)</span>
+              {goodCreditedCount}
+              <span className="text-base text-gray-400 font-normal"> / {goodTotalCount}</span>
+              <span className="ml-2 text-sm text-gray-500 font-normal">
+                ({goodHitCount} HIT · {goodPartial} PARTIAL)
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] text-gray-500">
+              Weighted: {goodTotal.earned.toFixed(1)} / {goodTotal.max} ({goodPct.toFixed(0)}%)
             </div>
           </Card>
           <Card
-            title="Bad signals — penalties"
-            subtitle={`${badSignals.length} possible. fired = HIT or PARTIAL on a bad signal`}
+            title="Bad signals — fired / total"
+            subtitle="fired = signals judged HIT or PARTIAL on a bad signal"
           >
             <div className="text-3xl font-semibold tabular-nums text-rose-700">
               {badFiredCount}
-              <span className="text-base text-gray-400 font-normal"> fired</span>
+              <span className="text-base text-gray-400 font-normal"> / {badTotalCount}</span>
               <span className="ml-2 text-sm text-gray-500 font-normal">
-                ({badPenalty.toFixed(1)} / {badMaxPenalty} max penalty)
+                ({badHitCount} HIT · {badPartial} PARTIAL)
               </span>
+            </div>
+            <div className="mt-1 text-[11px] text-gray-500">
+              Weighted penalty: {badPenalty.toFixed(1)} / {badMaxPenalty}
             </div>
           </Card>
           <Card
-            title="Partial hits"
+            title="Partial hits — total / overall"
             subtitle="signals judged PARTIAL — half credit (good) or half penalty (bad)"
           >
             <div className="text-3xl font-semibold tabular-nums text-yellow-700">
               {totalPartial}
+              <span className="text-base text-gray-400 font-normal"> / {goodTotalCount + badTotalCount}</span>
               <span className="ml-2 text-sm text-gray-500 font-normal">
                 ({goodPartial} good · {badPartial} bad)
               </span>
@@ -251,32 +287,23 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
 
         <div className="rounded border border-gray-300 bg-white p-3 flex flex-col">
           <div className="text-xs font-medium text-gray-700 mb-1">
-            Coverage — how the LLM judged each of the {rubric.signals.length} rubric signals
+            Coverage — how the LLM judged each rubric signal, split by polarity
           </div>
-          {pieData.length === 0 ? (
-            <div className="text-xs text-gray-500 py-8 text-center flex-1">No data</div>
-          ) : (
-            <div className="flex-1 min-h-[280px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    label={(entry) => `${entry.name}: ${entry.value}`}
-                  >
-                    {pieData.map((d, i) => (
-                      <Cell key={i} fill={d.fill} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
+          <div className="text-[11px] text-gray-500 mb-2">
+            Each pie counts every signal in its polarity exactly once. Slice
+            sizes show what happened: HIT, PARTIAL, MISS, or N/A
+            (skipped/not-evaluated).
+          </div>
+          <div className="flex-1 min-h-[260px] grid grid-cols-2 gap-2">
+            <PolarityPie
+              title={`Good signals (${goodSignals.length})`}
+              data={goodPieData}
+            />
+            <PolarityPie
+              title={`Bad signals (${badSignals.length})`}
+              data={badPieData}
+            />
+          </div>
         </div>
       </div>
 
@@ -422,6 +449,53 @@ function Card({
       <div className="text-[11px] uppercase tracking-wide text-gray-500">{title}</div>
       {subtitle && <div className="text-[11px] text-gray-400 mb-1">{subtitle}</div>}
       {children}
+    </div>
+  );
+}
+
+function PolarityPie({
+  title,
+  data,
+}: {
+  title: string;
+  data: Array<{ name: string; value: number; fill: string }>;
+}) {
+  const total = data.reduce((acc, d) => acc + d.value, 0);
+  return (
+    <div className="flex flex-col">
+      <div className="text-[11px] font-medium text-gray-700 text-center">{title}</div>
+      {total === 0 ? (
+        <div className="flex-1 flex items-center justify-center text-[11px] text-gray-400">
+          No signals
+        </div>
+      ) : (
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              cx="50%"
+              cy="50%"
+              outerRadius={60}
+              label={(entry) => `${entry.value}`}
+              labelLine={false}
+            >
+              {data.map((d, i) => (
+                <Cell key={i} fill={d.fill} />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(value: number, name: string) => [`${value}`, name]}
+            />
+            <Legend
+              verticalAlign="bottom"
+              iconSize={8}
+              wrapperStyle={{ fontSize: '10px' }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      )}
     </div>
   );
 }

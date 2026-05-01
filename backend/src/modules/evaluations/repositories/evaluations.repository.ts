@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 import { Phase } from '../../phase-tagger/models/phase.types';
-import { PhaseEvaluationResult } from '../models/evaluation.types';
+import { EvaluationAuditPayload, PhaseEvaluationResult } from '../models/evaluation.types';
 
 @Injectable()
 export class EvaluationsRepository {
@@ -24,6 +24,24 @@ export class EvaluationsRepository {
     });
   }
 
+  // 1:1 with PhaseEvaluation. The unique constraint on
+  // phase_evaluation_id enforces the "one audit per evaluation" invariant
+  // — a re-evaluate creates a new PhaseEvaluation row, hence a new audit.
+  createEvaluationAudit(phaseEvaluationId: string, audit: EvaluationAuditPayload) {
+    return this.prisma.evaluationAudit.create({
+      data: {
+        phaseEvaluationId,
+        prompt: audit.prompt,
+        rawResponse: audit.rawResponse,
+        modelUsed: audit.modelUsed,
+        tokensIn: audit.tokensIn,
+        tokensOut: audit.tokensOut,
+        cacheReadTokens: audit.cacheReadTokens,
+        cacheCreationTokens: audit.cacheCreationTokens,
+      },
+    });
+  }
+
   findBySession(sessionId: string) {
     return this.prisma.phaseEvaluation.findMany({
       where: { sessionId },
@@ -33,5 +51,9 @@ export class EvaluationsRepository {
 
   findById(evaluationId: string) {
     return this.prisma.phaseEvaluation.findUnique({ where: { id: evaluationId } });
+  }
+
+  findAuditByEvaluation(phaseEvaluationId: string) {
+    return this.prisma.evaluationAudit.findUnique({ where: { phaseEvaluationId } });
   }
 }

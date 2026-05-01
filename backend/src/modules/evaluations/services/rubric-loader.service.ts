@@ -24,6 +24,8 @@ type RawSignal = {
   evidence_hint?: string;
   critical?: boolean;
   cap_at_score?: number;
+  paired_with?: string;
+  requires_evidence?: string[];
 };
 
 type RawSection = { id: string; name: string; must_contain: string[] };
@@ -127,9 +129,12 @@ export class RubricLoaderService {
       evidenceHint: s.evidence_hint,
       critical: s.critical,
       capAtScore: s.cap_at_score,
+      pairedWith: s.paired_with,
+      requiresEvidence: s.requires_evidence,
     }));
 
     this.assertUniqueSignalIds(signals, filePath);
+    this.assertPairsAreSymmetric(signals, filePath);
 
     const timeBounds: RubricTimeBounds = {
       targetMinMinutes: raw.time_bounds.target_min_minutes,
@@ -187,6 +192,32 @@ export class RubricLoaderService {
         throw new Error(`${filePath}: duplicate signal id "${s.id}"`);
       }
       seen.add(s.id);
+    }
+  }
+
+  // Pair declarations must be symmetric: if A says paired_with: B, then B
+  // must say paired_with: A. Catches typos in YAML at load time rather
+  // than letting the LLM see an inconsistent pairing reference.
+  private assertPairsAreSymmetric(signals: RubricSignal[], filePath: string) {
+    const byId = new Map(signals.map((s) => [s.id, s]));
+    for (const s of signals) {
+      if (!s.pairedWith) continue;
+      const partner = byId.get(s.pairedWith);
+      if (!partner) {
+        throw new Error(
+          `${filePath}: signal "${s.id}" pairs with unknown signal "${s.pairedWith}"`,
+        );
+      }
+      if (partner.pairedWith !== s.id) {
+        throw new Error(
+          `${filePath}: pairing not symmetric — "${s.id}" paired_with "${s.pairedWith}", but "${s.pairedWith}".paired_with = "${partner.pairedWith ?? '(unset)'}"`,
+        );
+      }
+      if (partner.polarity === s.polarity) {
+        throw new Error(
+          `${filePath}: signals "${s.id}" and "${s.pairedWith}" both have polarity "${s.polarity}" — pairs must cross polarity`,
+        );
+      }
     }
   }
 }

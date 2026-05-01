@@ -1,0 +1,19 @@
+description: "Non-AI question (log pipeline). Verifies the relevance-gating rule: AI signals must be skipped, not missed."
+question: "Design a log ingestion pipeline that handles 50K events/sec from microservices, retains 30 days of hot data, and supports ad-hoc queries."
+rubricVersion: v1.0
+
+expectedScore:
+  min: 2.5
+  max: 4.0
+
+expectedSignals:
+  credited:
+    - scope_specificity
+    - dual_scale_nfrs
+    - shape_and_seams
+  miss: []
+  hit: []
+  # The headline test of this fixture: AI-related signals are domain-irrelevant
+  # to a log-pipeline problem, so the judge should mark them cannot_evaluate.
+  skipped:
+    - ai_strategy_explicit

@@ -1,0 +1,19 @@
+description: "Chat app explicitly invokes an AI coach. Tests the AI-related signals (should NOT be skipped here)."
+question: "Design a chat application where users can talk to a Socratic AI coach for system-design practice."
+rubricVersion: v1.0
+
+expectedScore:
+  min: 3.0
+  max: 4.5
+
+expectedSignals:
+  credited:
+    - scope_specificity
+    - shape_and_seams
+    - data_model_committed
+    # AI-specific signals are in scope here — the question explicitly invokes
+    # an AI coach, so the relevance gate should NOT skip these.
+    - ai_strategy_explicit
+  miss: []
+  hit: []
+  # No skipped: the question opens the door to AI signals.

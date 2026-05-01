@@ -69,6 +69,10 @@ export class OrchestratorService {
       this.logger.log(`Running ${phase} agent for session ${sessionId}`);
       const result = await this.planAgent.evaluate(input);
       const persisted = await this.evalsRepo.createPhaseEvaluation(sessionId, phase, result);
+      // Audit row goes in last so its FK target (the new PhaseEvaluation
+      // id) exists. Cascade on the FK keeps them aligned: deleting the
+      // evaluation drops the audit too.
+      await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
     }
     return out;

@@ -12,6 +12,15 @@ export interface RubricSignal {
   evidenceHint?: string;
   critical?: boolean;
   capAtScore?: number;
+  // Optional pairing metadata. When set, the LLM is instructed not to
+  // double-count: if the bad signal fires, the paired good signal is
+  // automatically MISS for reporting and not separately deducted (and
+  // vice versa).
+  pairedWith?: string;
+  // Artifacts that must be present for this signal to fire. If absent,
+  // the signal must return cannot_evaluate. Used by `ai_authored_plan`
+  // which needs hint history + snapshot timeline to judge responsibly.
+  requiresEvidence?: string[];
 }
 
 export interface RubricRequiredSection {

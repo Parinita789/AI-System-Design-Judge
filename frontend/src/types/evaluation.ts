@@ -16,3 +16,19 @@ export interface PhaseEvaluation {
   topActionableItems: string[];
   evaluatedAt: string;
 }
+
+// Matches the Prisma `EvaluationAudit` row — 1:1 with a PhaseEvaluation.
+// `prompt` is the full rendered system + user payload sent to the LLM;
+// `rawResponse` is the LLM text before parseEvalOutput() ran.
+export interface EvaluationAudit {
+  id: string;
+  phaseEvaluationId: string;
+  prompt: string;
+  rawResponse: string;
+  modelUsed: string;
+  tokensIn: number;
+  tokensOut: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  createdAt: string;
+}

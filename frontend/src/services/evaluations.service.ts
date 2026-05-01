@@ -1,5 +1,5 @@
 import { api } from './api';
-import { PhaseEvaluation } from '@/types/evaluation';
+import { EvaluationAudit, PhaseEvaluation } from '@/types/evaluation';
 
 export const evaluationsService = {
   runForSession(sessionId: string) {
@@ -14,5 +14,8 @@ export const evaluationsService = {
   },
   get(id: string) {
     return api.get<PhaseEvaluation>(`/evaluations/${id}`).then((r) => r.data);
+  },
+  getAudit(id: string) {
+    return api.get<EvaluationAudit>(`/evaluations/${id}/audit`).then((r) => r.data);
   },
 };

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sessionsService } from '@/services/sessions.service';
@@ -8,7 +8,7 @@ import { evaluationsService } from '@/services/evaluations.service';
 import { rubricsService } from '@/services/rubrics.service';
 import { useSessionStore } from '@/store/sessionStore';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
-import { PhaseEvaluation, SignalResult } from '@/types/evaluation';
+import { EvaluationAudit, PhaseEvaluation, SignalResult } from '@/types/evaluation';
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 import { QuestionWithSessions } from '@/types/question';
 
@@ -57,13 +57,12 @@ export function SessionResultsPage() {
   const queryClient = useQueryClient();
   const setActive = useSessionStore((s) => s.setActive);
   const [planMdExpanded, setPlanMdExpanded] = useState(false);
-  // null = "show the latest plan eval"; otherwise pin to a specific historical eval id.
-  const [selectedEvalId, setSelectedEvalId] = useState<string | null>(null);
-  // Default: Evaluation history is open when the page loads (it's the
-  // primary thing the user wants to see when revisiting an attempted
-  // question). Attempts stays collapsed — secondary navigation only.
-  const [historyOpen, setHistoryOpen] = useState(true);
   const [attemptsOpen, setAttemptsOpen] = useState(false);
+  // null = "show the latest plan eval"; otherwise pin a historical eval id.
+  // Only set via the View button on a row inside the current attempt's
+  // expanded eval-history sub-table; cleared by Re-evaluate or by the
+  // "show latest" link on the score panel.
+  const [selectedEvalId, setSelectedEvalId] = useState<string | null>(null);
 
   const sessionQuery = useQuery({
     queryKey: ['session', id],
@@ -127,14 +126,17 @@ export function SessionResultsPage() {
     () => (evalsQuery.data ?? []).filter((e) => e.phase === 'plan'),
     [evalsQuery.data],
   );
-  // Pinned (selected) eval if its id matches; otherwise the latest.
+  // If a historical eval is pinned and still present, show that one;
+  // otherwise default to the latest. Falls back gracefully if the pinned
+  // id stops existing (e.g., a Re-evaluate ran in another tab).
   const displayedEval = useMemo<PhaseEvaluation | undefined>(() => {
     if (selectedEvalId) {
-      const match = planEvals.find((e) => e.id === selectedEvalId);
-      if (match) return match;
+      const pinned = planEvals.find((e) => e.id === selectedEvalId);
+      if (pinned) return pinned;
     }
     return planEvals[0];
   }, [planEvals, selectedEvalId]);
+  const isLatestDisplayed = displayedEval?.id === planEvals[0]?.id;
 
   if (!id) return <div>Missing session id.</div>;
   if (sessionQuery.isPending || evalsQuery.isPending) return <div>Loading…</div>;
@@ -184,29 +186,15 @@ export function SessionResultsPage() {
         </div>
       )}
 
-      {/* Top-of-page collapsible secondary sections.
-          Default closed — keep the score breakdown front-and-center. */}
-      {planEvals.length > 0 && (
-        <CollapsibleSection
-          label="Evaluation history"
-          count={planEvals.length}
-          open={historyOpen}
-          onToggle={() => setHistoryOpen((v) => !v)}
-        >
-          <EvaluationHistorySection
-            planEvals={planEvals}
-            selectedEvalId={displayedEval?.id ?? null}
-            onSelect={setSelectedEvalId}
-            isLatest={(evalId) => planEvals[0]?.id === evalId}
-            sessionStatus={session.status}
-            rubricVersion={session.question.rubricVersion}
-          />
-        </CollapsibleSection>
-      )}
+      {/* Top-of-page collapsible: only Attempts now. Re-evaluations of
+          the same attempt are tracked in the DB but we always display the
+          latest one — no UI to pin an older eval. */}
       {(questionQuery.data?.sessions.length ?? 0) > 0 && (
         <CollapsibleSection
           label="Attempts of this question"
+          subtitle="Different attempts of this question — each has its own plan.md"
           count={questionQuery.data?.sessions.length ?? 0}
+          rubricVersion={session.question.rubricVersion}
           open={attemptsOpen}
           onToggle={() => setAttemptsOpen((v) => !v)}
         >
@@ -214,6 +202,8 @@ export function SessionResultsPage() {
             currentSessionId={session.id}
             attempts={questionQuery.data?.sessions ?? []}
             loading={questionQuery.isPending}
+            selectedEvalId={displayedEval?.id ?? null}
+            onSelectEval={setSelectedEvalId}
           />
         </CollapsibleSection>
       )}
@@ -245,7 +235,12 @@ export function SessionResultsPage() {
           </div>
         )
       ) : (
-        <PlanEvaluationView evaluation={displayedEval} rubric={rubricQuery.data} />
+        <PlanEvaluationView
+          evaluation={displayedEval}
+          rubric={rubricQuery.data}
+          isLatest={isLatestDisplayed}
+          onShowLatest={() => setSelectedEvalId(null)}
+        />
       )}
 
       <section>
@@ -269,9 +264,13 @@ export function SessionResultsPage() {
 function PlanEvaluationView({
   evaluation,
   rubric,
+  isLatest,
+  onShowLatest,
 }: {
   evaluation: PhaseEvaluation;
   rubric: Rubric | undefined;
+  isLatest: boolean;
+  onShowLatest: () => void;
 }) {
   const goodSignals = rubric?.signals.filter((s) => s.polarity === 'good') ?? [];
   const badSignals = rubric?.signals.filter((s) => s.polarity === 'bad') ?? [];
@@ -286,32 +285,45 @@ function PlanEvaluationView({
 
   return (
     <>
-      <section className="rounded border border-gray-300 bg-white p-4 flex items-center gap-6">
-        <div>
-          <div className="text-xs uppercase tracking-wide text-gray-500">Plan score</div>
-          <div className="text-5xl font-semibold tabular-nums flex items-baseline gap-3">
-            <span>
-              {formatScore(evaluation.score)}
-              <span className="text-base text-gray-400 font-normal"> / 5</span>
+      <section className="rounded border border-gray-300 bg-white px-4 py-3 flex items-center gap-4">
+        <div className="flex items-baseline gap-3">
+          <span className="text-xs uppercase tracking-wide text-gray-500">Plan score</span>
+          <span className="text-3xl font-semibold tabular-nums leading-none">
+            {formatScore(evaluation.score)}
+            <span className="text-sm text-gray-400 font-normal"> / 5</span>
+          </span>
+          {(() => {
+            const verdict = scoreVerdict(evaluation.score);
+            return (
+              <span
+                className={`inline-block rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${verdict.className}`}
+              >
+                {verdict.label}
+              </span>
+            );
+          })()}
+          <span className="text-[11px] text-gray-500">
+            · Evaluated {new Date(evaluation.evaluatedAt).toLocaleString()}
+          </span>
+          {!isLatest && (
+            <span className="flex items-baseline gap-1.5">
+              <span className="rounded bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide">
+                historical
+              </span>
+              <button
+                type="button"
+                onClick={onShowLatest}
+                className="text-[11px] text-blue-600 hover:underline"
+              >
+                show latest →
+              </button>
             </span>
-            {(() => {
-              const verdict = scoreVerdict(evaluation.score);
-              return (
-                <span
-                  className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${verdict.className}`}
-                >
-                  {verdict.label}
-                </span>
-              );
-            })()}
-          </div>
-          <div className="text-[11px] text-gray-500 mt-1">
-            Evaluated {new Date(evaluation.evaluatedAt).toLocaleString()}
-          </div>
+          )}
         </div>
         {rubric && (
           <CoverageSummary signals={rubric.signals} results={evaluation.signalResults} />
         )}
+        <AuditTrailButton evaluationId={evaluation.id} />
       </section>
 
       {rubric && <ScoreBreakdown rubric={rubric} evaluation={evaluation} />}
@@ -417,14 +429,12 @@ function CoverageSummary({
     else counts[r.result]++;
   }
   return (
-    <div className="ml-auto text-xs text-gray-700 leading-relaxed">
-      <div className="font-medium text-gray-800 mb-0.5">Coverage ({signals.length} signals)</div>
-      <div className="flex gap-3">
-        <span className="text-emerald-700">✓ {counts.hit} hit</span>
-        <span className="text-amber-700">~ {counts.partial} partial</span>
-        <span className="text-gray-500">– {counts.miss} miss</span>
-        <span className="text-purple-700">? {counts.not_evaluated} skipped</span>
-      </div>
+    <div className="ml-auto flex items-center gap-3 text-[11px] text-gray-700">
+      <span className="font-medium text-gray-800">Coverage ({signals.length}):</span>
+      <span className="text-emerald-700">✓ {counts.hit}</span>
+      <span className="text-amber-700">~ {counts.partial}</span>
+      <span className="text-gray-500">– {counts.miss}</span>
+      <span className="text-purple-700">? {counts.not_evaluated}</span>
     </div>
   );
 }
@@ -560,11 +570,40 @@ function AttemptsSection({
   currentSessionId,
   attempts,
   loading,
+  selectedEvalId,
+  onSelectEval,
 }: {
   currentSessionId: string;
   attempts: QuestionWithSessions['sessions'];
   loading: boolean;
+  selectedEvalId: string | null;
+  onSelectEval: (id: string | null) => void;
 }) {
+  // Most recent attempt at the top. The API returns oldest-first because
+  // attempt numbering ("attempt 1, attempt 2…") follows that order — we
+  // preserve the number on each row but reverse the rendered order so the
+  // newest is what the eye lands on first.
+  const ordered = useMemo(
+    () =>
+      [...attempts].sort(
+        (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
+      ),
+    [attempts],
+  );
+
+  // Tracks which attempt rows are showing their evaluation history.
+  // Each Re-evaluate of an attempt is a new PhaseEvaluation row in the
+  // DB; this dropdown is the only place the user can browse those.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleExpanded = (sessionId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(sessionId)) next.delete(sessionId);
+      else next.add(sessionId);
+      return next;
+    });
+  };
+
   if (loading) {
     return (
       <section>
@@ -594,43 +633,92 @@ function AttemptsSection({
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
-            {attempts.map((a, i) => {
-              const planScore = a.phaseEvaluations.find((e) => e.phase === 'plan')?.score;
+            {ordered.map((a, i) => {
+              // phaseEvaluations come newest-first from the API.
+              const planEvals = a.phaseEvaluations.filter((e) => e.phase === 'plan');
+              const planScore = planEvals[0]?.score;
               const isCurrent = a.id === currentSessionId;
+              const hasHistory = planEvals.length > 0;
+              const isExpanded = expanded.has(a.id);
               return (
-                <tr key={a.id} className={isCurrent ? 'bg-blue-50' : ''}>
-                  <td className="px-3 py-1.5 text-gray-500 tabular-nums">{i + 1}</td>
-                  <td className="px-3 py-1.5 text-xs text-gray-700">
-                    {new Date(a.startedAt).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-1.5 text-xs uppercase tracking-wide text-gray-600">
-                    {a.status}
-                    {isCurrent && (
-                      <span className="ml-2 normal-case text-[10px] text-blue-700">
-                        (this attempt)
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
-                    {planScore !== undefined && planScore !== null
-                      ? formatScore(planScore)
-                      : '—'}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    {!isCurrent && (
-                      <Link
-                        to={
-                          a.status === 'active'
-                            ? `/sessions/${a.id}/active`
-                            : `/sessions/${a.id}`
-                        }
-                        className="text-blue-600 hover:underline text-xs"
-                      >
-                        View →
-                      </Link>
-                    )}
-                  </td>
-                </tr>
+                <Fragment key={a.id}>
+                  <tr className={isCurrent ? 'bg-blue-50' : ''}>
+                    <td className="px-3 py-1.5 text-gray-500 tabular-nums">
+                      {ordered.length - i}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs text-gray-700">
+                      {new Date(a.startedAt).toLocaleString()}
+                    </td>
+                    <td className="px-3 py-1.5 text-xs uppercase tracking-wide text-gray-600">
+                      {a.status}
+                      {isCurrent && (
+                        <span className="ml-2 normal-case text-[10px] text-blue-700">
+                          (this attempt)
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
+                      {planScore !== undefined && planScore !== null
+                        ? formatScore(planScore)
+                        : '—'}
+                      {planEvals.length > 1 && (
+                        <span className="ml-1 text-[10px] font-normal text-gray-500">
+                          ×{planEvals.length}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-1.5 text-right">
+                      <div className="flex items-center justify-end gap-3">
+                        {!isCurrent && (
+                          <Link
+                            to={
+                              a.status === 'active'
+                                ? `/sessions/${a.id}/active`
+                                : `/sessions/${a.id}`
+                            }
+                            className="text-blue-600 hover:underline text-xs"
+                          >
+                            View →
+                          </Link>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => toggleExpanded(a.id)}
+                          disabled={!hasHistory}
+                          aria-expanded={isExpanded}
+                          aria-label={
+                            isExpanded
+                              ? 'Hide evaluation history'
+                              : 'Show evaluation history'
+                          }
+                          title={
+                            hasHistory
+                              ? `${planEvals.length} evaluation${planEvals.length === 1 ? '' : 's'} on this attempt`
+                              : 'No evaluations yet'
+                          }
+                          className="text-xs leading-none text-gray-500 hover:text-gray-800 disabled:text-gray-300 disabled:cursor-not-allowed transition-transform"
+                          style={{
+                            transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                          }}
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && hasHistory && (
+                    <tr className="bg-gray-50">
+                      <td colSpan={5} className="px-3 py-2">
+                        <EvaluationHistoryForAttempt
+                          planEvals={planEvals}
+                          isCurrentAttempt={isCurrent}
+                          selectedEvalId={selectedEvalId}
+                          onSelectEval={onSelectEval}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -640,83 +728,93 @@ function AttemptsSection({
   );
 }
 
-function EvaluationHistorySection({
+function EvaluationHistoryForAttempt({
   planEvals,
+  isCurrentAttempt,
   selectedEvalId,
-  onSelect,
-  isLatest,
-  sessionStatus,
-  rubricVersion,
+  onSelectEval,
 }: {
   planEvals: PhaseEvaluation[];
+  isCurrentAttempt: boolean;
   selectedEvalId: string | null;
-  onSelect: (id: string | null) => void;
-  isLatest: (id: string) => boolean;
-  sessionStatus: string;
-  rubricVersion: string;
+  onSelectEval: (id: string | null) => void;
 }) {
+  // planEvals comes newest-first from the API. Numbering counts down so
+  // the topmost row is "N" — matching how Attempts numbers its own rows.
+  // The View column only renders for the *current* attempt: pinning a
+  // historical eval from another attempt would require navigating to
+  // that session first, which we leave to the row-level "View →" link.
+  // For non-current attempts, the eval list is read-only.
   return (
-    <section>
-      <div className="rounded border border-gray-300 bg-white overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-600">
-            <tr>
-              <th className="text-left px-3 py-1.5 font-medium w-10">#</th>
-              <th className="text-left px-3 py-1.5 font-medium">When</th>
-              <th className="text-left px-3 py-1.5 font-medium">Status</th>
-              <th className="text-left px-3 py-1.5 font-medium">Rubric</th>
-              <th className="text-right px-3 py-1.5 font-medium">Score</th>
-              <th className="text-right px-3 py-1.5 font-medium w-32"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {planEvals.map((e, i) => {
-              const showing = e.id === selectedEvalId;
-              const latest = isLatest(e.id);
-              return (
-                <tr key={e.id} className={showing ? 'bg-blue-50' : ''}>
-                  <td className="px-3 py-1.5 text-gray-500 tabular-nums">
-                    {planEvals.length - i}
-                  </td>
-                  <td className="px-3 py-1.5 text-xs text-gray-700">
-                    {new Date(e.evaluatedAt).toLocaleString()}
-                    {latest && (
-                      <span className="ml-2 normal-case text-[10px] text-emerald-700 uppercase tracking-wide">
-                        latest
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-1.5">
-                    <span className="inline-block rounded bg-gray-100 text-gray-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide">
-                      {sessionStatus}
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
+        Evaluation history ({planEvals.length} run
+        {planEvals.length === 1 ? '' : 's'} on this attempt)
+      </div>
+      <table className="w-full text-xs">
+        <thead className="text-gray-600">
+          <tr>
+            <th className="text-left font-medium w-10">#</th>
+            <th className="text-left font-medium">When</th>
+            <th className="text-right font-medium">Score</th>
+            {isCurrentAttempt && (
+              <th className="text-right font-medium w-28"></th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-200">
+          {planEvals.map((e, i) => {
+            // The breakdown panel shows planEvals[0] when nothing is
+            // pinned, so the latest is "showing" by default unless the
+            // user has explicitly selected another row.
+            const isShowing = isCurrentAttempt
+              ? selectedEvalId
+                ? e.id === selectedEvalId
+                : i === 0
+              : false;
+            return (
+              <tr key={e.id} className={isShowing ? 'bg-blue-50' : ''}>
+                <td className="py-1 text-gray-500 tabular-nums">
+                  {planEvals.length - i}
+                  {i === 0 && (
+                    <span className="ml-1 text-[9px] uppercase tracking-wide text-emerald-700">
+                      latest
                     </span>
-                  </td>
-                  <td className="px-3 py-1.5 text-xs text-gray-600 font-mono">
-                    {rubricVersion}
-                  </td>
-                  <td className="px-3 py-1.5 text-right font-semibold tabular-nums">
-                    {formatScore(e.score)}
-                  </td>
-                  <td className="px-3 py-1.5 text-right">
-                    {showing ? (
-                      <span className="text-[11px] text-blue-700">currently shown</span>
+                  )}
+                </td>
+                <td className="py-1 text-gray-700">
+                  {new Date(e.evaluatedAt).toLocaleString()}
+                </td>
+                <td className="py-1 text-right font-semibold tabular-nums">
+                  {formatScore(e.score)}
+                </td>
+                {isCurrentAttempt && (
+                  <td className="py-1 text-right">
+                    {isShowing ? (
+                      <span className="text-[10px] text-blue-700">
+                        currently shown
+                      </span>
                     ) : (
                       <button
                         type="button"
-                        onClick={() => onSelect(e.id)}
-                        className="text-blue-600 hover:underline text-xs"
+                        onClick={() =>
+                          // Selecting the latest is equivalent to
+                          // clearing the pin: same result, simpler state.
+                          onSelectEval(i === 0 ? null : e.id)
+                        }
+                        className="text-blue-600 hover:underline text-[11px]"
                       >
                         View →
                       </button>
                     )}
                   </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -762,13 +860,17 @@ function CancelledEmptyState({
 
 function CollapsibleSection({
   label,
+  subtitle,
   count,
+  rubricVersion,
   open,
   onToggle,
   children,
 }: {
   label: string;
+  subtitle?: string;
   count: number;
+  rubricVersion?: string;
   open: boolean;
   onToggle: () => void;
   children: React.ReactNode;
@@ -779,16 +881,202 @@ function CollapsibleSection({
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 hover:bg-gray-50"
+        className="w-full flex items-center justify-between gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-left text-sm font-medium text-gray-800 hover:bg-gray-50"
       >
-        <span>
-          {open ? '▼' : '▶'} {label}
+        <span className="min-w-0 flex-1">
+          <span>
+            {open ? '▼' : '▶'} {label}
+          </span>
+          {subtitle && (
+            <span className="ml-2 text-[11px] font-normal text-gray-500 normal-case">
+              {subtitle}
+            </span>
+          )}
         </span>
-        <span className="text-xs font-normal text-gray-500">
-          {count} {count === 1 ? 'entry' : 'entries'}
+        <span className="flex items-center gap-2 shrink-0">
+          {rubricVersion && (
+            <span className="rounded bg-gray-100 text-gray-700 px-1.5 py-0.5 text-[10px] font-mono uppercase tracking-wide">
+              rubric: {rubricVersion}
+            </span>
+          )}
+          <span className="text-xs font-normal text-gray-500">
+            {count} {count === 1 ? 'entry' : 'entries'}
+          </span>
         </span>
       </button>
       {open && <div className="mt-2">{children}</div>}
     </section>
+  );
+}
+
+// Lazy-loads the EvaluationAudit row when the user clicks "View prompt".
+// The audit table can be large (~10–80 KB of prompt + response), so we
+// skip the fetch until the modal is opened. Hooks into React Query so
+// flipping between evaluations re-fetches on demand.
+function AuditTrailButton({ evaluationId }: { evaluationId: string }) {
+  const [open, setOpen] = useState(false);
+  const auditQuery = useQuery({
+    queryKey: ['eval-audit', evaluationId],
+    queryFn: () => evaluationsService.getAudit(evaluationId),
+    enabled: open,
+    retry: false,
+  });
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="ml-auto rounded border border-gray-300 bg-white px-2 py-1 text-[11px] font-medium text-gray-700 hover:bg-gray-50"
+        title="See the exact prompt sent to the LLM and the raw response"
+      >
+        View LLM audit →
+      </button>
+      {open && (
+        <AuditTrailModal
+          query={auditQuery}
+          onDismiss={() => setOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+function AuditTrailModal({
+  query,
+  onDismiss,
+}: {
+  query: ReturnType<typeof useQuery<EvaluationAudit>>;
+  onDismiss: () => void;
+}) {
+  const [tab, setTab] = useState<'prompt' | 'response'>('prompt');
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onDismiss]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      onClick={onDismiss}
+    >
+      <div
+        className="w-full max-w-5xl max-h-[90vh] flex flex-col rounded-lg bg-white shadow-xl border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-200">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">LLM audit trail</h2>
+            <p className="text-[11px] text-gray-500">
+              The exact bytes sent to the model and the raw response before parsing.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        {query.isPending && (
+          <div className="px-5 py-8 text-sm text-gray-500">Loading audit…</div>
+        )}
+        {query.isError && (
+          <div className="px-5 py-8 text-sm text-red-700">
+            Failed to load audit: {(query.error as Error).message}
+          </div>
+        )}
+        {query.data && (
+          <>
+            <div className="px-5 py-2 border-b border-gray-200 bg-gray-50 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-600">
+              <span>
+                model: <span className="font-mono text-gray-800">{query.data.modelUsed}</span>
+              </span>
+              <span>
+                tokens in: <span className="font-mono text-gray-800">{query.data.tokensIn.toLocaleString()}</span>
+              </span>
+              <span>
+                tokens out: <span className="font-mono text-gray-800">{query.data.tokensOut.toLocaleString()}</span>
+              </span>
+              <span>
+                cache read: <span className="font-mono text-gray-800">{query.data.cacheReadTokens.toLocaleString()}</span>
+              </span>
+              <span>
+                captured: <span className="font-mono text-gray-800">{new Date(query.data.createdAt).toLocaleString()}</span>
+              </span>
+            </div>
+
+            <div className="border-b border-gray-200 px-5 flex gap-1 text-xs">
+              <TabButton active={tab === 'prompt'} onClick={() => setTab('prompt')}>
+                Prompt sent ({query.data.prompt.length.toLocaleString()} chars)
+              </TabButton>
+              <TabButton active={tab === 'response'} onClick={() => setTab('response')}>
+                Raw response ({query.data.rawResponse.length.toLocaleString()} chars)
+              </TabButton>
+            </div>
+
+            <div className="flex-1 overflow-auto p-3 bg-gray-50">
+              <pre className="text-xs font-mono whitespace-pre-wrap break-words text-gray-800">
+                {tab === 'prompt' ? query.data.prompt : query.data.rawResponse}
+              </pre>
+            </div>
+
+            <div className="px-5 py-2 border-t border-gray-200 bg-white flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const text =
+                    tab === 'prompt' ? query.data!.prompt : query.data!.rawResponse;
+                  navigator.clipboard.writeText(text).catch(() => {});
+                }}
+                className="rounded border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              >
+                Copy {tab}
+              </button>
+              <button
+                type="button"
+                onClick={onDismiss}
+                className="rounded bg-gray-800 text-white px-3 py-1 text-xs font-medium hover:bg-gray-900"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-2 -mb-px border-b-2 ${
+        active
+          ? 'border-blue-600 text-blue-700 font-medium'
+          : 'border-transparent text-gray-600 hover:text-gray-900'
+      }`}
+    >
+      {children}
+    </button>
   );
 }

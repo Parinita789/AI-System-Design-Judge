@@ -1,0 +1,18 @@
+description: "Near-empty plan; judge should grade Failed and flag missing build sequence + validation."
+question: "Design a URL shortener for 10K req/s and 200M URLs."
+rubricVersion: v1.0
+
+# Sparse plan → expect a low score. Range gives the LLM some wiggle room.
+expectedScore:
+  min: 0.0
+  max: 2.0
+
+expectedSignals:
+  miss:
+    - validation_plan_concrete
+    - data_model_committed
+  credited: []
+  hit: []
+  # AI-related signals: question doesn't invoke AI, so they should be skipped.
+  skipped:
+    - ai_strategy_explicit
