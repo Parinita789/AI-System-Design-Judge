@@ -66,7 +66,10 @@ fixtures/<name>/
 ```yaml
 description: "One-line summary that lands in the console output."
 question: "Design a URL shortener for 10K req/s and 200M URLs."
-rubricVersion: v1.0
+rubricVersion: v2.0
+mode: design   # required for v2.0+; one of: build, design.
+               # For v1.0, omit this field — the legacy single-rubric
+               # path is used.
 
 # LLM judgments are noisy. Score is a tolerated range, not an exact value.
 expectedScore:

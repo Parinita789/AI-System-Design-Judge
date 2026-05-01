@@ -1,18 +1,20 @@
-// Shape of a fixture on disk: a directory with plan.md (the input artifact)
-// and fixture.yaml (metadata + expectations).
-
 export type SignalMode = 'hit' | 'partial' | 'miss' | 'credited' | 'skipped';
+
+// Rubric variant. Required on v2.0+ fixtures; ignored on v1.0 fixtures.
+export type RubricMode = 'build' | 'design';
+
+// Per-attempt seniority. Optional everywhere — fixtures default to
+// `senior` when absent (preserves pre-seniority calibration).
+export type FixtureSeniority = 'junior' | 'mid' | 'senior' | 'staff';
 
 export interface FixtureExpectation {
   expectedScore: { min: number; max: number };
-  // Each key is a SignalMode; the value is a list of rubric signal IDs the
-  // judge is expected to put in that mode for this fixture.
   expectedSignals: Partial<Record<SignalMode, string[]>>;
   warnOnly?: boolean;
 }
 
 export interface FixtureHint {
-  occurredAt: string; // ISO date; loader converts to Date
+  occurredAt: string;
   elapsedMinutes: number;
   prompt: string;
   response: string;
@@ -23,6 +25,11 @@ export interface Fixture extends FixtureExpectation {
   description: string;
   question: string;
   rubricVersion: string;
+  // Required when rubricVersion is v2.0+. Optional on v1.0 fixtures.
+  mode?: RubricMode;
+  // Optional. When absent, the runner uses 'senior' so existing fixtures
+  // stay calibrated as before. v2.0 fixtures can override per-fixture.
+  seniority?: FixtureSeniority;
   planMd: string | null;
   hints?: FixtureHint[];
 }

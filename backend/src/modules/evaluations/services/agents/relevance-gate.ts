@@ -1,4 +1,5 @@
 import { SignalResult } from '../../models/evaluation.types';
+import { isModeBQuestion } from './mode-classifier';
 
 // Deterministic backstops for the relevance-gating instructions in the
 // system prompt. Small LLMs (and sometimes large ones) ignore prose
@@ -117,17 +118,8 @@ const BUILD_EXECUTION_BAD_SIGNAL_IDS: readonly string[] = [
   'no_validation_plan',
 ];
 
-// Patterns that signal "this is a production-scale problem". Conservative
-// — match only when the question explicitly stipulates throughput or
-// distributed concerns. Ambiguous mid-size questions stay in Mode A.
-const MODE_B_PATTERNS: readonly RegExp[] = [
-  // Numeric throughput in K/M/B (e.g. "10K req/s", "100M users", "50K events/sec")
-  /\b\d+\s*[kmb]\b\s*(req|request|requests|qps|rps|tps|user|users|event|events|message|messages|connection|connections|eps|operations|ops)/i,
-  // Spelled-out millions/billions: "100 million users", "1 billion requests"
-  /\b\d+\s*(million|billion)\b/i,
-  // Distributed-system-only language that implies scale beyond 2h
-  /\b(distributed system|multi[- ]region|globally distributed|horizontal(ly)? scal|shard(ing|ed)?|geo[- ]?replicat)/i,
-];
+// Mode-B detection lives in mode-classifier.ts; this gate uses the same
+// predicate so v2.0 routing and v1.0 gating stay in sync.
 
 export function applyModeBBuildExecutionGate(
   questionPrompt: string,
@@ -160,6 +152,3 @@ export function applyModeBBuildExecutionGate(
   return { results: out, gated };
 }
 
-function isModeBQuestion(prompt: string): boolean {
-  return MODE_B_PATTERNS.some((re) => re.test(prompt));
-}

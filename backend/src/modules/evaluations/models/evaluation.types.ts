@@ -14,9 +14,6 @@ export interface PhaseEvaluationResult {
   audit: EvaluationAuditPayload;
 }
 
-// Captured per LLM call. Persisted in evaluation_audits 1:1 with the
-// resulting PhaseEvaluation row. The orchestrator joins these together
-// after the evaluation row has an id.
 export interface EvaluationAuditPayload {
   prompt: string;
   rawResponse: string;

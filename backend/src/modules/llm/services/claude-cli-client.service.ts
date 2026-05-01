@@ -21,13 +21,19 @@ export class ClaudeCliClientService {
   // Run the local `claude -p` (print mode) CLI with `prompt` piped via stdin.
   // Returns whatever the CLI prints to stdout. The user must already be
   // logged into Claude Code for this to work.
-  async run(prompt: string): Promise<ClaudeCliResult> {
+  // `model` is an optional Anthropic model string (e.g., 'claude-haiku-4-5')
+  // — when set, passed through as `--model <id>` so the per-call picker
+  // takes effect on the CLI provider too. Absent → CLI's default model.
+  async run(prompt: string, model?: string): Promise<ClaudeCliResult> {
     const bin =
       this.config.get<string>(LLM_ENV.CLAUDE_CLI_BIN) ?? CLAUDE_CLI_DEFAULT_BIN;
-    this.logger.log(`spawn ${bin} -p (prompt=${prompt.length} chars)`);
+    const args = model ? ['-p', '--model', model] : ['-p'];
+    this.logger.log(
+      `spawn ${bin} ${args.join(' ')} (prompt=${prompt.length} chars)`,
+    );
 
     return new Promise((resolve, reject) => {
-      const child = spawn(bin, ['-p'], { stdio: ['pipe', 'pipe', 'pipe'] });
+      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       let timedOut = false;
@@ -65,7 +71,11 @@ export class ClaudeCliClientService {
           );
           return;
         }
-        resolve({ text: stdout.trim(), model: 'claude-cli' });
+        // When the caller passed a model, stamp it on the result so the
+        // audit row reflects what actually ran. Without an override the
+        // CLI picks its own model and we can't introspect it from here,
+        // so fall back to the legacy marker.
+        resolve({ text: stdout.trim(), model: model ?? 'claude-cli' });
       });
 
       child.stdin.write(prompt);

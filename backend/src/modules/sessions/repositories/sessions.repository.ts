@@ -1,13 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { SessionStatus } from '@prisma/client';
+import { Seniority as PrismaSeniority, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 
 @Injectable()
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { questionId: string }) {
-    return this.prisma.session.create({ data });
+  create(data: { questionId: string; seniority?: PrismaSeniority | null }) {
+    return this.prisma.session.create({
+      data: {
+        questionId: data.questionId,
+        seniority: data.seniority ?? null,
+      },
+    });
   }
 
   findById(id: string) {

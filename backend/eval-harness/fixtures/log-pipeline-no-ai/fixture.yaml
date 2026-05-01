@@ -1,6 +1,7 @@
 description: "Non-AI question (log pipeline). Verifies the relevance-gating rule: AI signals must be skipped, not missed."
 question: "Design a log ingestion pipeline that handles 50K events/sec from microservices, retains 30 days of hot data, and supports ad-hoc queries."
-rubricVersion: v1.0
+rubricVersion: v2.0
+mode: design
 
 expectedScore:
   min: 2.5

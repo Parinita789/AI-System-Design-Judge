@@ -23,7 +23,11 @@ export class OrchestratorService {
     private readonly config: ConfigService,
   ) {}
 
-  async run(sessionId: string, phases: Phase[] = ['plan']): Promise<PhaseEvaluation[]> {
+  async run(
+    sessionId: string,
+    phases: Phase[] = ['plan'],
+    options?: { model?: string },
+  ): Promise<PhaseEvaluation[]> {
     const session = await this.sessionsService.getWithQuestion(sessionId);
     const allSnapshots = await this.snapshotsService.list(sessionId);
     const latestSnapshot = await this.snapshotsService.latest(sessionId);
@@ -59,6 +63,14 @@ export class OrchestratorService {
         response: h.response,
       })),
       rubricVersion,
+      // v2.0+ rubric variant. Null on legacy v1.0 questions; the loader
+      // takes the single-file path in that case.
+      mode: session.question.mode ?? null,
+      // Seniority is per-attempt — comes off the Session, not Question.
+      seniority: session.seniority ?? null,
+      // Optional model override (Anthropic Haiku/Sonnet/Opus). Absent →
+      // provider env default (LLM_MODEL).
+      model: options?.model,
     };
 
     const out: PhaseEvaluation[] = [];

@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpException,
@@ -7,7 +8,18 @@ import {
   Param,
   Post,
 } from '@nestjs/common';
+import { IsOptional, IsString } from 'class-validator';
 import { EvaluationsService } from '../services/evaluations.service';
+
+class RunEvaluationDto {
+  // Optional Anthropic model override (e.g., 'claude-haiku-4-5',
+  // 'claude-sonnet-4-6', 'claude-opus-4-7'). Absent → env default.
+  // String type, not enum, so future model strings don't require a
+  // backend deploy to land in the API surface.
+  @IsOptional()
+  @IsString()
+  model?: string;
+}
 
 @Controller()
 export class EvaluationsController {
@@ -16,9 +28,12 @@ export class EvaluationsController {
   constructor(private readonly evaluationsService: EvaluationsService) {}
 
   @Post('sessions/:sessionId/evaluate')
-  async runForSession(@Param('sessionId') sessionId: string) {
+  async runForSession(
+    @Param('sessionId') sessionId: string,
+    @Body() body?: RunEvaluationDto,
+  ) {
     try {
-      return await this.evaluationsService.runForSession(sessionId);
+      return await this.evaluationsService.runForSession(sessionId, body?.model);
     } catch (err) {
       const message = (err as Error).message ?? String(err);
       const stack = (err as Error).stack ?? '';
@@ -38,7 +53,6 @@ export class EvaluationsController {
 
   @Get('evaluations/:id/status')
   status() {
-    // Sync model — by the time the client can fetch this, the eval is already complete.
     return { state: 'complete' as const };
   }
 

@@ -2,6 +2,9 @@ import { Phase } from '../../phase-tagger/models/phase.types';
 
 export type SignalPolarity = 'good' | 'bad';
 export type WeightTier = 'high' | 'medium' | 'low';
+export type Mode = 'build' | 'design';
+export type Seniority = 'junior' | 'mid' | 'senior' | 'staff';
+export const SENIORITIES: readonly Seniority[] = ['junior', 'mid', 'senior', 'staff'];
 
 export interface RubricSignal {
   id: string;
@@ -21,6 +24,11 @@ export interface RubricSignal {
   // the signal must return cannot_evaluate. Used by `ai_authored_plan`
   // which needs hint history + snapshot timeline to judge responsibly.
   requiresEvidence?: string[];
+  // Per-seniority weight overrides. When set, the loader resolves
+  // `weight` from this map using the requested seniority and DROPS this
+  // field from the returned signal. Downstream code only ever sees a
+  // single `weight`. All four levels are required when this is provided.
+  weightBySeniority?: Record<Seniority, WeightTier>;
 }
 
 export interface RubricRequiredSection {
@@ -64,6 +72,13 @@ export interface Rubric {
   schemaVersion: number;
   rubricVersion: string;
   phase: Phase;
+  // Set on v2.0+ rubrics; null/undefined for the legacy v1.0 single-file
+  // rubric. The orchestrator passes it through from Question.mode.
+  mode?: Mode;
+  // Set when a Session.seniority drives the per-signal weight resolution.
+  // Rubric YAML files do NOT carry this — it comes from the session and
+  // is stamped on the Rubric object after the loader resolves weights.
+  seniority?: Seniority;
   phaseName: string;
   goal: string;
   timeBounds: RubricTimeBounds;

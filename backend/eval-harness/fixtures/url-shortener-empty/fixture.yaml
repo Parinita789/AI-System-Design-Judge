@@ -1,6 +1,7 @@
 description: "Near-empty plan; judge should grade Failed and flag missing build sequence + validation."
 question: "Design a URL shortener for 10K req/s and 200M URLs."
-rubricVersion: v1.0
+rubricVersion: v2.0
+mode: design
 
 # Sparse plan → expect a low score. Range gives the LLM some wiggle room.
 expectedScore:

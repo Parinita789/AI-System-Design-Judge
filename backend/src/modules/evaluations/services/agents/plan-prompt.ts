@@ -62,68 +62,76 @@ Good modes: ${aiUsage.goodModes.join('; ')}
 Bad modes: ${aiUsage.badModes.join('; ')}`
     : '';
 
-  return `You are an evaluator for the ${rubric.phaseName} phase of a system-design practice session.
-
-Read the artifacts the user will provide and return a structured JSON evaluation matching the schema at the bottom of this prompt. Be specific and cite evidence from the artifacts. Do not invent content that isn't in the artifacts.
-
-## How to read this rubric (IMPORTANT — read before judging)
+  // For v2.0+ rubrics, the variant has already been picked structurally
+  // (build vs design); the rubric content reflects the mode and the
+  // long classifier preamble below is redundant. For v1.0 rubrics, keep
+  // the long preamble — the variant doesn't exist there.
+  const modeOpener = rubric.mode
+    ? `## How to read this rubric (the ${rubric.mode} variant has already been chosen)
+You are evaluating a system-design plan in the **${rubric.mode}** variant
+of the v2.0 plan rubric:
+  - **build**  = small/buildable problem; candidate could realistically
+                 implement and verify in the same session.
+  - **design** = production-scale design exercise; candidate articulates,
+                 does not implement.
+The signals, weights, and anchors below already reflect ${rubric.mode}-mode
+expectations — score against them directly. Do not classify the question
+yourself; the routing was done at session creation time. Open the
+\`feedback\` field with one line confirming the variant
+(e.g. "${rubric.mode}: <one-sentence rationale tied to the question's scope>").`
+    : `## How to read this rubric (IMPORTANT — read before judging)
 
 This is a 2-hour session. Before scoring any signal, classify the question
 into one of two modes — your judgment depth depends on which:
 
 ### Mode A — "buildable" (small, concrete problem, no large-scale NFRs)
 The question asks for something the candidate could realistically design
-AND build a working version of in ~2 hours. Signals: no stated production
-scale, or scale ≤ ~100 RPS / ~1 GB; small surface area (one or two
-endpoints, one data store, no distributed concerns).
-Examples: "design a counter API", "build a simple URL shortener", "design
-a single-node rate limiter".
-Expectations in this mode:
-- \`build_sequence_planned\` and \`validation_plan_concrete\` should be
-  CONCRETE: a real ordered task list and a real, runnable test approach.
-- \`failure_modes_articulated\` should include modes the candidate could
-  actually exercise (e.g., specific endpoint failures, simple chaos).
-- A short-but-complete plan can score HIT across most signals.
+AND build a working version of in ~2 hours.
+Expectations: build_sequence_planned and validation_plan_concrete should
+be concrete; failure_modes_articulated should name exercisable failures;
+a short-but-complete plan can score HIT across most signals.
 
 ### Mode B — "design-only" (large-scale, distributed, infeasible to build in 2h)
-The question stipulates production-grade NFRs (e.g., "10K req/s", "200M
-URLs", "50K events/sec", "100M users") OR a multi-component distributed
-system. The candidate cannot build this in 2 hours; they are producing a
-\`plan.md\` describing what they would design.
-Examples: "URL shortener for 10K req/s and 200M URLs", "log pipeline at
-50K eps", "distributed chat at 100M users".
-Expectations in this mode:
-- Score articulation and reasoning quality, NOT execution evidence.
-- Every signal description starts with "Plan articulates ..." — interpret
-  literally. Look for the concept being articulated in the plan, not for
-  evidence that the concept has been implemented, deployed, or
-  load-tested.
-- Question NFRs describe the TARGET system the candidate is designing
-  for. Do NOT use them as a bar for validation evidence. Demo-scale
-  validation (a small load test, smoke test, sample data run, sketched
-  test plan) is fully sufficient evidence for
-  \`validation_plan_concrete\`. No production load test is required.
-- A "build sequence" is a written ordering of work — it does NOT
-  require shell commands, git commits, or actual code. 4–6 ordered steps
-  are plenty.
-- A "failure mode" is named and triaged in the plan — it does NOT
-  require implemented retries, circuit breakers, or chaos tests.
-- A data model is "committed" when entities, key fields, and
-  relationships are stated — full DDL or migrations are NOT required.
-- When the plan describes an approach at the right level of abstraction
-  for a design-only exercise, that is HIT. Do NOT mark MISS just because
-  the candidate skipped production-grade implementation detail.
+The question stipulates production-grade NFRs or a distributed system.
+Expectations: score articulation and reasoning, NOT execution evidence.
+Every signal description starts with "Plan articulates ..." — interpret
+literally. Question NFRs describe the TARGET system, not the validation
+bar. A 4–6 step build sequence is plenty; full DDL is not required.
 
 ### How to use these modes
-1. State your mode classification (A or B) at the top of the
-   \`feedback\` field, with a one-line reason. Example:
-   "Mode B (design-only): question stipulates 10K req/s and 200M URLs."
-2. Apply the corresponding expectations to every signal below. Mode A
-   plans get judged more strictly on concrete buildable evidence; Mode B
-   plans get judged on articulation and reasoning depth.
-3. If the question is genuinely ambiguous between A and B, default to
-   Mode B and note the ambiguity in feedback — being lenient on
-   articulation rarely hurts a real candidate.
+State your mode classification at the top of \`feedback\`. If genuinely
+ambiguous, default to Mode B and note the ambiguity.`;
+
+  // Seniority calibration — only emitted when a v2.0+ Session has a
+  // seniority set. The per-signal weights have already been resolved
+  // by the loader; this block tells the LLM to apply matching
+  // expectations to its qualitative HIT/PARTIAL/MISS judgments.
+  const seniorityOpener = rubric.seniority
+    ? `## Calibrate to the candidate's seniority: ${rubric.seniority}
+You are evaluating a ${rubric.seniority}-level engineer. Apply these
+expectations when judging individual signals (HIT / PARTIAL / MISS):
+  - junior: clarity of intent + a working approach are enough. Accept
+    rough articulation as PARTIAL rather than MISS. Don't penalize a
+    light treatment of capacity, bottlenecks, or consistency.
+  - mid:    add specificity — named interfaces, concrete validation,
+    explicit tradeoffs. Capacity / bottleneck reasoning is a bonus.
+  - senior: full bar — capacity, bottlenecks, scale-aware data model.
+    The current rubric anchors are calibrated here.
+  - staff:  bar is reasoning depth, not just coverage. Tradeoffs must
+    be defended; bottlenecks named with concrete mitigations; a plan
+    that hits all signals at HIT but lacks senior-level reasoning
+    earns PARTIAL on those signals, not HIT.
+Open the \`feedback\` field by acknowledging the seniority, e.g.
+"${rubric.seniority}-level evaluation: …".`
+    : '';
+
+  return `You are an evaluator for the ${rubric.phaseName} phase of a system-design practice session.
+
+Read the artifacts the user will provide and return a structured JSON evaluation matching the schema at the bottom of this prompt. Be specific and cite evidence from the artifacts. Do not invent content that isn't in the artifacts.
+
+${modeOpener}
+
+${seniorityOpener}
 
 ### Feedback prose must align with the mode (IMPORTANT)
 The \`feedback\` and \`top_actions\` fields MUST be self-consistent with

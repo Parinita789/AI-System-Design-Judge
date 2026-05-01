@@ -1,6 +1,7 @@
 description: "Well-scoped URL shortener with capacity, data model, and validation. Should score Good."
 question: "Design a URL shortener for 10K req/s and 200M URLs."
-rubricVersion: v1.0
+rubricVersion: v2.0
+mode: design
 
 expectedScore:
   min: 3.5
@@ -11,8 +12,8 @@ expectedSignals:
     - scope_specificity
     - dual_scale_nfrs
     - data_model_committed
-    - validation_plan_concrete
     - shape_and_seams
+    - validation_plan_concrete
   miss: []
   hit: []
   skipped:

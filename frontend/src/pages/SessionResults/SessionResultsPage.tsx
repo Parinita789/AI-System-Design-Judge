@@ -10,7 +10,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { EvaluationAudit, PhaseEvaluation, SignalResult } from '@/types/evaluation';
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
-import { QuestionWithSessions } from '@/types/question';
+import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -99,7 +99,7 @@ export function SessionResultsPage() {
   });
 
   const reEvalMutation = useMutation({
-    mutationFn: () => evaluationsService.runForSession(id!),
+    mutationFn: (model?: string) => evaluationsService.runForSession(id!, model),
     onSuccess: () => {
       // Drop any pinned historical selection so the new latest auto-loads.
       setSelectedEvalId(null);
@@ -110,9 +110,11 @@ export function SessionResultsPage() {
   });
 
   // Try-again creates a new Session under the same Question; the backend
-  // copies the most-recent plan.md from any prior attempt.
+  // copies the most-recent plan.md from any prior attempt. An optional
+  // seniority override flips the calibration for the new attempt.
   const retryMutation = useMutation({
-    mutationFn: () => questionsService.startAttempt(questionId!),
+    mutationFn: (seniority?: Seniority) =>
+      questionsService.startAttempt(questionId!, seniority),
     onSuccess: (newSession) => {
       setActive(newSession.id, newSession.startedAt);
       queryClient.invalidateQueries({ queryKey: ['questions'] });
@@ -159,24 +161,16 @@ export function SessionResultsPage() {
           <h2 className="text-xl font-semibold">Session results</h2>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => retryMutation.mutate()}
-            disabled={retryMutation.isPending || !questionId}
-            className="rounded bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-            title="Start a new attempt at this question, pre-loaded with this attempt's plan.md"
-          >
-            {retryMutation.isPending ? 'Starting…' : 'Try again'}
-          </button>
-          <button
-            type="button"
-            onClick={() => reEvalMutation.mutate()}
-            disabled={reEvalMutation.isPending}
-            className="rounded border border-blue-600 text-blue-700 bg-white px-3 py-1.5 text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Re-run the LLM evaluator on the same plan.md (overwrites this attempt's score)"
-          >
-            {reEvalMutation.isPending ? 'Re-evaluating…' : 'Re-evaluate'}
-          </button>
+          <RetryButton
+            currentSeniority={session.seniority ?? null}
+            isPending={retryMutation.isPending}
+            disabled={!questionId}
+            onRetry={(seniority) => retryMutation.mutate(seniority)}
+          />
+          <ReEvaluateButton
+            isPending={reEvalMutation.isPending}
+            onRun={(model) => reEvalMutation.mutate(model)}
+          />
         </div>
       </header>
 
@@ -194,7 +188,11 @@ export function SessionResultsPage() {
           label="Attempts of this question"
           subtitle="Different attempts of this question — each has its own plan.md"
           count={questionQuery.data?.sessions.length ?? 0}
-          rubricVersion={session.question.rubricVersion}
+          rubricVersion={formatRubricTag(
+            session.question.rubricVersion,
+            session.question.mode,
+            session.seniority,
+          )}
           open={attemptsOpen}
           onToggle={() => setAttemptsOpen((v) => !v)}
         >
@@ -1078,5 +1076,173 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+// Formats the rubric tag shown in the page header and section labels.
+// v1.0 → "v1.0". v2.0 build/senior → "v2.0 (build / senior)".
+function formatRubricTag(
+  version: string,
+  mode: 'build' | 'design' | null | undefined,
+  seniority: Seniority | null | undefined,
+): string {
+  const parts: string[] = [];
+  if (mode) parts.push(mode);
+  if (seniority) parts.push(seniority);
+  return parts.length ? `${version} (${parts.join(' / ')})` : version;
+}
+
+const SENIORITY_BTN_LABEL: Record<Seniority, string> = {
+  junior: 'Junior',
+  mid: 'Mid',
+  senior: 'Senior',
+  staff: 'Staff',
+};
+
+// Try-again button + inline seniority picker. Default click submits with
+// the current attempt's seniority (or null on legacy v1.0 sessions, in
+// which case the backend keeps it null too). The chevron expands a small
+// "Retry as: [Junior][Mid][Senior][Staff]" row.
+function RetryButton({
+  currentSeniority,
+  isPending,
+  disabled,
+  onRetry,
+}: {
+  currentSeniority: Seniority | null;
+  isPending: boolean;
+  disabled: boolean;
+  onRetry: (seniority?: Seniority) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  const supportsSeniority = currentSeniority !== null;
+
+  return (
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => onRetry()}
+        disabled={isPending || disabled}
+        className="rounded-l bg-emerald-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        title={
+          supportsSeniority
+            ? `Start a new attempt (inherits seniority: ${currentSeniority})`
+            : "Start a new attempt at this question, pre-loaded with this attempt's plan.md"
+        }
+      >
+        {isPending ? 'Starting…' : 'Try again'}
+      </button>
+      {supportsSeniority && (
+        <button
+          type="button"
+          onClick={() => setShowPicker((v) => !v)}
+          disabled={isPending || disabled}
+          className="rounded-r bg-emerald-600 text-white px-2 py-1.5 text-sm font-medium border-l border-emerald-700 hover:bg-emerald-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+          title="Retry at a different seniority level"
+          aria-label="Retry at a different seniority level"
+        >
+          ▾
+        </button>
+      )}
+      {showPicker && supportsSeniority && (
+        <div className="absolute right-0 top-full mt-1 z-10 rounded border border-gray-300 bg-white shadow-md p-2 text-xs whitespace-nowrap">
+          <div className="text-gray-500 mb-1">Retry as:</div>
+          <div className="inline-flex rounded border border-gray-300 overflow-hidden">
+            {SENIORITIES.map((level, i) => {
+              const active = level === currentSeniority;
+              return (
+                <button
+                  key={level}
+                  type="button"
+                  onClick={() => {
+                    setShowPicker(false);
+                    onRetry(level);
+                  }}
+                  className={`px-3 py-1 ${
+                    active
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-100'
+                  } ${i > 0 ? 'border-l border-gray-300' : ''}`}
+                >
+                  {SENIORITY_BTN_LABEL[level]}
+                </button>
+              );
+            })}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-1">
+            Default (left button) keeps the current level: {currentSeniority}.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Anthropic model picker for the Re-evaluate button. Hardcoded list of
+// the latest in each tier — they're stable model IDs for now. The
+// audit row records the model the provider actually used, so picks
+// are always traceable in the LLM audit modal.
+const MODEL_OPTIONS: Array<{ id: string; label: string; tier: string }> = [
+  { id: 'claude-haiku-4-5',  label: 'Haiku',  tier: 'fastest, cheapest' },
+  { id: 'claude-sonnet-4-6', label: 'Sonnet', tier: 'balanced' },
+  { id: 'claude-opus-4-7',   label: 'Opus',   tier: 'most capable' },
+];
+
+function ReEvaluateButton({
+  isPending,
+  onRun,
+}: {
+  isPending: boolean;
+  onRun: (model?: string) => void;
+}) {
+  const [showPicker, setShowPicker] = useState(false);
+  return (
+    <div className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => onRun()}
+        disabled={isPending}
+        className="rounded-l border border-blue-600 text-blue-700 bg-white px-3 py-1.5 text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Re-run the LLM evaluator on the same plan.md using the env's default model"
+      >
+        {isPending ? 'Re-evaluating…' : 'Re-evaluate'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setShowPicker((v) => !v)}
+        disabled={isPending}
+        className="rounded-r border border-blue-600 border-l-0 text-blue-700 bg-white px-2 py-1.5 text-sm font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+        title="Re-evaluate with a specific Anthropic model"
+        aria-label="Pick Anthropic model"
+      >
+        ▾
+      </button>
+      {showPicker && (
+        <div className="absolute right-0 top-full mt-1 z-10 rounded border border-gray-300 bg-white shadow-md p-2 text-xs whitespace-nowrap">
+          <div className="text-gray-500 mb-1">Re-evaluate with:</div>
+          <div className="flex flex-col gap-1">
+            {MODEL_OPTIONS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => {
+                  setShowPicker(false);
+                  onRun(m.id);
+                }}
+                className="text-left rounded hover:bg-gray-100 px-2 py-1"
+              >
+                <span className="font-medium text-gray-900">{m.label}</span>
+                <span className="ml-2 text-gray-500">{m.tier}</span>
+                <div className="font-mono text-[10px] text-gray-400">{m.id}</div>
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] text-gray-500 mt-1 border-t border-gray-200 pt-1">
+            Honored by Anthropic, Ollama, and Claude CLI. The audit row
+            records the model that ran.
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

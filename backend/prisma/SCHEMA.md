@@ -18,6 +18,7 @@ erDiagram
         uuid id PK
         text prompt
         text rubric_version
+        enum mode "build|design (NULL on v1.0 questions)"
         timestamp created_at
     }
 
@@ -28,6 +29,7 @@ erDiagram
         timestamp started_at
         timestamp ended_at
         enum status "active|completed|abandoned"
+        enum seniority "junior|mid|senior|staff (NULL on v1.0)"
         decimal overall_score
         text overall_feedback
     }

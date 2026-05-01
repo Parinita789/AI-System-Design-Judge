@@ -1,4 +1,4 @@
-import { Question } from './question';
+import { Question, Seniority } from './question';
 
 export type SessionStatus = 'active' | 'completed' | 'abandoned';
 
@@ -9,6 +9,8 @@ export interface Session {
   startedAt: string;
   endedAt: string | null;
   status: SessionStatus;
+  // Per-attempt seniority calibration. Null on legacy v1.0 sessions.
+  seniority?: Seniority | null;
   overallScore: number | null;
   overallFeedback: string | null;
 }

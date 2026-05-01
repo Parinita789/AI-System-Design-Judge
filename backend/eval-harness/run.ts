@@ -66,6 +66,11 @@ function buildInput(fx: Fixture): PhaseEvalInput {
         response: h.response,
       })) ?? [],
     rubricVersion: fx.rubricVersion,
+    mode: fx.mode,
+    // Default to 'senior' so existing fixtures that pre-date seniority
+    // stay calibrated as before. Fixtures opting in for a different
+    // level set `seniority` in their YAML.
+    seniority: fx.seniority ?? 'senior',
   };
 }
 
@@ -93,13 +98,22 @@ async function main(): Promise<void> {
     // Validate every expected signal id against the rubric before any LLM
     // call — typos in fixture.yaml otherwise fail silently as "signal never
     // returned, mismatch counted, fixture fails for the wrong reason".
+    // Cache key includes mode so build/design variants validate against
+    // their own merged signal lists.
     const rubricCache = new Map<string, ReadonlySet<string>>();
     for (const fx of fixtures) {
-      let ids = rubricCache.get(fx.rubricVersion);
+      const seniority = fx.seniority ?? 'senior';
+      const cacheKey = `${fx.rubricVersion}/${fx.mode ?? 'default'}/${seniority}`;
+      let ids = rubricCache.get(cacheKey);
       if (!ids) {
-        const rubric = await rubricLoader.load(fx.rubricVersion, 'plan');
+        const rubric = await rubricLoader.load(
+          fx.rubricVersion,
+          'plan',
+          fx.mode,
+          seniority,
+        );
         ids = new Set(rubric.signals.map((s) => s.id));
-        rubricCache.set(fx.rubricVersion, ids);
+        rubricCache.set(cacheKey, ids);
       }
       validateAgainstRubric(fx, ids);
     }

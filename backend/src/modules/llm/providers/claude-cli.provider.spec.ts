@@ -40,4 +40,21 @@ describe('ClaudeCliProvider', () => {
     expect(prompt).toContain('Assistant: prior answer');
     expect(prompt).toContain('User: follow-up');
   });
+
+  it('forwards opts.model to the CLI client (per-call picker)', async () => {
+    client.run.mockResolvedValue({ text: 'r', model: 'claude-haiku-4-5' });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {
+      model: 'claude-haiku-4-5',
+    });
+
+    // Second arg of the client.run call carries the model override.
+    expect(client.run.mock.calls[0][1]).toBe('claude-haiku-4-5');
+  });
+
+  it('passes undefined model when opts.model is absent (CLI uses its default)', async () => {
+    client.run.mockResolvedValue({ text: 'r', model: 'claude-cli' });
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
+    expect(client.run.mock.calls[0][1]).toBeUndefined();
+  });
 });

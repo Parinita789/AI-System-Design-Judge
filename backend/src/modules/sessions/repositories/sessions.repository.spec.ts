@@ -20,7 +20,9 @@ describe('SessionsRepository', () => {
       session.create.mockResolvedValue({ id: 'sid-1' });
       const result = await repo.create({ questionId: 'qid-1' });
 
-      expect(session.create).toHaveBeenCalledWith({ data: { questionId: 'qid-1' } });
+      expect(session.create).toHaveBeenCalledWith({
+        data: { questionId: 'qid-1', seniority: null },
+      });
       expect(result).toEqual({ id: 'sid-1' });
     });
   });

@@ -11,8 +11,10 @@ export class EvaluationsService {
 
   // Run the evaluator synchronously. Currently scoped to the plan phase only;
   // other phase agents are still stubbed.
-  runForSession(sessionId: string) {
-    return this.orchestrator.run(sessionId, ['plan']);
+  // `model` is an optional override (e.g., 'claude-haiku-4-5'); absent
+  // means the active provider's env-default model is used.
+  runForSession(sessionId: string, model?: string) {
+    return this.orchestrator.run(sessionId, ['plan'], { model });
   }
 
   getBySession(sessionId: string) {

@@ -1,8 +1,6 @@
 import { PhaseEvaluationResult, SignalResult } from '../src/modules/evaluations/models/evaluation.types';
 import { Fixture, FixtureResult, SignalMismatch, SignalMode } from './types';
 
-// Maps each expected mode to "is this actual judgment acceptable?" semantics.
-// `credited` is the lenient one: HIT or PARTIAL both count as credited.
 function modeAccepts(mode: SignalMode, actual: SignalResult['result']): boolean {
   switch (mode) {
     case 'hit':

@@ -2,9 +2,8 @@ import { LlmService } from '../../../llm/services/llm.service';
 import { RubricLoaderService } from '../rubric-loader.service';
 import { Phase } from '../../../phase-tagger/models/phase.types';
 import { PhaseEvaluationResult } from '../../models/evaluation.types';
+import { Mode, Seniority } from '../../models/rubric.types';
 
-// Inputs for any phase agent's evaluate(). DB-shaped — the orchestrator
-// loads these from sessions/snapshots/ai_interactions.
 export interface PhaseEvalInput {
   session: {
     id: string;
@@ -25,6 +24,17 @@ export interface PhaseEvalInput {
     response: string;
   }>;
   rubricVersion: string;
+  // v2.0+ rubric variant. Null/undefined on legacy v1.0 questions.
+  mode?: Mode | null;
+  // Per-attempt seniority calibration. When set, the loader resolves
+  // per-signal weight_by_seniority maps to a single weight and the
+  // prompt renders a calibration block.
+  seniority?: Seniority | null;
+  // Optional LLM model override for this evaluation call. When unset,
+  // the active provider falls back to its env default (LLM_MODEL for
+  // Anthropic, OLLAMA_MODEL for Ollama). The audit row records the
+  // actual model the provider returned, so picks are always traceable.
+  model?: string;
 }
 
 export abstract class BasePhaseAgent {

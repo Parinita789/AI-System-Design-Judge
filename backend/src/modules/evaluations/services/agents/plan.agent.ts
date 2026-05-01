@@ -25,7 +25,12 @@ export class PlanAgent extends BasePhaseAgent {
   }
 
   async evaluate(input: PhaseEvalInput): Promise<PhaseEvaluationResult> {
-    const rubric = await this.rubricLoader.load(input.rubricVersion, 'plan');
+    const rubric = await this.rubricLoader.load(
+      input.rubricVersion,
+      'plan',
+      input.mode ?? undefined,
+      input.seniority ?? undefined,
+    );
     const { systemBlocks, userMessage } = buildPlanPrompt(rubric, input);
 
     this.logger.log(
@@ -35,7 +40,14 @@ export class PlanAgent extends BasePhaseAgent {
 
     const llm = await this.llm.call(
       [{ role: ChatRole.User, content: userMessage }],
-      { system: systemBlocks, maxTokens: PLAN_AGENT_MAX_TOKENS },
+      {
+        system: systemBlocks,
+        maxTokens: PLAN_AGENT_MAX_TOKENS,
+        // Optional per-call model override. Anthropic accepts any
+        // claude-* string; Ollama uses it as the model name; Claude
+        // CLI ignores it (the binary picks its own).
+        ...(input.model ? { model: input.model } : {}),
+      },
     );
 
     this.logger.log(

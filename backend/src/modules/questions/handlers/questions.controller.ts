@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { QuestionsService } from '../services/questions.service';
-import { CreateQuestionDto } from '../models/create-question.dto';
+import { CreateQuestionDto, StartAttemptDto } from '../models/create-question.dto';
 
 @Controller('questions')
 export class QuestionsController {
@@ -24,10 +24,11 @@ export class QuestionsController {
     return this.questionsService.get(id);
   }
 
-  // Start a new attempt at this question. The new Session inherits the most
-  // recently saved plan.md from any prior attempt of this question.
+  // Start a new attempt at this question. The new Session inherits the
+  // most recently saved plan.md from any prior attempt. Seniority
+  // inherits from the most recent prior session unless overridden.
   @Post(':id/attempts')
-  startAttempt(@Param('id') id: string) {
-    return this.questionsService.startAttempt(id);
+  startAttempt(@Param('id') id: string, @Body() body?: StartAttemptDto) {
+    return this.questionsService.startAttempt(id, body?.seniority);
   }
 }

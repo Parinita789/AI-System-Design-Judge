@@ -22,7 +22,11 @@ export class ClaudeCliProvider implements LlmProvider {
       .join('\n\n');
     const prompt = systemText ? `${systemText}\n\n---\n\n${conversation}` : conversation;
 
-    const result = await this.client.run(prompt);
+    // Forward the per-call model override (if any) so the CLI picker on
+    // the frontend reaches the binary as `--model <id>`. Without an
+    // override, the CLI uses whatever model is configured in the user's
+    // Claude Code setup.
+    const result = await this.client.run(prompt, opts.model);
     if (!result.text) this.logger.warn('claude CLI returned empty stdout');
 
     return {

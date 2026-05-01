@@ -20,10 +20,30 @@ enum Phase {
   wrap
 }
 
+// Rubric variant for a question. v2.0 splits the plan rubric into two
+// variants — `build` for buildable problems (60-min sessions) and
+// `design` for production-scale design exercises. v1.0 questions stay
+// on `mode = null` and route through the legacy single-rubric path.
+enum Mode {
+  build
+  design
+}
+
+// Seniority calibration for an attempt. Same Question can be retried at
+// different levels — that's why this lives on Session, not Question.
+// Null on legacy rows; new v2.0+ Sessions default to `senior`.
+enum Seniority {
+  junior
+  mid
+  senior
+  staff
+}
+
 model Question {
   id            String   @id @default(uuid()) @db.Uuid
   prompt        String
   rubricVersion String   @map("rubric_version")
+  mode          Mode?
   createdAt     DateTime @default(now()) @map("created_at")
 
   sessions Session[]
@@ -38,6 +58,7 @@ model Session {
   startedAt       DateTime      @default(now()) @map("started_at")
   endedAt         DateTime?     @map("ended_at")
   status          SessionStatus @default(active)
+  seniority       Seniority?
   overallScore    Decimal?      @map("overall_score") @db.Decimal(3, 2)
   overallFeedback String?       @map("overall_feedback")
 

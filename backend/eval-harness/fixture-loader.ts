@@ -1,14 +1,25 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { Fixture, FixtureExpectation, FixtureHint, SignalMode } from './types';
+import {
+  Fixture,
+  FixtureExpectation,
+  FixtureHint,
+  FixtureSeniority,
+  RubricMode,
+  SignalMode,
+} from './types';
 
 const VALID_MODES: SignalMode[] = ['hit', 'partial', 'miss', 'credited', 'skipped'];
+const VALID_RUBRIC_MODES: RubricMode[] = ['build', 'design'];
+const VALID_SENIORITIES: FixtureSeniority[] = ['junior', 'mid', 'senior', 'staff'];
 
 interface RawFixtureYaml {
   description?: string;
   question?: string;
   rubricVersion?: string;
+  mode?: string;
+  seniority?: string;
   expectedScore?: { min?: number; max?: number };
   expectedSignals?: Partial<Record<string, string[]>>;
   warnOnly?: boolean;
@@ -60,6 +71,33 @@ function loadOne(rootDir: string, name: string): Fixture {
   const expectedScore = parseScoreRange(raw.expectedScore, name);
   const expectedSignals = parseExpectedSignals(raw.expectedSignals, name);
 
+  // `mode` is required on v2.0+ fixtures so the harness loads the right
+  let mode: RubricMode | undefined;
+  if (raw.mode !== undefined) {
+    if (!VALID_RUBRIC_MODES.includes(raw.mode as RubricMode)) {
+      throw new Error(
+        `${name}: mode "${raw.mode}" must be one of: ${VALID_RUBRIC_MODES.join(', ')}`,
+      );
+    }
+    mode = raw.mode as RubricMode;
+  } else if (rubricVersion !== 'v1.0') {
+    throw new Error(
+      `${name}: mode is required when rubricVersion is "${rubricVersion}" (v2.0+ rubrics)`,
+    );
+  }
+
+  // seniority is always optional. Default to 'senior' is applied by the
+  // runner so the YAML can omit the key. We still validate when set.
+  let seniority: FixtureSeniority | undefined;
+  if (raw.seniority !== undefined) {
+    if (!VALID_SENIORITIES.includes(raw.seniority as FixtureSeniority)) {
+      throw new Error(
+        `${name}: seniority "${raw.seniority}" must be one of: ${VALID_SENIORITIES.join(', ')}`,
+      );
+    }
+    seniority = raw.seniority as FixtureSeniority;
+  }
+
   const planMd = fs.readFileSync(planPath, 'utf8');
 
   const hints: FixtureHint[] | undefined = raw.hints?.map((h, i) => ({
@@ -74,6 +112,8 @@ function loadOne(rootDir: string, name: string): Fixture {
     description,
     question,
     rubricVersion,
+    mode,
+    seniority,
     planMd: planMd.length > 0 ? planMd : null,
     expectedScore,
     expectedSignals,
@@ -127,9 +167,6 @@ function requireNumber(v: unknown, key: string): number {
   return v;
 }
 
-// Cross-check: every signal id in expectedSignals must exist in the rubric.
-// Otherwise a typo silently passes the harness ("we never saw this signal so
-// it didn't count as a mismatch"). Validates eagerly at startup.
 export function validateAgainstRubric(
   fixture: Fixture,
   rubricSignalIds: ReadonlySet<string>,

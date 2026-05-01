@@ -8,9 +8,6 @@ import { EvaluationAuditPayload, PhaseEvaluationResult } from '../models/evaluat
 export class EvaluationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Each call inserts a new row. Multiple evaluations of the same
-  // (sessionId, phase) are preserved as history (no @@unique constraint
-  // any more). Use `findBySession` to read them newest-first.
   createPhaseEvaluation(sessionId: string, phase: Phase, result: PhaseEvaluationResult) {
     return this.prisma.phaseEvaluation.create({
       data: {
@@ -24,9 +21,6 @@ export class EvaluationsRepository {
     });
   }
 
-  // 1:1 with PhaseEvaluation. The unique constraint on
-  // phase_evaluation_id enforces the "one audit per evaluation" invariant
-  // — a re-evaluate creates a new PhaseEvaluation row, hence a new audit.
   createEvaluationAudit(phaseEvaluationId: string, audit: EvaluationAuditPayload) {
     return this.prisma.evaluationAudit.create({
       data: {
