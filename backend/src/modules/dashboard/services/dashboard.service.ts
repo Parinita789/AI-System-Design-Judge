@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { DashboardRepository } from '../repositories/dashboard.repository';
-import { HeatmapCell, TrendPoint, WeaknessSummary } from '../models/dashboard.types';
+import { HeatmapCell, TrendPoint, WeaknessSummary } from '../types/dashboard.types';
 
 @Injectable()
 export class DashboardService {

@@ -1,4 +1,4 @@
-import { PhaseEvaluationResult, SignalResult } from '../src/modules/evaluations/models/evaluation.types';
+import { PhaseEvaluationResult, SignalResult } from '../src/modules/evaluations/types/evaluation.types';
 import { Fixture, FixtureResult, SignalMismatch, SignalMode } from './types';
 
 function modeAccepts(mode: SignalMode, actual: SignalResult['result']): boolean {

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
-import { Phase } from '../../phase-tagger/models/phase.types';
-import { EvaluationAuditPayload, PhaseEvaluationResult } from '../models/evaluation.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
+import { EvaluationAuditPayload, PhaseEvaluationResult } from '../types/evaluation.types';
 
 @Injectable()
 export class EvaluationsRepository {

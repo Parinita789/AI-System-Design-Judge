@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { SnapshotsRepository } from '../repositories/snapshots.repository';
-import { CaptureSnapshotDto } from '../models/capture-snapshot.dto';
-import { SnapshotArtifacts } from '../models/snapshot.types';
+import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
+import { SnapshotArtifacts } from '../types/snapshot.types';
 
 @Injectable()
 export class SnapshotsService {

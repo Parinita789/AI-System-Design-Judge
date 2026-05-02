@@ -1,8 +1,6 @@
 import { ChatRole } from '../constants';
 
 export interface ChatMessage {
-  // Public ChatMessage allows only User/Assistant turns; the system prompt
-  // is delivered separately via LlmCallOptions.system.
   role: ChatRole.User | ChatRole.Assistant;
   content: string;
 }

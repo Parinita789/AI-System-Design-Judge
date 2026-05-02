@@ -1,4 +1,4 @@
-import { ChatMessage, LlmCallOptions, LlmResponse } from '../models/llm.types';
+import { ChatMessage, LlmCallOptions, LlmResponse } from '../types/llm.types';
 
 export interface LlmProvider {
   readonly name: string;

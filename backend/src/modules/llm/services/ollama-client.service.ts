@@ -1,19 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChatRole, LLM_ENV, OLLAMA_REQUEST_TIMEOUT_MS } from '../constants';
-
-export interface OllamaChatMessage {
-  role: ChatRole;
-  content: string;
-}
-
-export interface OllamaChatResponse {
-  model: string;
-  message: { role: string; content: string };
-  prompt_eval_count?: number;
-  eval_count?: number;
-  done: boolean;
-}
+import { LLM_ENV, OLLAMA_REQUEST_TIMEOUT_MS } from '../constants';
+import { OllamaChatMessage, OllamaChatResponse } from '../types/ollama.types';
 
 @Injectable()
 export class OllamaClientService {

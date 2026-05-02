@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
-import { Phase } from '../../phase-tagger/models/phase.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import {
   Mode,
   Rubric,
@@ -16,7 +16,7 @@ import {
   SENIORITIES,
   Seniority,
   WeightTier,
-} from '../models/rubric.types';
+} from '../types/rubric.types';
 
 type RawSignal = {
   id: string;

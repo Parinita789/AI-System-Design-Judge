@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { BasePhaseAgent, PhaseEvalInput } from './base-phase.agent';
-import { Phase } from '../../phase-tagger/models/phase.types';
-import { PhaseEvaluationResult } from '../models/evaluation.types';
+import { BasePhaseAgent } from './base-phase.agent';
+import { PhaseEvalInput } from '../types/evaluation.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
+import { PhaseEvaluationResult } from '../types/evaluation.types';
 import { ChatRole } from '../../llm/constants';
 import { LlmService } from '../../llm/services/llm.service';
 import { RubricLoaderService } from '../services/rubric-loader.service';

@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ProjectFilesService } from './project-files.service';
 import { ClaudeJsonlService } from './claude-jsonl.service';
 import { GitLogService } from './git-log.service';
-import { SnapshotArtifacts } from '../../snapshots/models/snapshot.types';
-import { FinalArtifacts } from '../models/artifacts.types';
+import { SnapshotArtifacts } from '../../snapshots/types/snapshot.types';
+import { FinalArtifacts } from '../types/artifacts.types';
 
 @Injectable()
 export class ArtifactsService {

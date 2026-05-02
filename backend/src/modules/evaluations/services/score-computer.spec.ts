@@ -1,6 +1,6 @@
 import { computeScore } from './score-computer';
-import { Rubric, RubricSignal } from '../models/rubric.types';
-import { SignalResult } from '../models/evaluation.types';
+import { Rubric, RubricSignal } from '../types/rubric.types';
+import { SignalResult } from '../types/evaluation.types';
 
 // Build a minimal rubric for deterministic, weight-controlled tests.
 function makeRubric(signals: RubricSignal[]): Rubric {

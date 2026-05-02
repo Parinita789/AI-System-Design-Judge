@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PhaseEvaluation } from '@prisma/client';
-import { Phase } from '../../phase-tagger/models/phase.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { AIInteractionsRepository } from '../../hints/repositories/ai-interactions.repository';
 import { PlanAgent } from '../agents/plan.agent';
-import { PhaseEvalInput } from '../agents/base-phase.agent';
+import { PhaseEvalInput } from '../types/evaluation.types';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
 
 @Injectable()

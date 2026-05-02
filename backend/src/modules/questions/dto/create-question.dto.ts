@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { Mode, Seniority } from '../../evaluations/models/rubric.types';
+import { Mode, Seniority } from '../../evaluations/types/rubric.types';
 
 export class CreateQuestionDto {
   @IsString()

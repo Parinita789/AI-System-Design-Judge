@@ -1,5 +1,5 @@
-import { Rubric, RubricSignal } from '../models/rubric.types';
-import { SignalResult } from '../models/evaluation.types';
+import { Rubric, RubricSignal } from '../types/rubric.types';
+import { SignalResult } from '../types/evaluation.types';
 
 // Replaces the LLM-emitted `score` field, which empirically drifts from
 // the model's own signal judgments — it pattern-matches against the

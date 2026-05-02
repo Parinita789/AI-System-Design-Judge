@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../database/prisma.service';
-import { FinalArtifacts } from '../models/artifacts.types';
+import { FinalArtifacts } from '../types/artifacts.types';
 
 @Injectable()
 export class ArtifactsRepository {

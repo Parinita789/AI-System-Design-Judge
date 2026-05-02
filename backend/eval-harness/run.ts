@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { AppModule } from '../src/app.module';
 import { PlanAgent } from '../src/modules/evaluations/agents/plan.agent';
 import { RubricLoaderService } from '../src/modules/evaluations/services/rubric-loader.service';
-import { PhaseEvalInput } from '../src/modules/evaluations/agents/base-phase.agent';
+import { PhaseEvalInput } from '../src/modules/evaluations/types/evaluation.types';
 import { LLM_ENV } from '../src/modules/llm/constants';
 import { loadFixtures, validateAgainstRubric } from './fixture-loader';
 import { compareResult } from './comparator';

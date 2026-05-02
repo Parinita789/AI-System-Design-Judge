@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { HintsService } from '../services/hints.service';
-import { SendHintDto } from '../models/send-hint.dto';
+import { SendHintDto } from '../dto/send-hint.dto';
 
 @Controller('sessions/:sessionId/hints')
 export class HintsController {

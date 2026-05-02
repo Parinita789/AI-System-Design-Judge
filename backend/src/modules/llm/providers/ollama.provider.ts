@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { OllamaClientService, OllamaChatMessage } from '../services/ollama-client.service';
-import { ChatMessage, LlmCallOptions, LlmResponse } from '../models/llm.types';
+import { OllamaClientService } from '../services/ollama-client.service';
+import { OllamaChatMessage } from '../types/ollama.types';
+import { ChatMessage, LlmCallOptions, LlmResponse } from '../types/llm.types';
 import { ChatRole, LLM_ENV } from '../constants';
 import { LlmProvider } from './llm-provider.interface';
 

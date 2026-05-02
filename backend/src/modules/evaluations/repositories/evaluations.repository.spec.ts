@@ -1,5 +1,5 @@
 import { EvaluationsRepository } from './evaluations.repository';
-import { EvaluationAuditPayload, PhaseEvaluationResult } from '../models/evaluation.types';
+import { EvaluationAuditPayload, PhaseEvaluationResult } from '../types/evaluation.types';
 
 describe('EvaluationsRepository', () => {
   let repo: EvaluationsRepository;

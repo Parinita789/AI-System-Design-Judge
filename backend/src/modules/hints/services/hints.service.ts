@@ -3,11 +3,11 @@ import { Prisma } from '@prisma/client';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { LlmService } from '../../llm/services/llm.service';
-import { ChatMessage } from '../../llm/models/llm.types';
+import { ChatMessage } from '../../llm/types/llm.types';
 import { ChatRole } from '../../llm/constants';
 import { AIInteractionsRepository } from '../repositories/ai-interactions.repository';
 import { HINT_REPLY_MAX_TOKENS } from '../constants';
-import { HINT_SYSTEM_PROMPT } from './hint-system-prompt';
+import { HINT_SYSTEM_PROMPT } from '../prompts/hint-system-prompt';
 
 @Injectable()
 export class HintsService {

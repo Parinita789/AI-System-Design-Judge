@@ -10,10 +10,6 @@ export class QuestionsRepository {
     return this.prisma.question.create({ data });
   }
 
-  // List for the sidebar — newest first. Per-session phase evaluations are
-  // ordered newest-first so consumers (sidebar best-score, results page
-  // attempt list) can use phaseEvaluations[0] / find(phase==='plan') and
-  // get the latest evaluation when multiple exist.
   findAll() {
     return this.prisma.question.findMany({
       orderBy: { createdAt: 'desc' },

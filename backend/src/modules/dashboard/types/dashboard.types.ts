@@ -1,4 +1,4 @@
-import { Phase } from '../../phase-tagger/models/phase.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 
 export interface TrendPoint {
   sessionId: string;

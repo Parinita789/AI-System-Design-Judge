@@ -1,4 +1,4 @@
-import { SignalResult } from '../models/evaluation.types';
+import { SignalResult } from '../types/evaluation.types';
 
 export class EvaluationParseError extends Error {
   constructor(message: string, public readonly rawText: string) {

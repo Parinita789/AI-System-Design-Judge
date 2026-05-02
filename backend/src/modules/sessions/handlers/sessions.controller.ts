@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { SessionsService } from '../services/sessions.service';
-import { EndSessionDto } from '../models/end-session.dto';
+import { EndSessionDto } from '../dto/end-session.dto';
 
 @Controller('sessions')
 export class SessionsController {

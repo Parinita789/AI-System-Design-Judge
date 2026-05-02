@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
 import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
 import { SessionsRepository } from '../repositories/sessions.repository';
-import { EndSessionDto } from '../models/end-session.dto';
+import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 
 export interface EndSessionResult {

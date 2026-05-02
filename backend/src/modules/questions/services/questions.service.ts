@@ -4,7 +4,7 @@ import { Question, Session } from '@prisma/client';
 import { QuestionsRepository } from '../repositories/questions.repository';
 import { SessionsRepository } from '../../sessions/repositories/sessions.repository';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
-import { CreateQuestionDto } from '../models/create-question.dto';
+import { CreateQuestionDto } from '../dto/create-question.dto';
 import { classifyMode } from '../../evaluations/helpers/mode-classifier';
 import { Seniority as PrismaSeniority } from '@prisma/client';
 
@@ -50,9 +50,6 @@ export class QuestionsService {
     return question;
   }
 
-  // Inherits plan.md from the most-recently-saved snapshot across ALL
-  // prior sessions of this question, and seniority from the most recent
-  // prior session (overridable).
   async startAttempt(questionId: string, seniorityOverride?: PrismaSeniority): Promise<Session> {
     const question = await this.get(questionId);
 

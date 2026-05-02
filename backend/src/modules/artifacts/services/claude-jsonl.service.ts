@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { JsonlEntry } from '../models/artifacts.types';
+import { JsonlEntry } from '../types/artifacts.types';
 
 @Injectable()
 export class ClaudeJsonlService {

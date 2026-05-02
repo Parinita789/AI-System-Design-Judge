@@ -1,4 +1,4 @@
-import { JsonlEntry } from '../../artifacts/models/artifacts.types';
+import { JsonlEntry } from '../../artifacts/types/artifacts.types';
 
 export type Phase = 'plan' | 'build' | 'validate' | 'wrap';
 

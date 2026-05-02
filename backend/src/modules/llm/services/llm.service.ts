@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ChatMessage, LlmCallOptions, LlmResponse } from '../models/llm.types';
+import { ChatMessage, LlmCallOptions, LlmResponse } from '../types/llm.types';
 import { LlmProviderFactory } from '../providers/llm-provider.factory';
 
 @Injectable()

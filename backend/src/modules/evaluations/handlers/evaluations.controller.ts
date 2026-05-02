@@ -1,45 +1,17 @@
-import {
-  Body,
-  Controller,
-  Get,
-  HttpException,
-  HttpStatus,
-  Logger,
-  Param,
-  Post,
-} from '@nestjs/common';
-import { IsOptional, IsString } from 'class-validator';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { EvaluationsService } from '../services/evaluations.service';
-
-class RunEvaluationDto {
-  @IsOptional()
-  @IsString()
-  model?: string;
-}
+import { RunEvaluationDto } from '../dto/run-evaluation.dto';
 
 @Controller()
 export class EvaluationsController {
-  private readonly logger = new Logger(EvaluationsController.name);
-
   constructor(private readonly evaluationsService: EvaluationsService) {}
 
   @Post('sessions/:sessionId/evaluate')
-  async runForSession(
+  runForSession(
     @Param('sessionId') sessionId: string,
     @Body() body?: RunEvaluationDto,
   ) {
-    try {
-      return await this.evaluationsService.runForSession(sessionId, body?.model);
-    } catch (err) {
-      const message = (err as Error).message ?? String(err);
-      const stack = (err as Error).stack ?? '';
-      this.logger.error(`Eval failed for ${sessionId}: ${message}\n${stack}`);
-      // Single-user dev tool — surfacing the cause is fine.
-      throw new HttpException(
-        { message: 'Evaluation failed', error: message },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return this.evaluationsService.runForSession(sessionId, body?.model);
   }
 
   @Get('sessions/:sessionId/evaluations')

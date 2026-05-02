@@ -1,4 +1,4 @@
-import { SignalResult } from '../models/evaluation.types';
+import { SignalResult } from '../types/evaluation.types';
 
 // Catches the "LLM cited a quote that isn't in plan.md" hallucination
 // mode by ground-checking each HIT/PARTIAL signal's evidence against

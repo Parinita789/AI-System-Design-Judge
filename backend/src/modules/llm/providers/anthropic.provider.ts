@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicClientService } from '../services/anthropic-client.service';
-import { ChatMessage, LlmCallOptions, LlmResponse, SystemBlock } from '../models/llm.types';
+import { ChatMessage, LlmCallOptions, LlmResponse, SystemBlock } from '../types/llm.types';
 import { LLM_ENV } from '../constants';
 import { LlmProvider } from './llm-provider.interface';
 

@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { SnapshotsService } from '../services/snapshots.service';
-import { CaptureSnapshotDto } from '../models/capture-snapshot.dto';
+import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
 
 @Controller('sessions/:sessionId/snapshots')
 export class SnapshotsController {

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ClaudeCliClientService } from '../services/claude-cli-client.service';
-import { ChatMessage, LlmCallOptions, LlmResponse } from '../models/llm.types';
+import { ChatMessage, LlmCallOptions, LlmResponse } from '../types/llm.types';
 import { ChatRole } from '../constants';
 import { LlmProvider } from './llm-provider.interface';
 import { flattenSystem } from './ollama.provider';
