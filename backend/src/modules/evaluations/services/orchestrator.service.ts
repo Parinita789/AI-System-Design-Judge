@@ -5,8 +5,8 @@ import { Phase } from '../../phase-tagger/models/phase.types';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { AIInteractionsRepository } from '../../hints/repositories/ai-interactions.repository';
-import { PlanAgent } from './agents/plan.agent';
-import { PhaseEvalInput } from './agents/base-phase.agent';
+import { PlanAgent } from '../agents/plan.agent';
+import { PhaseEvalInput } from '../agents/base-phase.agent';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
 
 @Injectable()

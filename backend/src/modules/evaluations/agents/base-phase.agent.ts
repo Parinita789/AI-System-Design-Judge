@@ -1,8 +1,8 @@
-import { LlmService } from '../../../llm/services/llm.service';
-import { RubricLoaderService } from '../rubric-loader.service';
-import { Phase } from '../../../phase-tagger/models/phase.types';
-import { PhaseEvaluationResult } from '../../models/evaluation.types';
-import { Mode, Seniority } from '../../models/rubric.types';
+import { LlmService } from '../../llm/services/llm.service';
+import { RubricLoaderService } from '../services/rubric-loader.service';
+import { Phase } from '../../phase-tagger/models/phase.types';
+import { PhaseEvaluationResult } from '../models/evaluation.types';
+import { Mode, Seniority } from '../models/rubric.types';
 
 export interface PhaseEvalInput {
   session: {

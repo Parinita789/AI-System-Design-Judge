@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { BasePhaseAgent, PhaseEvalInput } from './base-phase.agent';
-import { Phase } from '../../../phase-tagger/models/phase.types';
-import { PhaseEvaluationResult } from '../../models/evaluation.types';
-import { LlmService } from '../../../llm/services/llm.service';
-import { RubricLoaderService } from '../rubric-loader.service';
+import { Phase } from '../../phase-tagger/models/phase.types';
+import { PhaseEvaluationResult } from '../models/evaluation.types';
+import { LlmService } from '../../llm/services/llm.service';
+import { RubricLoaderService } from '../services/rubric-loader.service';
 
 @Injectable()
 export class WrapAgent extends BasePhaseAgent {

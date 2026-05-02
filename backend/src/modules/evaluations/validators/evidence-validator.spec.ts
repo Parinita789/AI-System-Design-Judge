@@ -1,5 +1,5 @@
 import { validateEvidence } from './evidence-validator';
-import { SignalResult } from '../../models/evaluation.types';
+import { SignalResult } from '../models/evaluation.types';
 
 const result = (r: SignalResult['result'], evidence = ''): SignalResult => ({
   result: r,

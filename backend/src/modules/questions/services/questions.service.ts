@@ -5,7 +5,7 @@ import { QuestionsRepository } from '../repositories/questions.repository';
 import { SessionsRepository } from '../../sessions/repositories/sessions.repository';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { CreateQuestionDto } from '../models/create-question.dto';
-import { classifyMode } from '../../evaluations/services/agents/mode-classifier';
+import { classifyMode } from '../../evaluations/helpers/mode-classifier';
 import { Seniority as PrismaSeniority } from '@prisma/client';
 
 @Injectable()

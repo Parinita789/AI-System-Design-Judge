@@ -1,14 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { BasePhaseAgent, PhaseEvalInput } from './base-phase.agent';
-import { Phase } from '../../../phase-tagger/models/phase.types';
-import { PhaseEvaluationResult } from '../../models/evaluation.types';
-import { ChatRole } from '../../../llm/constants';
-import { LlmService } from '../../../llm/services/llm.service';
-import { RubricLoaderService } from '../rubric-loader.service';
-import { buildPlanPrompt } from './plan-prompt';
-import { parseEvalOutput } from './parse-eval-output';
-import { validateEvidence } from './evidence-validator';
-import { computeScore } from '../score-computer';
+import { Phase } from '../../phase-tagger/models/phase.types';
+import { PhaseEvaluationResult } from '../models/evaluation.types';
+import { ChatRole } from '../../llm/constants';
+import { LlmService } from '../../llm/services/llm.service';
+import { RubricLoaderService } from '../services/rubric-loader.service';
+import { buildPlanPrompt } from '../prompts/plan-prompt';
+import { parseEvalOutput } from '../validators/parse-eval-output';
+import { validateEvidence } from '../validators/evidence-validator';
+import { computeScore } from '../services/score-computer';
 
 const PLAN_AGENT_MAX_TOKENS = 4096;
 

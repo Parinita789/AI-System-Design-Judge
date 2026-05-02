@@ -1,6 +1,6 @@
-import { Rubric } from '../../models/rubric.types';
-import { SystemBlock } from '../../../llm/models/llm.types';
-import { PhaseEvalInput } from './base-phase.agent';
+import { Rubric } from '../models/rubric.types';
+import { SystemBlock } from '../../llm/models/llm.types';
+import { PhaseEvalInput } from '../agents/base-phase.agent';
 
 export interface BuiltPrompt {
   systemBlocks: SystemBlock[];

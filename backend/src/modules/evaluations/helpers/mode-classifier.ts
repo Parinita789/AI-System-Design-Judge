@@ -1,4 +1,4 @@
-import { Mode } from '../../models/rubric.types';
+import { Mode } from '../models/rubric.types';
 
 export const MODE_B_PATTERNS: readonly RegExp[] = [
   // Numeric throughput in K/M/B (e.g. "10K req/s", "100M users", "50K events/sec")
