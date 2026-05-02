@@ -9,13 +9,11 @@ export interface Session {
   startedAt: string;
   endedAt: string | null;
   status: SessionStatus;
-  // Per-attempt seniority calibration. Null on legacy v1.0 sessions.
   seniority?: Seniority | null;
   overallScore: number | null;
   overallFeedback: string | null;
 }
 
-// GET /api/sessions/:id always includes the parent question.
 export interface SessionWithQuestion extends Session {
   question: Question;
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
@@ -34,10 +34,10 @@ type RawSignal = {
 
 type RawSection = { id: string; name: string; must_contain: string[] };
 
-// Shared (v2.0) and v1.0 single-file rubric share the same shape, but the
-// shared file omits a few variant-only fields (rubric_version, phase_name,
-// goal, time_bounds, scoring.anchors, scoring.calibration_note). The
-// schema is a permissive intersection so we can parse both.
+// Permissive shape that fits both v1.0 single-file rubrics and v2.0
+// shared files. Variant-only fields (rubric_version, phase_name, goal,
+// time_bounds, scoring.anchors) are optional here and required by the
+// path that consumes them.
 type RawSharedRubric = {
   schema_version: number;
   rubric_version?: string;
@@ -80,7 +80,6 @@ type RawTimeBounds = {
   note?: string;
 };
 
-// Variant file shape (v2.0+ build/design). Variant overrides shared.
 type RawVariantRubric = {
   schema_version: number;
   rubric_version: string;
@@ -106,15 +105,10 @@ const SUPPORTED_SCHEMA_VERSIONS = new Set([1, 2]);
 
 @Injectable()
 export class RubricLoaderService {
-  private readonly logger = new Logger(RubricLoaderService.name);
   private readonly cache = new Map<string, Rubric>();
 
   constructor(private readonly config: ConfigService) {}
 
-  // `mode` is required for v2.0+ rubrics (build vs design). For v1.0
-  // rubrics it's ignored and the legacy single-file path is used.
-  // `seniority` resolves per-signal `weight_by_seniority` maps to a
-  // single weight; signals without the map are unaffected.
   async load(
     version: string,
     phase: Phase,
@@ -127,7 +121,6 @@ export class RubricLoaderService {
 
     const rubricDir = this.config.get<string>('rubric.dir') ?? './rubrics';
 
-    // Variant path: v2.0+ with mode → load shared + variant and merge.
     if (mode) {
       const sharedPath = path.resolve(rubricDir, version, `${phase}.shared.yaml`);
       const variantPath = path.resolve(rubricDir, version, `${phase}.${mode}.yaml`);
@@ -147,10 +140,9 @@ export class RubricLoaderService {
         this.cache.set(cacheKey, finalized);
         return finalized;
       }
-      // Fall through to legacy path if there's no shared file at this version.
+      // Fall through to legacy path when no shared file exists for this version.
     }
 
-    // Legacy single-file path (v1.0) or v2.0+ without mode.
     const filePath = path.resolve(rubricDir, version, `${phase}.yaml`);
     let raw: string;
     try {
@@ -164,9 +156,6 @@ export class RubricLoaderService {
     this.cache.set(cacheKey, finalized);
     return finalized;
   }
-
-  // ──────────────────────────────────────────────────────────────────
-  // Single-file rubric (v1.0) — mostly unchanged from before.
 
   private toRubric(raw: RawSharedRubric, filePath: string): Rubric {
     if (!SUPPORTED_SCHEMA_VERSIONS.has(raw.schema_version)) {
@@ -209,9 +198,6 @@ export class RubricLoaderService {
     };
   }
 
-  // ──────────────────────────────────────────────────────────────────
-  // Shared + variant merge (v2.0+).
-
   private mergeSharedAndVariant(
     shared: RawSharedRubric,
     variant: RawVariantRubric,
@@ -234,7 +220,6 @@ export class RubricLoaderService {
       );
     }
 
-    // Start with the shared signal list, then apply override + add.
     const overrides = variant.override_signals ?? {};
     const startBase: RubricSignal[] = [];
     for (const s of shared.signals) {
@@ -244,7 +229,6 @@ export class RubricLoaderService {
       if (patch?.weight) merged.weight = patch.weight;
       startBase.push(merged);
     }
-    // Sanity-check: every override id must exist in shared.
     for (const id of Object.keys(overrides)) {
       if (!shared.signals.some((s) => s.id === id)) {
         throw new Error(
@@ -253,7 +237,6 @@ export class RubricLoaderService {
       }
     }
 
-    // Append variant-only signals.
     for (const raw of variant.add_signals ?? []) {
       startBase.push(toSignal(raw));
     }
@@ -261,7 +244,6 @@ export class RubricLoaderService {
     this.assertUniqueSignalIds(startBase, variantPath);
     this.assertPairsAreSymmetric(startBase, variantPath);
 
-    // Pass bar — start with shared sections, drop, then add.
     const dropSet = new Set(variant.override_pass_bar?.drop_sections ?? []);
     const baseSections = shared.pass_bar.required_sections.filter(
       (s) => !dropSet.has(s.id),
@@ -299,9 +281,6 @@ export class RubricLoaderService {
     };
   }
 
-  // ──────────────────────────────────────────────────────────────────
-  // Validators.
-
   private assertUniqueSignalIds(signals: RubricSignal[], filePath: string) {
     const seen = new Set<string>();
     for (const s of signals) {
@@ -336,14 +315,10 @@ export class RubricLoaderService {
   }
 }
 
-// ────────────────────────────────────────────────────────────────────
-// Field-mapping helpers (shared between single-file and merged paths).
-
 function toSignal(s: RawSignal): RubricSignal {
   let weightBySeniority: Record<Seniority, WeightTier> | undefined;
   if (s.weight_by_seniority) {
-    // Reject partial maps — explicit beats implicit. All four levels
-    // must be present so future YAML edits don't silently drop a level.
+    // Reject partial maps so a future YAML edit can't silently drop a level.
     const provided = Object.keys(s.weight_by_seniority);
     const missing = SENIORITIES.filter((lvl) => !(lvl in s.weight_by_seniority!));
     if (missing.length > 0) {
@@ -441,18 +416,10 @@ function parseYaml<T>(raw: string, filePath: string): T {
   }
 }
 
-// Resolve per-signal `weightBySeniority` maps to a single `weight` and
-// stamp the seniority on the rubric. When seniority is undefined, the
-// signal's default `weight` stands and `weightBySeniority` is dropped
-// from the returned signal so downstream code never has to consider it.
-// Returns a new Rubric — does not mutate the input.
 function applySeniority(rubric: Rubric, seniority: Seniority | undefined): Rubric {
   const signals: RubricSignal[] = rubric.signals.map((s) => {
     const resolvedWeight =
       seniority && s.weightBySeniority ? s.weightBySeniority[seniority] : s.weight;
-    // Strip weightBySeniority from the resolved signal — the field has
-    // done its job. Downstream code (prompt rendering, score-computer)
-    // sees a single weight per signal regardless of level.
     const { weightBySeniority: _drop, ...rest } = s;
     return { ...rest, weight: resolvedWeight };
   });

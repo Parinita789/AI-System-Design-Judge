@@ -71,7 +71,6 @@ function loadOne(rootDir: string, name: string): Fixture {
   const expectedScore = parseScoreRange(raw.expectedScore, name);
   const expectedSignals = parseExpectedSignals(raw.expectedSignals, name);
 
-  // `mode` is required on v2.0+ fixtures so the harness loads the right
   let mode: RubricMode | undefined;
   if (raw.mode !== undefined) {
     if (!VALID_RUBRIC_MODES.includes(raw.mode as RubricMode)) {
@@ -86,8 +85,6 @@ function loadOne(rootDir: string, name: string): Fixture {
     );
   }
 
-  // seniority is always optional. Default to 'senior' is applied by the
-  // runner so the YAML can omit the key. We still validate when set.
   let seniority: FixtureSeniority | undefined;
   if (raw.seniority !== undefined) {
     if (!VALID_SENIORITIES.includes(raw.seniority as FixtureSeniority)) {

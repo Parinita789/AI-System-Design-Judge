@@ -9,10 +9,7 @@ export class EvaluationsService {
     private readonly evalsRepo: EvaluationsRepository,
   ) {}
 
-  // Run the evaluator synchronously. Currently scoped to the plan phase only;
-  // other phase agents are still stubbed.
-  // `model` is an optional override (e.g., 'claude-haiku-4-5'); absent
-  // means the active provider's env-default model is used.
+  // Plan phase only; build/validate/wrap agents are stubs.
   runForSession(sessionId: string, model?: string) {
     return this.orchestrator.run(sessionId, ['plan'], { model });
   }
@@ -27,9 +24,6 @@ export class EvaluationsService {
     return row;
   }
 
-  // Returns the EvaluationAudit row for an evaluation: the rendered prompt
-  // sent to the LLM, the raw response text before JSON parsing, and the
-  // call's token / model metadata. 1:1 with PhaseEvaluation.
   async getAudit(evaluationId: string) {
     const row = await this.evalsRepo.findAuditByEvaluation(evaluationId);
     if (!row) {

@@ -15,19 +15,10 @@ export interface RubricSignal {
   evidenceHint?: string;
   critical?: boolean;
   capAtScore?: number;
-  // Optional pairing metadata. When set, the LLM is instructed not to
-  // double-count: if the bad signal fires, the paired good signal is
-  // automatically MISS for reporting and not separately deducted (and
-  // vice versa).
   pairedWith?: string;
-  // Artifacts that must be present for this signal to fire. If absent,
-  // the signal must return cannot_evaluate. Used by `ai_authored_plan`
-  // which needs hint history + snapshot timeline to judge responsibly.
   requiresEvidence?: string[];
-  // Per-seniority weight overrides. When set, the loader resolves
-  // `weight` from this map using the requested seniority and DROPS this
-  // field from the returned signal. Downstream code only ever sees a
-  // single `weight`. All four levels are required when this is provided.
+  // Resolved by RubricLoaderService.applySeniority — downstream code
+  // only sees the resolved `weight`, never this map.
   weightBySeniority?: Record<Seniority, WeightTier>;
 }
 
@@ -72,12 +63,7 @@ export interface Rubric {
   schemaVersion: number;
   rubricVersion: string;
   phase: Phase;
-  // Set on v2.0+ rubrics; null/undefined for the legacy v1.0 single-file
-  // rubric. The orchestrator passes it through from Question.mode.
   mode?: Mode;
-  // Set when a Session.seniority drives the per-signal weight resolution.
-  // Rubric YAML files do NOT carry this — it comes from the session and
-  // is stamped on the Rubric object after the loader resolves weights.
   seniority?: Seniority;
   phaseName: string;
   goal: string;

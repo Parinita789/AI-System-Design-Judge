@@ -5,7 +5,6 @@ export interface SignalResult {
   evidence: string;
 }
 
-// Matches the Prisma `PhaseEvaluation` row returned by the backend.
 export interface PhaseEvaluation {
   id: string;
   sessionId: string;
@@ -17,9 +16,6 @@ export interface PhaseEvaluation {
   evaluatedAt: string;
 }
 
-// Matches the Prisma `EvaluationAudit` row — 1:1 with a PhaseEvaluation.
-// `prompt` is the full rendered system + user payload sent to the LLM;
-// `rawResponse` is the LLM text before parseEvalOutput() ran.
 export interface EvaluationAudit {
   id: string;
   phaseEvaluationId: string;

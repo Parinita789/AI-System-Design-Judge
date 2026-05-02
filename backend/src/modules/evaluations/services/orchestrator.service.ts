@@ -33,7 +33,6 @@ export class OrchestratorService {
     const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const hints = await this.aiInteractionsRepo.findBySession(sessionId);
 
-    // Question owns the rubric version; fall back to env default for safety.
     const rubricVersion =
       session.question.rubricVersion ??
       this.config.get<string>('RUBRIC_VERSION') ??
@@ -63,13 +62,8 @@ export class OrchestratorService {
         response: h.response,
       })),
       rubricVersion,
-      // v2.0+ rubric variant. Null on legacy v1.0 questions; the loader
-      // takes the single-file path in that case.
       mode: session.question.mode ?? null,
-      // Seniority is per-attempt — comes off the Session, not Question.
       seniority: session.seniority ?? null,
-      // Optional model override (Anthropic Haiku/Sonnet/Opus). Absent →
-      // provider env default (LLM_MODEL).
       model: options?.model,
     };
 
@@ -81,9 +75,7 @@ export class OrchestratorService {
       this.logger.log(`Running ${phase} agent for session ${sessionId}`);
       const result = await this.planAgent.evaluate(input);
       const persisted = await this.evalsRepo.createPhaseEvaluation(sessionId, phase, result);
-      // Audit row goes in last so its FK target (the new PhaseEvaluation
-      // id) exists. Cascade on the FK keeps them aligned: deleting the
-      // evaluation drops the audit too.
+      // Audit FK requires persisted.id, so insert order is fixed.
       await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
     }

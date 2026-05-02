@@ -19,20 +19,12 @@ export class QuestionsService {
     private readonly config: ConfigService,
   ) {}
 
-  // Create a new Question and its first Session in one shot. The caller (UI)
-  // navigates to the new session's editor.
-  //
-  // Rubric variant routing: v2.0+ rubrics are split into build/design
-  // variants. If the client passed an explicit `mode`, honor it; else
-  // auto-detect from the prompt via the keyword classifier. v1.0 questions
-  // ignore the field entirely (mode = null in the DB).
   async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
     const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
+    // v1.0 takes the legacy single-rubric path (no mode/seniority).
     const mode = rubricVersion === 'v1.0'
       ? null
       : (dto.mode ?? classifyMode(dto.prompt));
-    // Seniority is per-attempt, stored on Session. v2.0+ defaults to
-    // 'senior'; v1.0 stays null (legacy single-rubric path).
     const seniority: PrismaSeniority | null = rubricVersion === 'v1.0'
       ? null
       : (dto.seniority ?? 'senior');
@@ -58,23 +50,17 @@ export class QuestionsService {
     return question;
   }
 
-  // Start a fresh attempt at this question. The new Session inherits the
-  // plan.md content from the question's most-recently-saved attempt
-  // (across ALL prior sessions, not just the latest one) so the user picks
-  // up where their best work left off.
-  // `seniorityOverride` lets the caller pick a different seniority
-  // for this retry. When undefined, inherit from the most recent
-  // sibling Session — same convention as inheriting plan.md.
+  // Inherits plan.md from the most-recently-saved snapshot across ALL
+  // prior sessions of this question, and seniority from the most recent
+  // prior session (overridable).
   async startAttempt(questionId: string, seniorityOverride?: PrismaSeniority): Promise<Session> {
     const question = await this.get(questionId);
 
-    // Find the most recent snapshot across all sessions of this question.
     let inheritedPlanMd: string | null = null;
     let mostRecent: Date | null = null;
     let inheritedSeniority: PrismaSeniority | null = null;
     let mostRecentSession: Date | null = null;
     for (const s of question.sessions) {
-      // Track most recent session for seniority inheritance.
       if (!mostRecentSession || s.startedAt > mostRecentSession) {
         mostRecentSession = s.startedAt;
         inheritedSeniority = s.seniority ?? null;

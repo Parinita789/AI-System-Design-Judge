@@ -12,10 +12,6 @@ import { IsOptional, IsString } from 'class-validator';
 import { EvaluationsService } from '../services/evaluations.service';
 
 class RunEvaluationDto {
-  // Optional Anthropic model override (e.g., 'claude-haiku-4-5',
-  // 'claude-sonnet-4-6', 'claude-opus-4-7'). Absent → env default.
-  // String type, not enum, so future model strings don't require a
-  // backend deploy to land in the API surface.
   @IsOptional()
   @IsString()
   model?: string;
@@ -38,7 +34,7 @@ export class EvaluationsController {
       const message = (err as Error).message ?? String(err);
       const stack = (err as Error).stack ?? '';
       this.logger.error(`Eval failed for ${sessionId}: ${message}\n${stack}`);
-      // Surface the actual cause to the caller — this is a dev tool, no PII risk.
+      // Single-user dev tool — surfacing the cause is fine.
       throw new HttpException(
         { message: 'Evaluation failed', error: message },
         HttpStatus.INTERNAL_SERVER_ERROR,

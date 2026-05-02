@@ -67,9 +67,6 @@ function buildInput(fx: Fixture): PhaseEvalInput {
       })) ?? [],
     rubricVersion: fx.rubricVersion,
     mode: fx.mode,
-    // Default to 'senior' so existing fixtures that pre-date seniority
-    // stay calibrated as before. Fixtures opting in for a different
-    // level set `seniority` in their YAML.
     seniority: fx.seniority ?? 'senior',
   };
 }
@@ -84,7 +81,6 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv);
   const fixturesDir = path.join(__dirname, 'fixtures');
 
-  // Quiet bootstrap — Nest's startup logs drown out the harness output otherwise.
   const app = await NestFactory.createApplicationContext(AppModule, {
     logger: ['warn', 'error'],
   });
@@ -95,11 +91,8 @@ async function main(): Promise<void> {
 
     const fixtures = loadFixtures(fixturesDir, args.filter);
 
-    // Validate every expected signal id against the rubric before any LLM
-    // call — typos in fixture.yaml otherwise fail silently as "signal never
-    // returned, mismatch counted, fixture fails for the wrong reason".
-    // Cache key includes mode so build/design variants validate against
-    // their own merged signal lists.
+    // Validate expected-signal ids against each fixture's resolved rubric
+    // before any LLM call so typos fail fast.
     const rubricCache = new Map<string, ReadonlySet<string>>();
     for (const fx of fixtures) {
       const seniority = fx.seniority ?? 'senior';

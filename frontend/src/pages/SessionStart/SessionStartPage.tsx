@@ -7,10 +7,9 @@ import { Mode, Seniority, SENIORITIES } from '@/types/question';
 
 const MIN_PROMPT_LENGTH = 10;
 
-// Mirror of backend mode-classifier.ts. Kept here so the user sees the
-// inferred mode update live as they type. Backend re-infers if the
-// field is absent at create time, so a slight drift between client and
-// server only affects the on-screen chip, not the rubric routing.
+// Mirror of backend mode-classifier.ts so the chip updates live. Backend
+// re-infers when the field is absent at create time, so client/server
+// drift only affects the chip, not the rubric routing.
 const PRODUCTION_SCALE_PATTERNS: RegExp[] = [
   /\b\d+\s*[kmb]\b\s*(req|request|requests|qps|rps|tps|user|users|event|events|message|messages|connection|connections|eps|operations|ops)/i,
   /\b\d+\s*(million|billion)\b/i,
@@ -25,7 +24,6 @@ export function SessionStartPage() {
   const queryClient = useQueryClient();
   const setActive = useSessionStore((s) => s.setActive);
   const [prompt, setPrompt] = useState('');
-  // null = follow the inferred mode; otherwise pin a user override.
   const [userMode, setUserMode] = useState<Mode | null>(null);
   const [seniority, setSeniority] = useState<Seniority>('senior');
 
@@ -40,8 +38,6 @@ export function SessionStartPage() {
     mutationFn: (p: { prompt: string; mode: Mode | null; seniority: Seniority }) =>
       questionsService.create({
         prompt: p.prompt,
-        // Send mode only when we have one; backend falls back to its
-        // own classifier when the field is absent.
         ...(p.mode ? { mode: p.mode } : {}),
         seniority: p.seniority,
       }),

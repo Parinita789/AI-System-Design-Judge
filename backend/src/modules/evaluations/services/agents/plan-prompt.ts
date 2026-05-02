@@ -8,11 +8,12 @@ export interface BuiltPrompt {
 }
 
 export function buildPlanPrompt(rubric: Rubric, input: PhaseEvalInput): BuiltPrompt {
+  // Both blocks are cacheable: the rubric is frozen across evaluations
+  // and the session question is constant within a session, so prompt
+  // caching catches them.
   return {
     systemBlocks: [
-      // Block 1: rubric — large, frozen across all evaluations → cacheable.
       { text: renderRubricSystemPrompt(rubric), cacheable: true },
-      // Block 2: session question — constant per session → cacheable.
       { text: `## Session question\n${input.session.prompt}`, cacheable: true },
     ],
     userMessage: renderUserPayload(input),
@@ -30,9 +31,6 @@ function renderRubricSystemPrompt(rubric: Rubric): string {
   const goodSignalsBlock = goodSignals.map(formatSignal).join('\n\n');
   const badSignalsBlock = badSignals.map(formatSignal).join('\n\n');
 
-  // Build a pairing reference table from the YAML metadata. Each pair
-  // appears once (good → bad) and the rule against double-counting is
-  // stated next to it. The loader already validated symmetry.
   const pairs = goodSignals
     .filter((s) => s.pairedWith)
     .map((s) => `  - ${s.id} (good) ↔ ${s.pairedWith} (bad)`);
@@ -62,10 +60,7 @@ Good modes: ${aiUsage.goodModes.join('; ')}
 Bad modes: ${aiUsage.badModes.join('; ')}`
     : '';
 
-  // For v2.0+ rubrics, the variant has already been picked structurally
-  // (build vs design); the rubric content reflects the mode and the
-  // long classifier preamble below is redundant. For v1.0 rubrics, keep
-  // the long preamble — the variant doesn't exist there.
+  // v2.0+ has its variant pre-selected; v1.0 needs the LLM to classify.
   const modeOpener = rubric.mode
     ? `## How to read this rubric (the ${rubric.mode} variant has already been chosen)
 You are evaluating a system-design plan in the **${rubric.mode}** variant
@@ -81,17 +76,17 @@ yourself; the routing was done at session creation time. Open the
 (e.g. "${rubric.mode}: <one-sentence rationale tied to the question's scope>").`
     : `## How to read this rubric (IMPORTANT — read before judging)
 
-This is a 2-hour session. Before scoring any signal, classify the question
+This is a 1-hour session. Before scoring any signal, classify the question
 into one of two modes — your judgment depth depends on which:
 
 ### Mode A — "buildable" (small, concrete problem, no large-scale NFRs)
 The question asks for something the candidate could realistically design
-AND build a working version of in ~2 hours.
+AND build a working version of in ~1 hour.
 Expectations: build_sequence_planned and validation_plan_concrete should
 be concrete; failure_modes_articulated should name exercisable failures;
 a short-but-complete plan can score HIT across most signals.
 
-### Mode B — "design-only" (large-scale, distributed, infeasible to build in 2h)
+### Mode B — "design-only" (large-scale, distributed, infeasible to build in 1h)
 The question stipulates production-grade NFRs or a distributed system.
 Expectations: score articulation and reasoning, NOT execution evidence.
 Every signal description starts with "Plan articulates ..." — interpret
@@ -102,10 +97,6 @@ bar. A 4–6 step build sequence is plenty; full DDL is not required.
 State your mode classification at the top of \`feedback\`. If genuinely
 ambiguous, default to Mode B and note the ambiguity.`;
 
-  // Seniority calibration — only emitted when a v2.0+ Session has a
-  // seniority set. The per-signal weights have already been resolved
-  // by the loader; this block tells the LLM to apply matching
-  // expectations to its qualitative HIT/PARTIAL/MISS judgments.
   const seniorityOpener = rubric.seniority
     ? `## Calibrate to the candidate's seniority: ${rubric.seniority}
 You are evaluating a ${rubric.seniority}-level engineer. Apply these
@@ -140,7 +131,7 @@ breakdown and they should not contradict it. Specifically:
 
 - In **Mode B**, do NOT criticize the plan for "no build sequence",
   "no validation plan", "missing load tests", "no benchmarks", or
-  similar — those expectations don't apply to a 2-hour design exercise
+  similar — those expectations don't apply to a 1-hour design exercise
   on a production-scale problem. If the plan articulates the concept
   even briefly, that's enough; if it doesn't, treat it as out-of-scope
   rather than a gap.
@@ -151,9 +142,9 @@ breakdown and they should not contradict it. Specifically:
   silently omit them from feedback.
 - In **Mode A**, the above critiques ARE fair game when the plan
   genuinely lacks them, since the candidate could realistically build
-  and test the system in 2 hours.
+  and test the system in 1 hour.
 - \`top_actions\` should only include actions that are achievable and
-  worthwhile within the same 2-hour design session. "Run a 10K req/s
+  worthwhile within the same 1-hour design session. "Run a 10K req/s
   load test" is NOT a valid action; "sketch how you'd validate at demo
   scale" is. "Implement retry logic" is NOT valid; "name two failure
   modes you'd handle vs punt" is.
@@ -222,7 +213,7 @@ Every signal listed above (both good and bad) must appear as a key in the "signa
 
 \`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
-\`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 2-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
+\`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
 
 The JSON MUST match this schema:
 ${JSON.stringify(rubric.outputSchema, null, 2)}`;
@@ -248,12 +239,10 @@ judge_notes: ${s.judgeNotes}${s.evidenceHint ? `\nevidence_hint: ${s.evidenceHin
 function renderUserPayload(input: PhaseEvalInput): string {
   const sections: string[] = [];
 
-  // plan.md (the primary artifact)
   sections.push(
     `## plan.md (final state)\n${input.planMd && input.planMd.trim().length > 0 ? input.planMd : '(empty)'}`,
   );
 
-  // Snapshot timeline — temporal evidence for iteration_evident, code_before_plan, etc.
   if (input.snapshots.length === 0) {
     sections.push(`## Snapshot timeline\n(no snapshots — plan.md was never saved)`);
   } else {
@@ -273,10 +262,7 @@ function renderUserPayload(input: PhaseEvalInput): string {
     sections.push(`## Snapshot timeline\n${lines.join('\n')}`);
   }
 
-  // Hint usage — temporal + content evidence for ai_authored_plan,
-  // ai_strategy_explicit, etc. The full chat history matters for the
-  // judgment (e.g., whether the candidate had the bot do their thinking),
-  // so we send every exchange in full rather than sampling.
+  // Full chat history is needed to judge ai_authored_plan reliably; no sampling.
   if (input.hints.length === 0) {
     sections.push(`## AI hint usage\nNo hint chat used during this session.`);
   } else {
@@ -289,7 +275,6 @@ function renderUserPayload(input: PhaseEvalInput): string {
     sections.push(`## AI hint usage\n${lines.join('\n')}`);
   }
 
-  // Session-level timing (pause-aware via latest snapshot's elapsedMinutes when present).
   const activeMinutes =
     input.snapshots.length > 0
       ? Math.max(...input.snapshots.map((s) => s.elapsedMinutes))

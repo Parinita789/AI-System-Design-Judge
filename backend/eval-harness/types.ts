@@ -1,10 +1,5 @@
 export type SignalMode = 'hit' | 'partial' | 'miss' | 'credited' | 'skipped';
-
-// Rubric variant. Required on v2.0+ fixtures; ignored on v1.0 fixtures.
 export type RubricMode = 'build' | 'design';
-
-// Per-attempt seniority. Optional everywhere — fixtures default to
-// `senior` when absent (preserves pre-seniority calibration).
 export type FixtureSeniority = 'junior' | 'mid' | 'senior' | 'staff';
 
 export interface FixtureExpectation {
@@ -25,11 +20,8 @@ export interface Fixture extends FixtureExpectation {
   description: string;
   question: string;
   rubricVersion: string;
-  // Required when rubricVersion is v2.0+. Optional on v1.0 fixtures.
-  mode?: RubricMode;
-  // Optional. When absent, the runner uses 'senior' so existing fixtures
-  // stay calibrated as before. v2.0 fixtures can override per-fixture.
-  seniority?: FixtureSeniority;
+  mode?: RubricMode; // required on v2.0+
+  seniority?: FixtureSeniority; // defaults to 'senior' in the runner
   planMd: string | null;
   hints?: FixtureHint[];
 }

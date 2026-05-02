@@ -6,13 +6,10 @@ import { AnthropicProvider } from './anthropic.provider';
 import { OllamaProvider } from './ollama.provider';
 import { ClaudeCliProvider } from './claude-cli.provider';
 
-// Selects the active LlmProvider based on env config. Selection rules:
-//   1. LLM_PROVIDER=claude_cli  → ClaudeCliProvider (explicit override)
-//   2. OLLAMA_BASE_URL is set   → OllamaProvider (local dev convention)
-//   3. otherwise                → AnthropicProvider (production default)
-//
-// Adding a new provider: implement LlmProvider, inject it here, extend
-// resolveName() and get() — no caller changes needed.
+// Selection priority:
+//   1. LLM_PROVIDER=claude_cli  → ClaudeCliProvider
+//   2. OLLAMA_BASE_URL is set   → OllamaProvider
+//   3. otherwise                → AnthropicProvider
 @Injectable()
 export class LlmProviderFactory {
   constructor(

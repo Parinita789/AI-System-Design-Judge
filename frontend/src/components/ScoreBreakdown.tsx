@@ -34,19 +34,13 @@ function classifyResult(
   return r ? r.result : 'not_evaluated';
 }
 
-// HIT scores full weight; PARTIAL scores half. MISS / N/A / not_evaluated score 0.
 function pointsFor(kind: ResultKind, weight: number): number {
   if (kind === 'hit') return weight;
   if (kind === 'partial') return weight / 2;
   return 0;
 }
 
-// Per-polarity pie slices. Colors:
-//   GOOD polarity — shades of green for credited, gray for missed/skipped.
-//   BAD  polarity — shades of red for fired, gray for didn't-fire/skipped.
-//                   ("Bad MISS" is a positive outcome — the bad pattern
-//                   didn't appear — so we keep it neutral gray rather
-//                   than tinting it red.)
+// Bad-MISS uses gray (not red) because not firing a bad signal is a positive outcome.
 function buildPolarityPie(
   signals: RubricSignal[],
   results: Record<string, SignalResult>,
@@ -112,9 +106,7 @@ function tierStats(
       const kind = classifyResult(sig, results);
       stats[kind]++;
       stats.earned += pointsFor(kind, weightValues[tier]);
-      // Skipped signals (LLM said "not applicable to this question") don't
-      // contribute to max — they're excluded from the % so they don't
-      // unfairly drag the score down.
+      // Skipped signals don't contribute to max so they don't drag the % down.
       if (kind !== 'cannot_evaluate') {
         stats.max += weightValues[tier];
       }
@@ -156,9 +148,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   );
   const goodPct = goodTotal.max > 0 ? (goodTotal.earned / goodTotal.max) * 100 : 0;
 
-  // Count-based aggregates so all three cards report in the same units
-  // (number of signals, not weighted scores). Weighted earned/max stay
-  // available below the headline as small captions.
   const goodHitCount = goodTiers.reduce((acc, t) => acc + t.hit, 0);
   const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
   const goodCreditedCount = goodHitCount + goodPartial;
@@ -173,10 +162,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
 
   const totalPartial = goodPartial + badPartial;
 
-  // Two pie datasets, scoped by polarity. Each shows the per-judgment
-  // breakdown within its polarity (HIT / PARTIAL / MISS / N/A) so the
-  // user sees both *how many* good (or bad) signals exist and *what
-  // happened* to each. Side-by-side rendering below.
   const goodPieData = useMemo(
     () => buildPolarityPie(goodSignals, evaluation.signalResults, 'good'),
     [goodSignals, evaluation.signalResults],
@@ -186,13 +171,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
     [badSignals, evaluation.signalResults],
   );
 
-  // Per-signal grouped bar data: ALL rubric criteria (good + bad).
-  // Color rules for the "earned" bar (HIT and PARTIAL share a color —
-  // bar height already conveys partial vs full credit):
-  //   - medium-weight signal, judged HIT or PARTIAL → yellow (any polarity)
-  //   - good polarity, HIT or PARTIAL, weight ≠ medium → green
-  //   - bad  polarity, HIT or PARTIAL, weight ≠ medium → red
-  //   - MISS / N/A / not-evaluated → neutral gray
   const perSignalData = useMemo(() => {
     const colorFor = (
       polarity: 'good' | 'bad',
@@ -223,8 +201,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
         evidence: result?.evidence ?? '',
       };
     });
-    // Sort: good first, then bad. Within each polarity: heaviest weight first,
-    // then alphabetical for stable ordering.
     return all.sort((a, b) => {
       if (a.polarity !== b.polarity) return a.polarity === 'good' ? -1 : 1;
       if (a.max !== b.max) return b.max - a.max;
@@ -238,7 +214,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
         Score breakdown
       </h3>
 
-      {/* Top row: score cards on the left, pie chart on the right. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div className="grid grid-cols-1 gap-3">
           <Card
@@ -307,7 +282,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
         </div>
       </div>
 
-      {/* Per-criterion: ALL good + bad signals, full-width row. */}
       <div className="rounded border border-gray-300 bg-white p-3">
         <div className="text-xs font-medium text-gray-700 mb-1">
           Per-criterion: weight vs earned ({rubric.signals.length} rubric criteria)
@@ -376,8 +350,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   );
 }
 
-// Custom tooltip for the per-signal grouped bar — surfaces the rubric
-// description + LLM judgment + evidence quote on hover.
 function PerSignalTooltip({
   active,
   payload,

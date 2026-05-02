@@ -1,0 +1,40 @@
+description: "Hallucination trap: production-scale question + a plan that mentions scale concerns qualitatively but never derives capacity numbers or names a bottleneck. Bait the LLM into inventing evidence that the validator catches; observed downgrades dropped the score from a likely 3.5–4 to ~2."
+question: "Design a URL shortener for 200M URLs and 10K req/s peak."
+rubricVersion: v2.0
+mode: design
+seniority: senior
+
+# Post-validation band. The LLM emits a polished response but the
+# evidence-validator downgrades ~5 signals per run with ungrounded
+# quotes, pulling the deterministic score into the Failed band. The
+# *exact* set of downgraded signals varies with LLM phrasing (a HIT
+# whose evidence quotes plan.md verbatim survives; a HIT whose
+# evidence paraphrases the same content gets caught), so the fixture
+# only asserts what's stable across runs.
+expectedScore:
+  min: 1.0
+  max: 3.0
+
+expectedSignals:
+  # Signals whose evidence is short and verbatim in the plan — these
+  # consistently survive the validator across runs.
+  credited:
+    - scope_specificity
+    - scope_cuts
+    - data_model_committed
+    - failure_modes_articulated
+
+  # Plan only states the target scale once (10K req/s, 200M URLs). No
+  # demo-scale split — the LLM correctly judges this a MISS every run.
+  miss:
+    - dual_scale_nfrs
+
+  # AI signals are gated by question domain (no AI mentioned).
+  skipped:
+    - ai_strategy_explicit
+
+# Validator-triggering signals (varies run-to-run): scope_realism,
+# tool_stack_completeness, shape_and_seams, caching_strategy_articulated,
+# read_write_path_differentiation, build_sequence_planned,
+# boundaries_without_interfaces. Each WARN log line names which fired.
+# Audit modal shows the `[unverifiable: ...]` annotation on each.

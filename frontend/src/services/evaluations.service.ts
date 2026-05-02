@@ -2,8 +2,6 @@ import { api } from './api';
 import { EvaluationAudit, PhaseEvaluation } from '@/types/evaluation';
 
 export const evaluationsService = {
-  // `model` is an optional override (e.g., 'claude-haiku-4-5'). Absent
-  // means the backend uses its env default (LLM_MODEL).
   runForSession(sessionId: string, model?: string) {
     return api
       .post<PhaseEvaluation[]>(`/sessions/${sessionId}/evaluate`, model ? { model } : {})

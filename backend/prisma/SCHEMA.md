@@ -108,7 +108,7 @@ linkage Postgres uses to enforce the relationship.
 
 ## Design highlights
 
-- **Question vs Session split** is leetcode-style: Question = the problem
+- **Question vs Session split**: Question = the problem
   (prompt + rubric version), Session = one attempt. A Question owns N
   attempts; the most recent `plan.md` is copied forward into a new attempt
   via the "Try again" path.

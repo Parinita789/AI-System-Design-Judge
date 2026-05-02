@@ -58,10 +58,7 @@ export function SessionResultsPage() {
   const setActive = useSessionStore((s) => s.setActive);
   const [planMdExpanded, setPlanMdExpanded] = useState(false);
   const [attemptsOpen, setAttemptsOpen] = useState(false);
-  // null = "show the latest plan eval"; otherwise pin a historical eval id.
-  // Only set via the View button on a row inside the current attempt's
-  // expanded eval-history sub-table; cleared by Re-evaluate or by the
-  // "show latest" link on the score panel.
+  // null = follow the latest plan eval; non-null = pinned historical eval.
   const [selectedEvalId, setSelectedEvalId] = useState<string | null>(null);
 
   const sessionQuery = useQuery({
@@ -82,7 +79,6 @@ export function SessionResultsPage() {
     enabled: !!id,
   });
 
-  // The session response carries the parent question (rubricVersion + prompt).
   const questionId = sessionQuery.data?.questionId;
   const rubricVersion = sessionQuery.data?.question.rubricVersion;
   const rubricQuery = useQuery({
@@ -91,7 +87,6 @@ export function SessionResultsPage() {
     enabled: !!rubricVersion,
   });
 
-  // Pull the question + every attempt of it (replaces the old lineage query).
   const questionQuery = useQuery({
     queryKey: ['question', questionId],
     queryFn: () => questionsService.get(questionId!),
@@ -101,17 +96,13 @@ export function SessionResultsPage() {
   const reEvalMutation = useMutation({
     mutationFn: (model?: string) => evaluationsService.runForSession(id!, model),
     onSuccess: () => {
-      // Drop any pinned historical selection so the new latest auto-loads.
-      setSelectedEvalId(null);
+      setSelectedEvalId(null); // drop any pinned historical eval
       queryClient.invalidateQueries({ queryKey: ['evals', id] });
       queryClient.invalidateQueries({ queryKey: ['question', questionId] });
       queryClient.invalidateQueries({ queryKey: ['questions'] });
     },
   });
 
-  // Try-again creates a new Session under the same Question; the backend
-  // copies the most-recent plan.md from any prior attempt. An optional
-  // seniority override flips the calibration for the new attempt.
   const retryMutation = useMutation({
     mutationFn: (seniority?: Seniority) =>
       questionsService.startAttempt(questionId!, seniority),
@@ -123,14 +114,11 @@ export function SessionResultsPage() {
     },
   });
 
-  // Plan evaluations only, newest first (the API already orders desc).
+  // API orders desc by evaluatedAt — planEvals[0] is the latest.
   const planEvals = useMemo<PhaseEvaluation[]>(
     () => (evalsQuery.data ?? []).filter((e) => e.phase === 'plan'),
     [evalsQuery.data],
   );
-  // If a historical eval is pinned and still present, show that one;
-  // otherwise default to the latest. Falls back gracefully if the pinned
-  // id stops existing (e.g., a Re-evaluate ran in another tab).
   const displayedEval = useMemo<PhaseEvaluation | undefined>(() => {
     if (selectedEvalId) {
       const pinned = planEvals.find((e) => e.id === selectedEvalId);
@@ -180,9 +168,6 @@ export function SessionResultsPage() {
         </div>
       )}
 
-      {/* Top-of-page collapsible: only Attempts now. Re-evaluations of
-          the same attempt are tracked in the DB but we always display the
-          latest one — no UI to pin an older eval. */}
       {(questionQuery.data?.sessions.length ?? 0) > 0 && (
         <CollapsibleSection
           label="Attempts of this question"
@@ -273,8 +258,7 @@ function PlanEvaluationView({
   const goodSignals = rubric?.signals.filter((s) => s.polarity === 'good') ?? [];
   const badSignals = rubric?.signals.filter((s) => s.polarity === 'bad') ?? [];
 
-  // Signals the LLM returned that don't match any rubric ID — surface them
-  // so the user knows the model invented IDs (a common failure mode).
+  // Surface IDs the LLM invented (common hallucination mode).
   const extraSignalIds = useMemo(() => {
     if (!rubric) return [];
     const known = new Set(rubric.signals.map((s) => s.id));
@@ -449,7 +433,7 @@ function SignalGroup({
   weightValues: Record<WeightTier, number>;
 }) {
   const [open, setOpen] = useState(false);
-  // Heaviest signals first, then alphabetical for stable order within a tier.
+  // Heaviest first, alphabetical within a tier for stable order.
   const sorted = useMemo(
     () =>
       [...signals].sort((a, b) => {
@@ -577,10 +561,7 @@ function AttemptsSection({
   selectedEvalId: string | null;
   onSelectEval: (id: string | null) => void;
 }) {
-  // Most recent attempt at the top. The API returns oldest-first because
-  // attempt numbering ("attempt 1, attempt 2…") follows that order — we
-  // preserve the number on each row but reverse the rendered order so the
-  // newest is what the eye lands on first.
+  // API returns oldest-first (so attempt 1 is index 0); reverse for display.
   const ordered = useMemo(
     () =>
       [...attempts].sort(
@@ -589,9 +570,6 @@ function AttemptsSection({
     [attempts],
   );
 
-  // Tracks which attempt rows are showing their evaluation history.
-  // Each Re-evaluate of an attempt is a new PhaseEvaluation row in the
-  // DB; this dropdown is the only place the user can browse those.
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = (sessionId: string) => {
     setExpanded((prev) => {
@@ -632,7 +610,6 @@ function AttemptsSection({
           </thead>
           <tbody className="divide-y divide-gray-200">
             {ordered.map((a, i) => {
-              // phaseEvaluations come newest-first from the API.
               const planEvals = a.phaseEvaluations.filter((e) => e.phase === 'plan');
               const planScore = planEvals[0]?.score;
               const isCurrent = a.id === currentSessionId;
@@ -737,12 +714,8 @@ function EvaluationHistoryForAttempt({
   selectedEvalId: string | null;
   onSelectEval: (id: string | null) => void;
 }) {
-  // planEvals comes newest-first from the API. Numbering counts down so
-  // the topmost row is "N" — matching how Attempts numbers its own rows.
-  // The View column only renders for the *current* attempt: pinning a
-  // historical eval from another attempt would require navigating to
-  // that session first, which we leave to the row-level "View →" link.
-  // For non-current attempts, the eval list is read-only.
+  // View column is current-attempt-only — pinning a historical eval
+  // from another session would require navigating to it first.
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
@@ -762,9 +735,6 @@ function EvaluationHistoryForAttempt({
         </thead>
         <tbody className="divide-y divide-gray-200">
           {planEvals.map((e, i) => {
-            // The breakdown panel shows planEvals[0] when nothing is
-            // pinned, so the latest is "showing" by default unless the
-            // user has explicitly selected another row.
             const isShowing = isCurrentAttempt
               ? selectedEvalId
                 ? e.id === selectedEvalId
@@ -796,8 +766,7 @@ function EvaluationHistoryForAttempt({
                       <button
                         type="button"
                         onClick={() =>
-                          // Selecting the latest is equivalent to
-                          // clearing the pin: same result, simpler state.
+                          // Selecting the latest = clearing the pin.
                           onSelectEval(i === 0 ? null : e.id)
                         }
                         className="text-blue-600 hover:underline text-[11px]"
@@ -823,7 +792,6 @@ function CancelledEmptyState({
   siblings: QuestionWithSessions['sessions'];
   currentSessionId: string;
 }) {
-  // Prefer the most recently completed sibling that actually has a plan eval.
   const scoredSibling = [...siblings]
     .filter(
       (s) =>
@@ -907,10 +875,7 @@ function CollapsibleSection({
   );
 }
 
-// Lazy-loads the EvaluationAudit row when the user clicks "View prompt".
-// The audit table can be large (~10–80 KB of prompt + response), so we
-// skip the fetch until the modal is opened. Hooks into React Query so
-// flipping between evaluations re-fetches on demand.
+// Lazy-loaded — the audit row can be 10–80 KB, so wait for the click.
 function AuditTrailButton({ evaluationId }: { evaluationId: string }) {
   const [open, setOpen] = useState(false);
   const auditQuery = useQuery({
@@ -1079,8 +1044,7 @@ function TabButton({
   );
 }
 
-// Formats the rubric tag shown in the page header and section labels.
-// v1.0 → "v1.0". v2.0 build/senior → "v2.0 (build / senior)".
+// "v1.0" or "v2.0 (build / senior)".
 function formatRubricTag(
   version: string,
   mode: 'build' | 'design' | null | undefined,
@@ -1099,10 +1063,6 @@ const SENIORITY_BTN_LABEL: Record<Seniority, string> = {
   staff: 'Staff',
 };
 
-// Try-again button + inline seniority picker. Default click submits with
-// the current attempt's seniority (or null on legacy v1.0 sessions, in
-// which case the backend keeps it null too). The chevron expands a small
-// "Retry as: [Junior][Mid][Senior][Staff]" row.
 function RetryButton({
   currentSeniority,
   isPending,
@@ -1178,10 +1138,6 @@ function RetryButton({
   );
 }
 
-// Anthropic model picker for the Re-evaluate button. Hardcoded list of
-// the latest in each tier — they're stable model IDs for now. The
-// audit row records the model the provider actually used, so picks
-// are always traceable in the LLM audit modal.
 const MODEL_OPTIONS: Array<{ id: string; label: string; tier: string }> = [
   { id: 'claude-haiku-4-5',  label: 'Haiku',  tier: 'fastest, cheapest' },
   { id: 'claude-sonnet-4-6', label: 'Sonnet', tier: 'balanced' },

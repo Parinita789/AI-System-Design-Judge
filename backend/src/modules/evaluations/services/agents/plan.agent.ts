@@ -7,7 +7,7 @@ import { LlmService } from '../../../llm/services/llm.service';
 import { RubricLoaderService } from '../rubric-loader.service';
 import { buildPlanPrompt } from './plan-prompt';
 import { parseEvalOutput } from './parse-eval-output';
-import { applyAIRelevanceGate, applyModeBBuildExecutionGate } from './relevance-gate';
+import { validateEvidence } from './evidence-validator';
 import { computeScore } from '../score-computer';
 
 const PLAN_AGENT_MAX_TOKENS = 4096;
@@ -17,9 +17,8 @@ export class PlanAgent extends BasePhaseAgent {
   protected readonly phase: Phase = 'plan';
   private readonly logger = new Logger(PlanAgent.name);
 
-  // Explicit constructor so Nest's DI emits param metadata on this class.
-  // Without it, the abstract base's constructor signature is invisible to DI
-  // and `rubricLoader`/`llm` arrive as undefined at runtime.
+  // Explicit constructor — without it, Nest's DI doesn't emit param
+  // metadata for this subclass and llm/rubricLoader arrive undefined.
   constructor(llm: LlmService, rubricLoader: RubricLoaderService) {
     super(llm, rubricLoader);
   }
@@ -43,9 +42,6 @@ export class PlanAgent extends BasePhaseAgent {
       {
         system: systemBlocks,
         maxTokens: PLAN_AGENT_MAX_TOKENS,
-        // Optional per-call model override. Anthropic accepts any
-        // claude-* string; Ollama uses it as the model name; Claude
-        // CLI ignores it (the binary picks its own).
         ...(input.model ? { model: input.model } : {}),
       },
     );
@@ -57,37 +53,15 @@ export class PlanAgent extends BasePhaseAgent {
 
     const parsed = parseEvalOutput(llm.text);
 
-    // Deterministic relevance backstops. The prompt asks the model to do
-    // these checks; these gates guarantee them when the model ignores it.
-    //   1. AI gate: skip AI signals on non-AI questions.
-    //   2. Mode-B gate: skip build/validation BAD signals on production-
-    //      scale questions that obviously can't be built in 2 hours.
-    let workingSignals = parsed.signals;
-    const aiGate = applyAIRelevanceGate(input.session.prompt, workingSignals);
-    workingSignals = aiGate.results;
-    if (aiGate.gated.length > 0) {
-      this.logger.log(
-        `Relevance gate auto-skipped ${aiGate.gated.length} AI signal(s) on ` +
-          `non-AI question: ${aiGate.gated.join(', ')}`,
+    const validated = validateEvidence(parsed.signals, input.planMd, input.hints);
+    if (validated.downgraded.length > 0) {
+      this.logger.warn(
+        `Evidence validator downgraded ${validated.downgraded.length} signal(s) ` +
+          `with unverifiable quotes: ${validated.downgraded.join(', ')}`,
       );
     }
-    const modeBGate = applyModeBBuildExecutionGate(input.session.prompt, workingSignals);
-    workingSignals = modeBGate.results;
-    if (modeBGate.gated.length > 0) {
-      this.logger.log(
-        `Mode-B gate auto-skipped ${modeBGate.gated.length} build/validation ` +
-          `bad signal(s) on production-scale question: ${modeBGate.gated.join(', ')}`,
-      );
-    }
+    const workingSignals = validated.signals;
 
-    // Deterministic score recomputation. The LLM's emitted `score` is
-    // unreliable — it pattern-matches against the qualitative anchor
-    // scenarios instead of computing the threshold-table ratio, so a
-    // plan with strong signals can still get score=1 if the model
-    // "feels" it should. Recomputing from post-gate signals using the
-    // exact algorithm in scoring.computation eliminates that drift.
-    // The LLM's original score is preserved in the audit row's
-    // rawResponse for comparison.
     const computed = computeScore(rubric, workingSignals);
     if (Math.abs(computed.score - parsed.score) >= 1) {
       this.logger.warn(
@@ -98,9 +72,8 @@ export class PlanAgent extends BasePhaseAgent {
       );
     }
 
-    // Render the prompt to a single string so it persists as the audit
-    // record. Separator matches what flatten-style providers produce, so
-    // rebuilding from this column alone reproduces the exact LLM input.
+    // Separator matches the flatten-style providers so rebuilding from
+    // this column alone reproduces the exact LLM input.
     const renderedPrompt =
       systemBlocks.map((b) => b.text).join('\n\n') + '\n\n---\n\n' + userMessage;
 

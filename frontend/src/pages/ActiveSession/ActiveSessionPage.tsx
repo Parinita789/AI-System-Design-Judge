@@ -51,7 +51,6 @@ export function ActiveSessionPage() {
     retry: false,
   });
 
-  // If the session in the URL no longer exists, fall back to the start screen.
   useEffect(() => {
     if (sessionQuery.isError) {
       clearStore();
@@ -59,8 +58,6 @@ export function ActiveSessionPage() {
     }
   }, [sessionQuery.isError, clearStore, navigate]);
 
-  // If the session has already ended (completed or abandoned), redirect to
-  // the read-only results page instead of resuming the editor.
   useEffect(() => {
     if (sessionQuery.data && sessionQuery.data.status !== 'active' && id) {
       navigate(`/sessions/${id}`, { replace: true });
@@ -73,7 +70,6 @@ export function ActiveSessionPage() {
     enabled: !!id,
   });
 
-  // Seed editor once with the latest snapshot's content.
   useEffect(() => {
     if (seededRef.current) return;
     if (latestSnapshotQuery.isPending) return;
@@ -89,8 +85,6 @@ export function ActiveSessionPage() {
   const saveMutation = useMutation({
     mutationFn: async (text: string) => {
       if (!id || !sessionQuery.data) throw new Error('No active session');
-      // Use pause-aware elapsed so paused time isn't counted as active work
-      // (matters for the rubric's temporal signals later).
       const elapsedMs = computeElapsedMs(
         useSessionStore.getState().pauseStates[id],
         sessionQuery.data.startedAt,
@@ -114,7 +108,7 @@ export function ActiveSessionPage() {
   const endMutation = useMutation({
     mutationFn: async (status: 'completed' | 'abandoned') => {
       if (!id) throw new Error('No active session');
-      // For "End", flush any unsaved content first. Cancel discards.
+      // End flushes unsaved content; cancel discards.
       if (status === 'completed' && seededRef.current && content !== lastSavedContentRef.current) {
         await saveMutation.mutateAsync(content);
       }
@@ -125,8 +119,6 @@ export function ActiveSessionPage() {
       queryClient.invalidateQueries({ queryKey: ['evals', id] });
       clearStore();
       if (status === 'completed' && id) {
-        // Navigate to the results page; SessionResultsPage shows the eval (or
-        // an error banner if `evalError` is non-null on the latest run).
         navigate(`/sessions/${id}`, { replace: true });
       } else {
         navigate('/home', { replace: true });
@@ -151,10 +143,8 @@ export function ActiveSessionPage() {
 
   const dirtyNow = seededRef.current && content !== lastSavedContentRef.current;
 
-  // Tick clock for elapsed/relative times. Skip while paused or once the
-  // session is ending/ended so the displayed timer freezes the moment
-  // End/Cancel is pressed instead of continuing to advance during the
-  // backend round-trip and final eval.
+  // Freeze the timer the moment End/Cancel is pressed so it doesn't keep
+  // advancing during the backend round-trip and final eval.
   const timerStopped = isPaused || endMutation.isPending || endMutation.isSuccess;
   useEffect(() => {
     if (timerStopped) return;
@@ -162,20 +152,18 @@ export function ActiveSessionPage() {
     return () => clearInterval(t);
   }, [timerStopped]);
 
-  // Initialize pause state for this session on mount.
   useEffect(() => {
     if (!id || !sessionQuery.data) return;
     initPauseState(id, sessionQuery.data.startedAt);
   }, [id, sessionQuery.data, initPauseState]);
 
-  // Auto-save every 5 minutes if content has changed.
   useEffect(() => {
     const t = setInterval(saveIfDirty, AUTOSAVE_INTERVAL_MS);
     return () => clearInterval(t);
   }, [saveIfDirty]);
 
-  // Mirror live editor content + session into refs so the unload listener
-  // (registered once per session) reads the latest values without rebinding.
+  // Mirror live values into refs so the unload listener (registered once)
+  // reads the latest content without rebinding.
   const contentRef = useRef(content);
   useEffect(() => {
     contentRef.current = content;
@@ -185,8 +173,7 @@ export function ActiveSessionPage() {
     sessionRef.current = sessionQuery.data;
   }, [sessionQuery.data]);
 
-  // Flush dirty content on tab close / refresh / OS shutdown via sendBeacon —
-  // regular fetch/axios doesn't reliably complete during page unload.
+  // sendBeacon is used because fetch/axios don't reliably complete on unload.
   useEffect(() => {
     if (!id) return;
     const flushOnExit = () => {
@@ -206,8 +193,7 @@ export function ActiveSessionPage() {
         elapsedMinutes,
         artifacts: { planMd: contentRef.current },
       });
-      // Blob with application/json so NestJS body-parses it correctly;
-      // sendBeacon defaults to form-urlencoded otherwise.
+      // application/json so NestJS body-parses; sendBeacon defaults to form-urlencoded.
       const blob = new Blob([body], { type: 'application/json' });
       navigator.sendBeacon(url, blob);
     };
@@ -221,11 +207,11 @@ export function ActiveSessionPage() {
   }, [id]);
 
   if (!id) return <div>Missing session id.</div>;
-  if (sessionQuery.isError) return null; // redirect effect kicks in
+  if (sessionQuery.isError) return null;
   if (sessionQuery.isPending) return <div>Loading session…</div>;
 
   const session = sessionQuery.data;
-  // Read `now` so the timer re-renders each second; pauseState handles the pause math.
+  // Re-render each tick so the elapsed timer updates; pauseState handles the math.
   void now;
   const elapsed = computeElapsedMs(pauseState, session.startedAt);
   const dirty = seededRef.current && content !== lastSavedContentRef.current;
@@ -238,7 +224,6 @@ export function ActiveSessionPage() {
 
   return (
     <div className="flex flex-col gap-3 h-[calc(100vh-3rem)]">
-      {/* Compact header: title on left, all session controls on right in one row */}
       <header className="flex items-center justify-between gap-4 shrink-0">
         <div>
           <h2 className="text-lg font-semibold leading-tight">Active session</h2>
@@ -296,7 +281,6 @@ export function ActiveSessionPage() {
         </div>
       )}
 
-      {/* Body fills remaining vertical space — both columns share the same height */}
       <div className="flex gap-4 flex-1 min-h-0">
         <div className="flex-1 min-w-0 flex flex-col gap-3 min-h-0">
           <section className="shrink-0">

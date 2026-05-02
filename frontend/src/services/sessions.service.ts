@@ -9,8 +9,6 @@ export interface EndSessionResult {
 }
 
 export const sessionsService = {
-  // Note: starting a new session goes through `questionsService.create` (new
-  // question) or `questionsService.startAttempt(qid)` (additional attempt).
   end(id: string, status: 'completed' | 'abandoned' = 'completed') {
     return api
       .post<EndSessionResult>(`/sessions/${id}/end`, { status })
