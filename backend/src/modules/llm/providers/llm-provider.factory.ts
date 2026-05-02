@@ -8,8 +8,8 @@ import { ClaudeCliProvider } from './claude-cli.provider';
 
 // Selection priority:
 //   1. LLM_PROVIDER=claude_cli  → ClaudeCliProvider
-//   2. OLLAMA_BASE_URL is set   → OllamaProvider
-//   3. otherwise                → AnthropicProvider
+//.  2. ANTHROPIC_API_KEY is set   → AnthropicProvider
+//   3. otherwise  → OllamaProvider
 @Injectable()
 export class LlmProviderFactory {
   constructor(
@@ -33,7 +33,7 @@ export class LlmProviderFactory {
 
   private resolveName(): 'anthropic' | 'ollama' | 'claude_cli' {
     if (this.config.get<string>(LLM_ENV.LLM_PROVIDER) === 'claude_cli') return 'claude_cli';
-    if (this.config.get<string>(LLM_ENV.OLLAMA_BASE_URL)) return 'ollama';
-    return 'anthropic';
+    if (this.config.get<string>(LLM_ENV.ANTHROPIC_API_KEY)) return 'anthropic';
+    return 'ollama';
   }
 }

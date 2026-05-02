@@ -21,23 +21,24 @@ describe('LlmProviderFactory', () => {
     );
   });
 
-  it('returns Anthropic by default (no overrides set)', () => {
+  it('returns Anthropic when ANTHROPIC_API_KEY is set', () => {
+    env.ANTHROPIC_API_KEY = 'sk-test';
     expect(factory.get()).toBe(anthropic);
   });
 
-  it('returns Ollama when OLLAMA_BASE_URL is set', () => {
-    env.OLLAMA_BASE_URL = 'http://host:11434';
+  it('falls back to Ollama when no API key and no LLM_PROVIDER override', () => {
     expect(factory.get()).toBe(ollama);
   });
 
-  it('returns Claude CLI when LLM_PROVIDER=claude_cli, even if OLLAMA_BASE_URL is set', () => {
+  it('returns Claude CLI when LLM_PROVIDER=claude_cli, even if ANTHROPIC_API_KEY is set', () => {
     env.LLM_PROVIDER = 'claude_cli';
-    env.OLLAMA_BASE_URL = 'http://host:11434';
+    env.ANTHROPIC_API_KEY = 'sk-test';
     expect(factory.get()).toBe(claudeCli);
   });
 
   it('ignores LLM_PROVIDER values other than claude_cli', () => {
     env.LLM_PROVIDER = 'something_else';
+    env.ANTHROPIC_API_KEY = 'sk-test';
     expect(factory.get()).toBe(anthropic);
   });
 });
