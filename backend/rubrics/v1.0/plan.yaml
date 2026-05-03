@@ -1,0 +1,739 @@
+schema_version: 1
+rubric_version: v1.0
+phase: plan
+phase_name: "Plan & Scope"
+
+goal: |
+  To convert the open-ended interview prompt into a written, scoped target —
+  what's in, what's out, what success looks like, what tools, what
+  architectural shape, where the future-scale seams are, what data and
+  components the system has, how it will be built and validated (if feasible) — 
+  so the rest of the session has a clear contract to build
+  against. Because there is no separate design phase, this phase carries
+  both planning and design responsibility. Plan should reflect a Senior level engineer's judgement.
+
+time_bounds:
+  target_min_minutes: 12
+  target_max_minutes: 20
+  flag_under_minutes: 8
+  flag_over_minutes: 25
+  note: |
+    Time bounds widened relative to a planning-only phase because this
+    phase now includes design responsibility. Adjust after running 2-3
+    sessions and observing actual duration.
+
+weight_values:
+  high: 3
+  medium: 2
+  low: 1
+
+pass_bar:
+  description: |
+    A plan.md file exists at the project root, committed before any
+    implementation file. It contains all required sections below, each
+    non-empty.
+  required_artifact: "plan.md at project root"
+  temporal_check: "Committed before the first implementation file"
+  required_sections:
+    - id: scope
+      name: "Scope"
+      must_contain:
+        - "Explicit list of in-scope features"
+        - "Explicit list of out-of-scope features"
+    - id: functional_requirements
+      name: "Functional requirements"
+      must_contain:
+        - "List of what the system must do"
+    - id: non_functional_requirements
+      name: "Non-functional requirements"
+      must_contain:
+        - "Demo scale: numeric targets the build will actually be validated against(applicable for traditional system design problem with huge scale), for small apps it should be runnable"
+        - "Target scale: numeric targets the architecture should grow into without rewrite"
+    - id: tool_choices
+      name: "Tool choices"
+      must_contain:
+        - "Chosen stack/libraries"
+        - "One-line reasoning per choice, referencing at least one stated requirement"
+    - id: architectural_shape_and_seams
+      name: "Architectural shape and seams"
+      must_contain:
+        - "One-sentence description of the system's overall structure"
+        - "2-3 named seams where future scale would be added without rewriting, each tied to a target-scale concern"
+    - id: data_model
+      name: "Data model"
+      must_contain:
+        - "Entities with key fields"
+        - "Relationships between entities, if any"
+    - id: component_boundaries
+      name: "Component boundaries"
+      must_contain:
+        - "Named modules with one-line responsibility per module"
+        - "Statement of which modules can call which (the dependency direction)"
+    - id: key_interfaces
+      name: "Key interfaces"
+      must_contain:
+        - "Function or method sketches for the main cross-module boundaries"
+    - id: failure_modes
+      name: "Failure modes"
+      must_contain:
+        - "List of failure modes the build will handle"
+        - "List of failure modes explicitly punted out of scope"
+    - id: build_sequence
+      name: "Build sequence"
+      must_contain:
+        - "Ordered list of build steps from data model through validation"
+    - id: validation_plan
+      name: "Validation plan"
+      must_contain:
+        - "What will be tested and how (automated, manual, or both)"
+        - "How demo-scale NFR targets will be verified"
+    - id: ai_usage_plan
+      name: "AI usage plan"
+      must_contain:
+        - "What will be delegated to AI"
+        - "What the candidate will write themselves"
+
+signals:
+  # ---------- GOOD SIGNALS ----------
+  - id: scope_specificity
+    polarity: good
+    weight: high
+    description: |
+      Scope names 2-4 specific, buildable features. Features are concrete
+      (named endpoints, operations, or user-facing behaviors), not
+      abstract ("core features", "main use cases").
+    judge_notes: |
+      Count features. Each must be concrete enough to write a one-line
+      acceptance test for. Vague names fail this signal even if count is
+      right.
+    evidence_hint: "Quote the in-scope features list verbatim from plan.md."
+
+  - id: scope_realism
+    polarity: good
+    weight: high
+    description: |
+      Total scope is plausibly buildable in the time remaining after
+      planning, build, and validation phases — typically ~75-85 minutes
+      of build time in a 2-hour session.
+    judge_notes: |
+      Use domain reasoning. Apply "defensible, not optimal" — ambitious
+      but not absurd is fine. Three CRUD endpoints in 80 min: realistic.
+      Distributed consensus with fault tolerance: not realistic.
+    evidence_hint: "Quote the in-scope list and reference the build-time budget assumed."
+
+  - id: scope_cuts
+    polarity: good
+    weight: medium
+    paired_with: missing_or_trivial_cuts
+    description: |
+      Plan explicitly lists 2+ out-of-scope items. Cuts are non-trivial —
+      things a reasonable person might have included.
+    judge_notes: |
+      "Out of scope: nothing" or "out of scope: [absurd thing]" fails.
+      Cuts should be real tradeoffs the candidate had to actively make.
+    evidence_hint: "Quote the out-of-scope list verbatim."
+
+  - id: clarification_evidence
+    polarity: good
+    weight: medium
+    description: |
+      Plan shows evidence that the candidate considered key clarifying
+      dimensions of the problem before committing to scope — even if
+      answers had to be assumed. Dimensions include data shape, latency
+      targets, scale (volume and rate), retraining or update frequency,
+      and (for LLM/agentic systems) context window limits and memory
+      requirements.
+    judge_notes: |
+      Look for explicit "assumed:" or "given:" entries in plan.md, or
+      a dedicated assumptions section. The signal is about visibility
+      of thought, not correctness of assumptions. "Assumed: text input,
+      p95 < 500ms, no retraining in scope, single-session memory only"
+      passes — the candidate considered the dimensions and committed
+      to working assumptions. Plan.md that just lists features without
+      naming any of these dimensions fails. Apply judgment: at minimum,
+      plan should address 2-3 dimensions relevant to the prompt.
+      Irrelevant dimensions don't count (e.g., "context window" for a
+      non-LLM system).
+    evidence_hint: "Quote any 'assumed:' / 'given:' entries or the assumptions section."
+
+  - id: tool_reasoning
+    polarity: good
+    weight: medium
+    description: |
+      Each tool choice is paired with a one-line reason that references a
+      stated requirement. At least one choice rejects an obvious default
+      with explicit reasoning.
+    judge_notes: |
+      Apply "defensible, not optimal" to the choices themselves. The
+      signal is about reasoning quality, not choice optimality. A
+      defensibly-justified unconventional choice beats an unjustified
+      default.
+    evidence_hint: "Quote 1-2 tool-choice + reasoning lines from the tools section."
+
+  - id: tool_stack_completeness
+    polarity: good
+    weight: high
+    description: |
+      Tool choices cover every component named in the architectural shape,
+      data model, and component boundaries sections. No component is left
+      without a corresponding tool, library, or explicit decision to mock
+      or defer it.
+    judge_notes: |
+      Cross-reference the tools section against the architectural shape,
+      data model, and component boundaries. For each named component (or
+      type of component the architecture implies), verify a tool covers
+      it OR the plan explicitly notes it will be mocked, stubbed, or
+      deferred. For an LLM-powered search system, the implied components
+      typically include: embedding model, vector store, LLM provider,
+      chunking strategy, retrieval orchestration. Missing any of these
+      without explicit mention fires this signal. The point is to catch
+      plans whose tools don't add up to the system being described —
+      e.g., "LLM-powered search" with only a primary database listed.
+      Apply judgment: don't demand tools for components that aren't
+      needed for the chosen architecture, but do demand them for
+      components the architecture clearly requires.
+    evidence_hint: "List each architecture component and the tool covering it (or mark 'uncovered')."
+
+  - id: explicit_tradeoffs
+    polarity: good
+    weight: medium
+    paired_with: tradeoffs_as_platitudes
+    description: |
+      Plan names 2-3 explicit trade-offs accepted, with reasoning that
+      ties each trade-off to a stated requirement or constraint.
+      Trade-offs go beyond tool choice — they cover dimensions like
+      accuracy vs. latency, batch vs. real-time, consistency vs.
+      availability, autonomy vs. control, or cost vs. redundancy.
+    judge_notes: |
+      A trade-off has two sides and a reasoned choice between them.
+      "Accepting eventual consistency on click counts to enable async
+      write path later — demo scale doesn't need strong consistency"
+      passes. "Used SQLite" is a tool choice, not a trade-off. Look
+      for the shape: "chose X over Y because Z, accepting cost W."
+      Generic tradeoff language ("there are tradeoffs in scalability")
+      fails. The trade-offs should be specific to the candidate's
+      chosen architecture and stated requirements, not generic system
+      design tradeoffs.
+    evidence_hint: "Quote each named tradeoff with both sides and reasoning."
+
+  - id: dual_scale_nfrs
+    polarity: good
+    weight: medium
+    description: |
+      Non-functional requirements distinguish demo scale (what this build
+      will actually handle and validate against) from target scale (what
+      the design should grow into without rewriting). Both have numbers.
+    judge_notes: |
+      Demo scale = local-testing target the candidate will verify.
+      Target scale = architectural ambition. Both must be present and
+      quantified. "Should scale" with no numbers fails. Demo scale
+      wildly exceeding what's buildable in 2hr also fails.
+    evidence_hint: "Quote the demo-scale numbers and the target-scale numbers separately."
+
+  - id: shape_and_seams
+    polarity: good
+    weight: high
+    paired_with: shape_without_seams
+    description: |
+      Plan commits to a specific architectural shape AND names 2-3 seams
+      where future scale would be added without rewriting. Each seam
+      ties to a target-scale concern stated in NFRs.
+    judge_notes: |
+      A seam is a boundary designed for future swap or extension.
+      Examples: "repository interface for DB swap", "queue boundary for
+      async migration", "stateless handlers for horizontal scale".
+      Generic claims like "modular architecture" don't count. Seams
+      must be specific and tied to scale concerns. If a seam doesn't
+      correspond to any target-scale NFR, flag the inconsistency.
+    evidence_hint: "Quote the shape sentence and each named seam (with the NFR it ties to)."
+
+  - id: data_model_committed
+    polarity: good
+    weight: high
+    description: |
+      Plan commits to entities, their key fields, and relationships
+      before any schema or model file is written. Data model decisions
+      connect to architectural seams where relevant.
+    judge_notes: |
+      Full schemas not required — entities, key fields, and
+      relationships are enough. Examples (different domains):
+      "Url(id, slug, target, click_count). Single table." for a URL
+      shortener; "ChatRoom(id, members[], created_at) + Message(id,
+      room_id, body)" for a chat app; "Counter(id, value, owner_id)"
+      for a counter API. Look for at least one decision that ties data
+      shape to scale concerns (denormalization, indexing, partition
+      keys). Without these connections, the data model is a list, not
+      a commitment.
+      (See Mode B framing — full DDL or migrations are NOT required.)
+    evidence_hint: "Quote the entities + key fields and any seam connection."
+
+  - id: component_boundaries
+    polarity: good
+    weight: medium
+    description: |
+      Plan names modules with one-line responsibilities and states the
+      dependency direction (what calls what). Boundaries align with
+      architectural shape and seams.
+    judge_notes: |
+      Look for: named modules, what each is responsible for, who calls
+      whom. "handlers/ -> services/ -> repos/, no skipping" passes.
+      "Modular architecture with separation of concerns" fails — too
+      abstract. Verify boundaries are consistent with seams: if a seam
+      is "repo interface for DB swap", a repo module must exist.
+    evidence_hint: "Quote the modules list and the dependency-direction sentence."
+
+  - id: interfaces_sketched
+    polarity: good
+    weight: medium
+    description: |
+      Key cross-module interfaces are sketched with function/method
+      signatures or near-equivalents. Sufficient to anchor AI-generated
+      code against a contract.
+    judge_notes: |
+      Full type signatures not required — names and rough shapes are
+      enough. Examples (different domains): "UrlRepo.create(target) ->
+      slug, UrlRepo.find(slug) -> Url|None" for a URL shortener;
+      "Bucket.tryConsume(tenantId, route, n) -> RemainingTokens |
+      Rejected" for a rate limiter; "Ingest.put(event) ->
+      AcknowledgedOffset" for a log pipeline. Boundaries that exist
+      only as module names without interface sketches fail. The point
+      is to give yourself and the AI a contract to build against.
+    evidence_hint: "Quote 1-2 interface signatures from plan.md."
+
+  - id: failure_modes_articulated
+    polarity: good
+    weight: medium
+    paired_with: no_failure_mode_articulation
+    description: |
+      Plan names failure modes that will be handled and failure modes
+      explicitly punted. Punted failure modes are real (not strawmen).
+    judge_notes: |
+      Examples (different domains): "Failures handled: invalid slug
+      (404), DB unreachable (retry once then 500). Punted: partial DB
+      writes, network partitions" passes for a URL shortener.
+      "Failures handled: queue back-pressure (drop-oldest), consumer
+      crash (replay from last offset). Punted: cross-region replication"
+      passes for a log pipeline. "Will handle errors gracefully" fails
+      regardless of domain. Verify punts are honest tradeoffs given
+      demo scope, not pretense. (See Mode B framing — no implementation
+      of retries/circuit-breakers required, just naming and triage.)
+      Concrete failure-mode patterns worth noting as exemplars: fallback
+      models for AI systems (big model fails -> smaller model serves),
+      circuit breakers for downstream dependencies, retry with backoff
+      for transient errors.
+    evidence_hint: "Quote 2-3 handled failures and 2-3 punted ones."
+
+  - id: build_sequence_planned
+    polarity: good
+    weight: low
+    paired_with: no_build_sequence
+    description: |
+      Plan articulates an explicit ordered sequence for the build phase,
+      from data model through validation, with each step a separate
+      commit candidate.
+    judge_notes: |
+      A 4–6 step ordering is plenty. Examples (different domains):
+      "1) schema, 2) repo, 3) service, 4) handlers, 5) tests" for a
+      URL shortener; "1) ingestion contract, 2) buffer, 3) consumer,
+      4) sink, 5) backpressure tests" for a log pipeline.
+      (See Mode B framing — no shell commands or git commits required.)
+    evidence_hint: "Quote the build step list."
+
+  - id: validation_plan_concrete
+    polarity: good
+    weight: high
+    paired_with: no_validation_plan
+    description: |
+      Plan articulates how the demo will be validated — what's tested,
+      how, and how demo-scale NFR targets will be verified. Method is
+      concrete enough to execute without further design.
+    judge_notes: |
+      Examples (different domains): "pytest covers each endpoint happy
+      path + one error path; ab -n 100 -c 10 against /shorten verifies
+      p95 < 200ms" passes for a URL shortener. "Replay 10K canned events
+      through the pipeline; assert all land in the right index within
+      5s" passes for a log pipeline. "Manual testing" alone fails;
+      "will write tests" fails — too vague.
+      (See Mode B framing — demo-scale validation is sufficient; no
+      production load test required.)
+    evidence_hint: "Quote the specific validation method (commands, tools, tests)."
+
+  - id: ai_strategy_explicit
+    polarity: good
+    weight: low
+    paired_with: ai_strategy_absent
+    description: |
+      Plan articulates what will be delegated to AI vs. candidate-written.
+      Strategy aligns with the AI usage modes (autocomplete, sparring
+      partner) rather than full delegation.
+    judge_notes: |
+      Strategy doesn't need to be elaborate. "AI: scaffolding, model
+      boilerplate, test scaffolding. Candidate: data model, business
+      logic, seam abstractions" passes. Absence is a low-severity
+      gap — strategy can be evaluated retrospectively, but explicit
+      upfront strategy correlates with cleaner AI usage during build.
+    evidence_hint: "Quote the delegate-to-AI vs candidate-written split."
+
+  # ---------- BAD SIGNALS ----------
+  - id: code_before_plan
+    polarity: bad
+    weight: high
+    critical: true
+    cap_at_score: 2
+    description: |
+      Implementation files were committed before plan.md, OR plan.md was
+      committed in the same commit as significant implementation code
+      (>50 lines).
+    judge_notes: |
+      Check git log. plan.md must appear in an earlier commit than the
+      first implementation file. Combined first commits with substantial
+      implementation are critical violations because the plan didn't
+      actually constrain anything.
+    evidence_hint: "Quote the offending commit SHA(s) and filenames showing implementation before plan.md."
+
+  - id: ai_authored_plan
+    polarity: bad
+    weight: high
+    requires_evidence: [hints, snapshots]
+    description: |
+      plan.md appears AI-generated and adopted with minimal candidate
+      editing, rather than candidate-authored and AI-refined.
+    judge_notes: |
+      EVIDENCE PRECONDITION: this signal requires hint-chat history AND
+      snapshot timeline. If only plan.md is provided (no hint exchanges,
+      no snapshot ordering), return cannot_evaluate with evidence
+      "no timing or AI-interaction signal available — cannot
+      responsibly judge AI authorship from plan.md alone".
+
+      When evidence IS available, look for converging signatures:
+      (a) hint history shows a single prompt eliciting a full
+      architectural plan that closely matches plan.md;
+      (b) snapshot timeline shows plan.md materializing in a single
+      large jump shortly after a hint exchange;
+      (c) plan.md is comprehensive-but-generic, abstract tradeoffs
+      untied to specific constraints.
+      Two or more signatures fires this signal. Single signature alone
+      is not sufficient.
+    evidence_hint: "List the converging signatures with quotes/timestamps from JSONL."
+
+  - id: data_model_only_in_code
+    polarity: bad
+    weight: high
+    description: |
+      Data model is never written down in plan.md and appears for the
+      first time in models.py, schema.sql, or equivalent.
+    judge_notes: |
+      Check whether data model section in plan.md names entities and
+      key fields before any storage implementation file exists in git.
+      Without an upfront commitment, the build phase is more vulnerable
+      to AI-generated generic schemas that don't reflect specific
+      constraints.
+    evidence_hint: "Note absence of data model section in plan.md and quote first appearance file."
+
+  - id: tool_stack_mismatch
+    polarity: bad
+    weight: high
+    description: |
+      Tool choices listed are insufficient to build the architecture
+      described. The system claims to do X but the tools cannot do X.
+    judge_notes: |
+      Fires when the gap between architecture and tooling is large enough
+      that the build cannot proceed honestly. Examples: "LLM-powered
+      search" with no LLM or embedding tools listed; "real-time
+      notifications" with no queue or websocket tooling; "vector search"
+      with only a relational DB. Distinguish from tool_stack_completeness:
+      that signal catches missing tools for named components; this signal
+      catches the broader failure where the toolset doesn't support the
+      system at all. If both apply, fire this one — it's the more severe
+      diagnosis. High weight because it indicates the plan and the tools
+      are about different systems.
+    evidence_hint: "Quote the architecture claim and the tools list; describe the gap."
+
+  - id: no_validation_plan
+    polarity: bad
+    weight: high
+    paired_with: validation_plan_concrete
+    description: |
+      plan.md doesn't articulate how the demo will be validated, or
+      validation is described too vaguely to execute (e.g., "manual
+      testing").
+    judge_notes: |
+      Without a concrete validation plan, validation becomes ad-hoc at
+      the end of the session and demo-scale NFR claims go unverified.
+      High weight because it directly damages the wrap phase.
+    evidence_hint: "Quote the validation section verbatim, or note absence."
+
+  - id: missing_or_trivial_cuts
+    polarity: bad
+    weight: medium
+    paired_with: scope_cuts
+    description: |
+      plan.md lacks an out-of-scope section, OR contains only trivial
+      cuts (items nobody plausibly would have included).
+    judge_notes: |
+      Missing section is a pass-bar failure. Trivial cuts: judge
+      whether a reasonable candidate might have included this if not
+      being disciplined. If no, the cut is fake.
+    evidence_hint: "Quote the out-of-scope section or note absence."
+
+  - id: scale_pretense
+    polarity: bad
+    weight: medium
+    description: |
+      Plan claims production-grade scale will be built (not just
+      designed for) within the 2-hour session.
+    judge_notes: |
+      Statements like "system will handle 100k RPS" without
+      distinguishing architected-for vs built-for fires this. The
+      candidate is confusing demo with production. Sets up the rest
+      of the session to either over-build or fake the scale claim.
+    evidence_hint: "Quote the scale claim that conflates demo and production."
+
+  - id: shape_without_seams
+    polarity: bad
+    weight: medium
+    paired_with: shape_and_seams
+    description: |
+      Architectural shape is committed but seams are absent or generic.
+      Plan commits to a structure but not to where future scale would
+      live.
+    judge_notes: |
+      "Layered monolith" with no named seams fires this. "Layered
+      monolith with repo interface for DB swap, sync->async seam at
+      CounterService" passes the corresponding good signal. Seams are
+      the architectural maturity signal — their absence is a real gap.
+    evidence_hint: "Quote the shape sentence and note absent or generic seams."
+
+  - id: boundaries_without_interfaces
+    polarity: bad
+    weight: medium
+    description: |
+      Component boundaries are named but no interfaces are sketched
+      between them. Modules exist as labels without contracts.
+    judge_notes: |
+      "Modules: handlers, services, repos" with no function sketches
+      between them fires this. The interfaces are what make boundaries
+      enforceable during AI-assisted build — without them, the AI fills
+      in arbitrary contracts.
+    evidence_hint: "Quote the modules list and note absent interface sketches."
+
+  - id: no_failure_mode_articulation
+    polarity: bad
+    weight: medium
+    paired_with: failure_modes_articulated
+    description: |
+      Failure modes section is absent, empty, or filled with generic
+      platitudes ("handle errors gracefully") rather than specific
+      failures.
+    judge_notes: |
+      Examples (different domains): for a URL shortener, specifics like
+      "404 on bad slug, retry on DB unreachable, regenerate on slug
+      collision" pass the corresponding good signal. For a log pipeline,
+      "drop-oldest on consumer lag, replay from last offset on consumer
+      crash" passes. Generic claims fail. Punted failures must also be
+      specific.
+    evidence_hint: "Quote the failure-modes section verbatim, or note absence."
+
+  - id: tradeoffs_as_platitudes
+    polarity: bad
+    weight: low
+    paired_with: explicit_tradeoffs
+    description: |
+      Plan mentions trade-offs but uses generic, content-free language
+      ("there are tradeoffs in scalability", "considered the
+      trade-offs") without specific choices or reasoning.
+    judge_notes: |
+      Fires when the word "trade-off" appears but no actual trade-off
+      is made. The candidate is gesturing at the concept without
+      engaging with it. Lower weight because it's a quality issue,
+      not a structural one. Pairs with the explicit_tradeoffs good
+      signal — one rewards real trade-offs, the other catches fake
+      ones.
+    evidence_hint: "Quote the platitude phrasing."
+
+  - id: no_build_sequence
+    polarity: bad
+    weight: low
+    paired_with: build_sequence_planned
+    description: |
+      plan.md doesn't articulate the order in which components will be
+      built, AND the build phase commits show no clear progression.
+    judge_notes: |
+      Lower severity — strong engineers often sequence implicitly. Fire
+      only if both the plan lacks sequence and the resulting commits
+      are scattered (e.g., handlers committed before the data model
+      exists). If plan lacks sequence but build commits are clean, do
+      not fire.
+    evidence_hint: "Note absence in plan.md and quote scattered commit ordering."
+
+  - id: ai_strategy_absent
+    polarity: bad
+    weight: low
+    paired_with: ai_strategy_explicit
+    description: |
+      plan.md doesn't articulate what will be delegated to AI vs.
+      candidate-written. AI usage during build appears ad-hoc.
+    judge_notes: |
+      Without explicit strategy, the use-of-AI evaluation falls back
+      to inference from prompt logs. Lower severity because retroactive
+      evaluation is still possible. Strategy doesn't need to be
+      elaborate — naming what's delegated is enough.
+    evidence_hint: "Note absence of the AI usage section."
+
+ai_usage_for_this_phase:
+  description: |
+    Plan must be candidate-authored first, then refined with AI — not
+    AI-generated and adopted. The way AI is used during planning is a
+    first-class signal of whether planning actually happened.
+  good_modes:
+    - "Mode 1 — Autocomplete: candidate has decisions, AI helps express them cleanly"
+    - "Mode 2 — Sparring partner: candidate has draft, AI challenges or surfaces blind spots"
+  bad_modes:
+    - "Mode 3 — Outsourcing: AI generates plan from prompt, candidate adopts with minimal edits"
+  additional_note: |
+    When the candidate accepts AI-generated architectural shape, seams,
+    data model, or component boundaries without first committing to
+    their own version, that's Mode 3 applied to architecture. Treat
+    with same severity as ai_authored_plan.
+
+artifacts_to_inspect:
+  - "plan.md (existence, location, contents, commit timestamp, section completeness)"
+  - "Git log: commit ordering of plan.md vs implementation files"
+  - "Git log: ordering of model/schema files vs handler/service files"
+  - "AI prompt log from minutes 0-20"
+  - "Narration log from minutes 0-20 if maintained"
+
+judge_calibration:
+  - "Apply 'defensible, not optimal' to all judgment-based criteria. A choice or tradeoff is acceptable if a reasonable senior engineer could justify it given the candidate's stated requirements, even if you'd choose differently."
+  - "Boring, simple, well-fitted choices are good. Don't penalize unconventional choices that are explicitly justified."
+  - "When the candidate preemptively addresses an obvious objection, treat it charitably. Don't flag a choice as questionable when reasoning has already been given."
+  - "Process criteria (was X written down?) are mechanical checks. Quality criteria (was X done well?) require domain reasoning under the framing above."
+  - "Distinguish demo scale from target scale rigorously. Don't penalize a small demo or reward an unrealistically large one. Target scale is where architectural judgment is evaluated; demo scale is where build feasibility is evaluated."
+  - "Because there is no separate design phase, weak performance here cannot be recovered later in the session. Score with that in mind — a 3 here implies the rest of the session is operating from a weak foundation. Be appropriately demanding."
+
+scoring:
+  scale_min: 1
+  scale_max: 5
+  default_score: null
+  computation: |
+    For each good signal: assign 0 (miss / cannot_evaluate), 0.5
+    (partial), or 1.0 (hit). Multiply by weight_values[signal.weight].
+    Sum across all good signals = good_score.
+
+    max_score = sum of weight_values for every good signal that is NOT
+    cannot_evaluate. (Skipped/non-applicable signals are excluded from
+    BOTH numerator and denominator so they don't drag the score down.)
+
+    For each bad signal:
+      - HIT      → subtract weight_values[bad.weight]
+      - PARTIAL  → subtract weight_values[bad.weight] * 0.5
+      - MISS / cannot_evaluate → no deduction
+      If `paired_with` references a good signal: that pair measures
+      the same concept from opposite sides. Set the paired good
+      signal to MISS *only for reporting* — under this formula the
+      good's MISS contributes 0 to good_score (no extra deduction),
+      so the bad's deduction stands alone. The pairing is for
+      reporting consistency, not extra math.
+
+    ratio = max(0, good_score - bad_deductions) / max_score
+
+    Apply the threshold table:
+      ratio >= 0.85 AND no high-weight good missed → 5
+      ratio >= 0.70 AND no high-weight good missed → 4
+      ratio >= 0.50                                → 3
+      ratio >= 0.30                                → 2
+      ratio <  0.30                                → 1
+
+    Critical bad signal override: if any bad signal with critical=true
+    fires, cap the final score at its cap_at_score regardless of the
+    threshold table. (Note: ai_authored_plan was previously critical
+    but was downgraded — it now contributes its weight as a deduction
+    only when its evidence preconditions are met.)
+
+    The qualitative anchors below are descriptive cross-checks, not the
+    primary computation. If your threshold-table score and the closest
+    anchor disagree, prefer the threshold-table score and note the
+    discrepancy in feedback.
+  anchors:
+    5: |
+      Pass bar fully met. Nearly all good signals hit, with high-weight
+      signals all hit. No bad signals fire. Plan is sharp, shows real
+      cuts and tradeoffs, distinguishes demo from target scale, names
+      specific seams tied to scale concerns, commits to data model and
+      component boundaries with sketched interfaces, articulates failure
+      modes and validation plan. AI used in Mode 1 or 2.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight ones.
+      Minor gaps in medium-weight signals (e.g., one tool choice
+      under-justified, one seam slightly generic, build sequence
+      implicit). No high-severity bad signals fire. Overall strong.
+    3: |
+      Pass bar met but one or more high-weight good signals are partial
+      or missed (e.g., data model present but disconnected from seams,
+      validation plan present but vague). Some medium-severity bad
+      signals fire. Acceptable but the foundation is shaky for the rest
+      of the session.
+    2: |
+      Pass bar partially missed (a required section absent or trivially
+      filled), OR multiple high-weight good signals missed, OR one
+      critical bad signal fires.
+    1: |
+      No plan.md, OR plan exists but is functionally empty, OR plan is
+      clearly AI-authored without candidate fingerprints, OR plan was
+      committed after substantial implementation.
+  calibration_note: |
+    Do not default to 3. Commit to scores when signals are clear. A
+    critical bad signal caps the score at 2 regardless of other signals.
+    Because this phase encompasses both planning and design
+    responsibility, the bar for a 4 or 5 is higher than for a
+    planning-only phase — the plan must contain the equivalent of design
+    artifacts to score in the upper range.
+
+# JSON Schema the LLM must satisfy. The agent appends this to the prompt
+# and validates the response before persisting. Invalid -> 1 retry, then
+# fall back to cannot_evaluate for unfilled signals.
+output_schema:
+  type: object
+  required: [score, signals, feedback, top_actions]
+  additionalProperties: false
+  properties:
+    score:
+      type: number
+      minimum: 1
+      maximum: 5
+    signals:
+      type: object
+      description: "Keyed by signal id from the rubric. One entry per signal."
+      additionalProperties:
+        type: object
+        required: [result, evidence]
+        additionalProperties: false
+        properties:
+          result:
+            enum: [hit, partial, miss, cannot_evaluate]
+          evidence:
+            type: string
+            maxLength: 500
+    feedback:
+      type: string
+      maxLength: 3000
+      description: "Synthesis: mode classification, score rationale, top themes. Per-signal reasoning belongs in signals[*].evidence, not here."
+    top_actions:
+      type: array
+      maxItems: 5
+      items:
+        type: string
+        maxLength: 200
+    bad_signals_fired:
+      type: array
+      description: "Ids of bad signals (polarity=bad) that fired."
+      items:
+        type: string
+
+deferred_items:
+  description: "Items intentionally not included in v1. Add later if needed."
+  items:
+    - "Good and bad example plan.md snippets — write after running first session, using your own real plan.md as starting material"
+    - "Time bound calibration — adjust min/max minutes after observing your actual planning duration across 2-3 sessions"
+    - "Weight calibration — review after 3-5 sessions; if a signal consistently fires but the gap doesn't hurt downstream, downgrade its weight"
+    - "Sub-weights within sections — currently each signal is weighted equally within its tier; could refine if needed"

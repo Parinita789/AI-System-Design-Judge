@@ -1,0 +1,211 @@
+schema_version: 2
+rubric_version: v2.0
+phase: plan
+mode: build
+phase_name: "Plan & Scope (Build mode)"
+extends: plan.shared.yaml
+
+goal: |
+  Convert the open-ended prompt into a buildable contract — what's in,
+  what's out, what success looks like, what tools, what data, what
+  components, how they fit together, what tests will run, and an ordered
+  build sequence the candidate can execute in roughly 30-40 minutes after
+  planning. This is a 1-hour *buildable* exercise: the plan exists to
+  make the build phase mechanical.
+
+time_bounds:
+  target_min_minutes: 12
+  target_max_minutes: 20
+  flag_under_minutes: 8
+  flag_over_minutes: 25
+  note: |
+    Build mode targets a 60-minute total session: ~15-min plan,
+    ~30-40-min build, ~5-10-min validate.
+
+override_signals:
+  failure_modes_articulated:
+    weight: high
+  interfaces_sketched:
+    weight: high
+
+# Build-only signals
+add_signals:
+  - id: build_sequence_planned
+    polarity: good
+    weight: high
+    paired_with: no_build_sequence
+    description: |
+      Plan articulates an explicit ordered sequence for the build
+      phase, from data model through validation. Each step is a
+      separate commit candidate.
+    judge_notes: |
+      A 4-6 step ordering is plenty. Examples (different domains):
+      "1) schema, 2) repo, 3) service, 4) handlers, 5) tests" for a
+      URL shortener; "1) ingestion contract, 2) buffer, 3) consumer,
+      4) sink, 5) backpressure tests" for a log pipeline. No shell
+      commands or git commits required.
+    evidence_hint: "Quote the build step list."
+
+  - id: no_build_sequence
+    polarity: bad
+    weight: medium
+    paired_with: build_sequence_planned
+    description: |
+      plan.md doesn't articulate the order in which components will be
+      built.
+    judge_notes: |
+      Strong engineers can sequence implicitly during build, but in a
+      60-minute session a written sequence is the difference between
+      coherent commits and scattered work.
+    evidence_hint: "Note absence in plan.md."
+
+  - id: validation_plan_concrete
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid:    high
+      senior: high
+      staff:  high
+    paired_with: no_validation_plan
+    description: |
+      Plan articulates how the demo will be validated — what's tested,
+      how, and how demo-scale NFR targets will be verified. Method is
+      concrete enough to execute without further design.
+    judge_notes: |
+      Examples (different domains): "pytest covers each endpoint happy
+      path + one error path; ab -n 100 -c 10 against /shorten verifies
+      p95 < 200ms" for a URL shortener. "Replay 10K canned events
+      through the pipeline; assert all land in the right index within
+      5s" for a log pipeline. "Manual testing" alone fails.
+    evidence_hint: "Quote the specific validation method."
+
+  - id: no_validation_plan
+    polarity: bad
+    weight: high
+    paired_with: validation_plan_concrete
+    description: |
+      plan.md doesn't articulate how the demo will be validated, or
+      validation is described too vaguely to execute.
+    judge_notes: |
+      Without a concrete validation plan, validation becomes ad-hoc
+      at the end of the session.
+    evidence_hint: "Quote the validation section verbatim, or note absence."
+
+  - id: ai_strategy_explicit
+    polarity: good
+    weight: high
+    paired_with: ai_strategy_absent
+    description: |
+      Plan articulates what will be delegated to AI vs.
+      candidate-written. Strategy aligns with sparring/autocomplete
+      modes rather than full delegation.
+    judge_notes: |
+      Strategy doesn't need to be elaborate. "AI: scaffolding, model
+      boilerplate, test scaffolding. Candidate: data model, business
+      logic, validation harness" passes.
+    evidence_hint: "Quote the AI usage plan section."
+
+  - id: ai_strategy_absent
+    polarity: bad
+    weight: medium
+    paired_with: ai_strategy_explicit
+    description: |
+      plan.md doesn't articulate what will be delegated to AI vs.
+      candidate-written. AI usage during build appears ad-hoc.
+    judge_notes: |
+      Without explicit AI strategy, the build phase tends to drift
+      into Mode-3 outsourcing.
+    evidence_hint: "Quote the section or note absence."
+
+  - id: test_granularity_appropriate
+    polarity: good
+    weight: medium
+    description: |
+      Plan declares a test split (unit vs. integration vs. end-to-end)
+      that matches the system's surface area. A small handler-only
+      service gets unit + one integration; a multi-component pipeline
+      adds end-to-end.
+    judge_notes: |
+      Look for explicit test granularity. "Unit tests for the slug
+      generator and validator; one integration test that exercises
+      POST /shorten and GET /:slug" passes. "Will write tests" fails.
+    evidence_hint: "Quote the test plan and identify the granularity declaration."
+
+  - id: commit_atomicity_planned
+    polarity: good
+    weight: medium
+    description: |
+      Each step in the build sequence is independently verifiable and
+      can be a separate commit. No step depends on its successor's
+      existence to be testable.
+    judge_notes: |
+      Look at the build sequence: each step should produce something
+      that compiles and at least one test that passes. "1) data model
+      + model unit tests, 2) repo + repo tests with in-memory fake,
+      3) service + service tests" passes. "1) write everything, 2)
+      then write tests" fails this.
+    evidence_hint: "Quote 1-2 build steps and explain why they're atomic."
+
+  - id: ai_delegation_specificity
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: medium
+      staff:  high
+    description: |
+      AI delegation names files, sections, or tasks — not vague labels
+      like "scaffolding" or "boilerplate".
+    judge_notes: |
+      "AI to write the FastAPI app skeleton + the SQLAlchemy model
+      class for Url; candidate writes slug-generation logic, the
+      validation harness, and the README" passes. "AI for boilerplate,
+      candidate for the interesting parts" fails — too vague.
+    evidence_hint: "Quote the AI delegation list and note specificity."
+
+# Override pass_bar to drop sections that don't apply in build mode.
+override_pass_bar:
+  drop_sections: [architectural_shape_and_seams]
+  add_sections:
+    - id: build_sequence
+      name: "Build sequence"
+      must_contain:
+        - "Ordered list of build steps from data model through validation"
+    - id: validation_plan
+      name: "Validation plan"
+      must_contain:
+        - "What will be tested and how (automated, manual, or both)"
+        - "How demo-scale NFR targets will be verified"
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Plan produces a clearly buildable contract:
+      ordered build steps each commit-shaped, concrete validation,
+      explicit AI delegation by file/section, named interfaces. No bad
+      signals fire.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor gaps (test granularity slightly under-specified,
+      AI delegation a level too abstract). No high-severity bad
+      signals fire.
+    3: |
+      Pass bar met but one or more high-weight good signals are
+      partial or missed (validation plan present but vague, build
+      sequence skips an obvious step). Some medium bad signals fire.
+      Buildable but the build phase will be uncomfortable.
+    2: |
+      Pass bar partially missed (a required section absent or
+      trivially filled), OR multiple high-weight good signals
+      missed, OR critical bad signal (code_before_plan) fires.
+    1: |
+      No plan.md, OR plan exists but is functionally empty, OR plan
+      committed after substantial implementation.
+  calibration_note: |
+    Build mode's central question is: did the plan produce a buildable
+    contract? Articulation alone doesn't earn full marks — concrete
+    sequencing, validation, and interface sketches are required because
+    the candidate is going to actually execute against this plan in the
+    next 75 minutes.

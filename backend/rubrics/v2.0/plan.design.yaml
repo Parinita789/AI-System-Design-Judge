@@ -1,0 +1,297 @@
+schema_version: 2
+rubric_version: v2.0
+phase: plan
+mode: design
+phase_name: "Plan & Scope (Design mode)"
+extends: plan.shared.yaml
+
+goal: |
+  Convert the open-ended interview prompt into a written, scoped design
+  for a production-scale system: in/out, target NFRs, architectural
+  shape with seams, data model with scale-aware reasoning, capacity
+  estimates, named bottlenecks with mitigations, and a sketched (not
+  executed) validation strategy. The candidate is *designing*, not
+  building — articulation depth and reasoning quality matter more than
+  build mechanics.
+
+time_bounds:
+  target_min_minutes: 25
+  target_max_minutes: 45
+  flag_under_minutes: 15
+  flag_over_minutes: 60
+  note: |
+    Design mode targets a longer planning phase. There is no follow-up
+    build phase against this plan in the same session — the plan IS
+    the artifact.
+
+override_signals:
+  explicit_tradeoffs:
+    weight: high
+  clarification_evidence:
+    weight: high
+
+add_signals:
+  # ---------- Design-mode GOOD signals ----------
+
+  - id: shape_and_seams
+    polarity: good
+    weight: high
+    paired_with: shape_without_seams
+    description: |
+      Plan commits to a specific architectural shape AND names 2-3
+      seams where future scale would be added without rewriting. Each
+      seam ties to a target-scale concern stated in NFRs.
+    judge_notes: |
+      A seam is a boundary designed for future swap or extension.
+      "Layered monolith with repo interface for DB swap, sync->async
+      seam at the analytics writer, code-generation seam abstracted
+      behind nextCode()" passes. "Layered monolith" alone fails.
+    evidence_hint: "Quote the shape sentence and each named seam (with the NFR it ties to)."
+
+  - id: shape_without_seams
+    polarity: bad
+    weight: medium
+    paired_with: shape_and_seams
+    description: |
+      Architectural shape is committed but seams are absent or generic.
+    judge_notes: |
+      Seams are the architectural maturity signal — their absence is a
+      real gap in design mode.
+    evidence_hint: "Quote the shape sentence and note absent or generic seams."
+
+  - id: dual_scale_nfrs
+    polarity: good
+    weight: high
+    paired_with: scale_pretense
+    description: |
+      Plan distinguishes demo-scale (what the design will be sketched
+      against) from target-scale (what the architecture must grow into
+      without rewrite), with numeric targets for both.
+    judge_notes: |
+      Examples: "Demo: 100 RPS for the load test sketch; Target: 10K
+      RPS sustained, 50K peak" passes. A single scale claim fails.
+    evidence_hint: "Quote the NFR section."
+
+  - id: scale_pretense
+    polarity: bad
+    weight: medium
+    paired_with: dual_scale_nfrs
+    description: |
+      Plan claims production-grade scale will be built (not just
+      designed for) within the design exercise.
+    judge_notes: |
+      Statements like "system will handle 100k RPS" without
+      distinguishing architected-for vs built-for fires this.
+    evidence_hint: "Quote the scale claim that conflates demo and production."
+
+  - id: capacity_estimation
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan includes back-of-envelope capacity numbers — storage,
+      bandwidth, QPS — derived from the stated target scale, not
+      pulled out of thin air.
+    judge_notes: |
+      Examples: "200M URLs × 300 B avg = ~60 GB hot storage; 10K req/s
+      × 1 KB avg payload = ~10 MB/s ingress at peak" passes. "We'll
+      need a lot of storage" fails. The numbers don't have to be
+      precisely right — they have to be derived from stated inputs and
+      defensible.
+    evidence_hint: "Quote the capacity numbers and the derivation."
+
+  - id: bottleneck_identification
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan names the system's primary bottleneck under target load and
+      proposes a specific mitigation. Bottleneck is concrete (a
+      component / read-path / write-path), not abstract.
+    judge_notes: |
+      Examples: "Hot-row analytics counter: mitigate with async queue
+      + periodic aggregation, not direct row updates"; "Read-fanout
+      on cache miss for popular slugs: mitigate with singleflight
+      coalescing in the cache layer". "Database might be slow" fails.
+    evidence_hint: "Quote the bottleneck + the mitigation."
+
+  - id: read_write_path_differentiation
+    polarity: good
+    weight: medium
+    description: |
+      Plan distinguishes the read path from the write path with
+      different design choices (caching, replication, indexing,
+      consistency requirements).
+    judge_notes: |
+      For systems with skewed read/write ratios this is essential. A
+      URL shortener with 20:1 read:write should treat the resolve path
+      and the create path differently. Symmetric treatment is a miss
+      when the ratio is asymmetric.
+    evidence_hint: "Quote the section that differentiates read from write."
+
+  - id: caching_strategy_articulated
+    polarity: good
+    weight: medium
+    description: |
+      If caching is in scope (most production-scale designs), plan
+      names the cache layer, what's cached, the eviction strategy,
+      and what happens on cache miss.
+    judge_notes: |
+      "Redis read-through cache for short_code -> long_url; LRU
+      eviction; singleflight on miss" passes. "Add a cache" fails.
+      cannot_evaluate if caching is genuinely out of scope (small
+      scale or stateless system).
+    evidence_hint: "Quote the cache section."
+
+  - id: consistency_model_chosen
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    low
+      senior: medium
+      staff:  high
+    description: |
+      Plan names the consistency model (strong, eventual, read-your-
+      writes, etc.) for at least one component where it matters, and
+      ties that choice to a stated requirement or trade-off.
+    judge_notes: |
+      "Click counts are eventually consistent (trade strict accuracy
+      for write throughput)" passes. "Strong consistency everywhere"
+      without justification fails the reasoning bar even if it's a
+      consistent answer.
+    evidence_hint: "Quote the consistency choice + the justification."
+
+  # ---------- Design-mode demoted-good companions for the bads ----------
+
+  - id: build_sequence_planned
+    polarity: good
+    weight: low
+    paired_with: no_build_sequence
+    description: |
+      (Demoted in design mode.) Plan articulates how the build *would*
+      be sequenced if the candidate were to implement it.
+    judge_notes: |
+      Low weight in design mode — the candidate is not going to build
+      this in the session. A 3-4 step sketch is fine; absence is a
+      minor gap, not a major one.
+    evidence_hint: "Quote the build sequence (if any)."
+
+  - id: no_build_sequence
+    polarity: bad
+    weight: low
+    paired_with: build_sequence_planned
+    description: |
+      (Demoted in design mode.) plan.md doesn't sketch a build order.
+    judge_notes: |
+      Low weight — design exercises can legitimately stop short of
+      build sequencing.
+    evidence_hint: "Note absence."
+
+  - id: validation_plan_concrete
+    polarity: good
+    weight: low
+    paired_with: no_validation_plan
+    description: |
+      (Demoted in design mode.) Plan sketches how the design *would*
+      be validated. Demo-scale verification is sufficient — no
+      production load test needed.
+    judge_notes: |
+      Examples: "Sketch a load test at demo scale (100 req/s) using ab
+      or k6; assert p95 stays under 200ms; verify cache hit rate"
+      passes. "Manual testing" alone fails. Lower weight because the
+      candidate isn't going to run the test in the session.
+    evidence_hint: "Quote the validation sketch."
+
+  - id: no_validation_plan
+    polarity: bad
+    weight: low
+    paired_with: validation_plan_concrete
+    description: |
+      (Demoted in design mode.) plan.md doesn't sketch validation.
+    judge_notes: |
+      Low weight in design mode.
+    evidence_hint: "Note absence."
+
+  - id: ai_strategy_explicit
+    polarity: good
+    weight: low
+    paired_with: ai_strategy_absent
+    description: |
+      (Demoted in design mode unless the question itself invokes AI.)
+      Plan articulates what will be delegated to AI vs.
+      candidate-written.
+    judge_notes: |
+      Low weight in design mode; effectively skipped on non-AI
+      questions via the relevance gate.
+    evidence_hint: "Quote the AI usage section."
+
+  - id: ai_strategy_absent
+    polarity: bad
+    weight: low
+    paired_with: ai_strategy_explicit
+    description: |
+      (Demoted in design mode unless the question itself invokes AI.)
+      plan.md doesn't articulate AI usage. The relevance gate
+      auto-skips this for non-AI questions.
+    judge_notes: |
+      Low weight; effectively skipped on non-AI questions.
+    evidence_hint: "Quote the section or note absence."
+
+# Add design-mode-specific required sections.
+override_pass_bar:
+  add_sections:
+    - id: architectural_shape_and_seams
+      name: "Architectural shape and seams"
+      must_contain:
+        - "One-sentence description of the system's overall structure"
+        - "2-3 named seams where future scale would be added without rewriting, each tied to a target-scale concern"
+    - id: capacity_estimation
+      name: "Capacity estimation"
+      must_contain:
+        - "Back-of-envelope numbers for storage, bandwidth, and request throughput at target scale"
+    - id: bottlenecks_and_mitigations
+      name: "Bottlenecks and mitigations"
+      must_contain:
+        - "At least one named bottleneck and a concrete mitigation"
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Plan demonstrates real scale-aware reasoning:
+      named seams tied to NFRs, capacity numbers derived from target
+      scale, primary bottleneck named with concrete mitigation,
+      consistency model chosen and justified, read/write paths
+      differentiated where ratios warrant. No bad signals fire.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor gaps in medium-weight signals (caching strategy
+      slightly under-specified, one bottleneck named but mitigation
+      generic). No high-severity bad signals fire.
+    3: |
+      Pass bar met but one or more high-weight good signals are
+      partial or missed (capacity numbers absent, no bottleneck
+      named, dual-scale conflated). Some medium bad signals fire.
+      The design is workable but the candidate's reasoning is shallow
+      for a production-scale exercise.
+    2: |
+      Pass bar partially missed, OR multiple high-weight good signals
+      missed, OR critical bad signal (code_before_plan) fires.
+    1: |
+      No plan.md, OR plan exists but is functionally empty, OR plan
+      shows no scale-aware reasoning whatsoever.
+  calibration_note: |
+    Design mode's central question is: did the plan demonstrate
+    scale-aware reasoning? A plan that lists what to build but never
+    names a bottleneck or estimates capacity is not a design exercise
+    — it's a wishlist. Apply this lens when judging high-weight
+    signals: capacity_estimation, bottleneck_identification,
+    shape_and_seams, dual_scale_nfrs.

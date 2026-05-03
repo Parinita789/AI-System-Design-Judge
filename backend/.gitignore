@@ -9,4 +9,3 @@ coverage/
 .idea/
 .vscode/
 prisma/migrations/dev.db*
-rubrics/
