@@ -7,20 +7,28 @@ export interface BuiltPrompt {
   userMessage: string;
 }
 
-export function buildPlanPrompt(rubric: Rubric, input: PhaseEvalInput): BuiltPrompt {
+export interface BuildPlanPromptOptions {
+  useTools?: boolean;
+}
+
+export function buildPlanPrompt(
+  rubric: Rubric,
+  input: PhaseEvalInput,
+  opts: BuildPlanPromptOptions = {},
+): BuiltPrompt {
   // Both blocks are cacheable: the rubric is frozen across evaluations
   // and the session question is constant within a session, so prompt
   // caching catches them.
   return {
     systemBlocks: [
-      { text: renderRubricSystemPrompt(rubric), cacheable: true },
+      { text: renderRubricSystemPrompt(rubric, opts.useTools === true), cacheable: true },
       { text: `## Session question\n${input.session.prompt}`, cacheable: true },
     ],
     userMessage: renderUserPayload(input),
   };
 }
 
-function renderRubricSystemPrompt(rubric: Rubric): string {
+function renderRubricSystemPrompt(rubric: Rubric, useTools: boolean): string {
   const goodSignals = rubric.signals.filter((s) => s.polarity === 'good');
   const badSignals = rubric.signals.filter((s) => s.polarity === 'bad');
 
@@ -206,7 +214,21 @@ the question genuinely has no surface area for the signal.
 Aggregate scoring: skipped ("cannot_evaluate") signals are excluded
 from both earned and max totals so they do not change the score.
 
-## OUTPUT FORMAT (strict)
+${renderOutputBlock(rubric, useTools)}`;
+}
+
+function renderOutputBlock(rubric: Rubric, useTools: boolean): string {
+  if (useTools) {
+    return `## Output
+Submit your evaluation by calling the \`submit_evaluation\` tool. Every signal listed above (both good and bad) must appear in the \`signals\` object — the tool schema enforces this and unknown signal ids are rejected.
+
+For each signal, write \`reasoning\` first (your brief justification), then commit to \`result\` (one of "hit", "partial", "miss", "cannot_evaluate"), then quote \`evidence\` verbatim from plan.md or activity logs (≤500 chars). For "cannot_evaluate", evidence must explain why the signal is not applicable to this question.
+
+\`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
+
+\`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.`;
+  }
+  return `## OUTPUT FORMAT (strict)
 Return ONLY a single valid JSON object. No prose. No markdown fences. No explanations outside the JSON.
 Every signal listed above (both good and bad) must appear as a key in the "signals" object with one of: "hit", "miss", "partial", "cannot_evaluate".
 "evidence" should quote or paraphrase the specific text from plan.md or activity logs that justifies your judgment (≤500 chars). For "cannot_evaluate", evidence must explain why the signal is not applicable to this question.

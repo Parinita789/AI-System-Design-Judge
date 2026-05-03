@@ -76,6 +76,21 @@ describe('OllamaProvider', () => {
     expect(client.chat.mock.calls[0][0].options).toEqual({ num_predict: 512 });
   });
 
+  it('forwards temperature inside the Ollama options map', async () => {
+    client.chat.mockResolvedValue({
+      model: 'llama3.1',
+      message: { role: 'assistant', content: '' },
+      done: true,
+    });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {
+      maxTokens: 512,
+      temperature: 0,
+    });
+
+    expect(client.chat.mock.calls[0][0].options).toEqual({ num_predict: 512, temperature: 0 });
+  });
+
   it('maps Ollama eval counts to tokensIn/tokensOut and zeros cache fields', async () => {
     client.chat.mockResolvedValue({
       model: 'llama3.1',

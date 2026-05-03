@@ -29,6 +29,7 @@ export interface PhaseEvalInput {
 export interface SignalResult {
   result: 'hit' | 'miss' | 'partial' | 'cannot_evaluate';
   evidence: string;
+  reasoning?: string;
 }
 
 export interface PhaseEvaluationResult {

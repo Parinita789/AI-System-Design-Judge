@@ -61,7 +61,6 @@ describe('AnthropicProvider', () => {
     client.createMessage.mockResolvedValue({
       content: [
         { type: 'text', text: 'first' },
-        { type: 'tool_use', name: 'noop', input: {} },
         { type: 'text', text: 'second' },
       ],
       model: 'claude-opus-4-7',
@@ -108,5 +107,105 @@ describe('AnthropicProvider', () => {
     await provider.call([{ role: ChatRole.User, content: 'hi' }], { maxTokens: 256 });
 
     expect(client.createMessage.mock.calls[0][0].max_tokens).toBe(256);
+  });
+
+  it('passes tools and tool_choice through to the API', async () => {
+    client.createMessage.mockResolvedValue({
+      content: [
+        {
+          type: 'tool_use',
+          name: 'submit_evaluation',
+          input: { feedback: 'ok', signals: {}, top_actions: [] },
+        },
+      ],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {
+      tools: [
+        {
+          name: 'submit_evaluation',
+          description: 'desc',
+          inputSchema: { type: 'object', properties: {} },
+        },
+      ],
+      toolChoice: { type: 'tool', name: 'submit_evaluation' },
+    });
+
+    const call = client.createMessage.mock.calls[0][0];
+    expect(call.tools).toEqual([
+      {
+        name: 'submit_evaluation',
+        description: 'desc',
+        input_schema: { type: 'object', properties: {} },
+      },
+    ]);
+    expect(call.tool_choice).toEqual({ type: 'tool', name: 'submit_evaluation' });
+  });
+
+  it('surfaces a tool_use block as toolUse on the response', async () => {
+    const toolInput = { feedback: 'ok', signals: { a: { result: 'hit' } }, top_actions: [] };
+    client.createMessage.mockResolvedValue({
+      content: [{ type: 'tool_use', name: 'submit_evaluation', input: toolInput }],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    const result = await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
+
+    expect(result.toolUse).toEqual({ name: 'submit_evaluation', input: toolInput });
+    expect(result.text).toBe('');
+  });
+
+  it('omits toolUse when no tool_use block is returned', async () => {
+    client.createMessage.mockResolvedValue({
+      content: [{ type: 'text', text: 'just prose' }],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    const result = await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
+
+    expect(result.toolUse).toBeUndefined();
+    expect(result.text).toBe('just prose');
+  });
+
+  it('passes temperature through when set', async () => {
+    client.createMessage.mockResolvedValue({
+      content: [{ type: 'text', text: 'r' }],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], { temperature: 0 });
+
+    expect(client.createMessage.mock.calls[0][0].temperature).toBe(0);
+  });
+
+  it('omits temperature from the request when not set', async () => {
+    client.createMessage.mockResolvedValue({
+      content: [{ type: 'text', text: 'r' }],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
+
+    expect(client.createMessage.mock.calls[0][0].temperature).toBeUndefined();
+  });
+
+  it('omits tools/tool_choice from the request when not set', async () => {
+    client.createMessage.mockResolvedValue({
+      content: [{ type: 'text', text: 'r' }],
+      model: 'claude-opus-4-7',
+      usage: { input_tokens: 1, output_tokens: 1 },
+    });
+
+    await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
+
+    const call = client.createMessage.mock.calls[0][0];
+    expect(call.tools).toBeUndefined();
+    expect(call.tool_choice).toBeUndefined();
   });
 });

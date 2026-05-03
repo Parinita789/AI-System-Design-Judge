@@ -7,7 +7,9 @@ import { ChatRole } from '../../llm/constants';
 import { LlmService } from '../../llm/services/llm.service';
 import { RubricLoaderService } from '../services/rubric-loader.service';
 import { buildPlanPrompt } from '../prompts/plan-prompt';
-import { parseEvalOutput } from '../validators/parse-eval-output';
+import { buildPlanEvalTool, SUBMIT_EVAL_TOOL_NAME } from '../prompts/plan-tool-schema';
+import { parseEvalOutput, ParsedEvalOutput } from '../validators/parse-eval-output';
+import { validateEvalToolArgs } from '../validators/validate-eval-tool-args';
 import { validateEvidence } from '../validators/evidence-validator';
 import { computeScore } from '../services/score-computer';
 
@@ -18,8 +20,6 @@ export class PlanAgent extends BasePhaseAgent {
   protected readonly phase: Phase = 'plan';
   private readonly logger = new Logger(PlanAgent.name);
 
-  // Explicit constructor — without it, Nest's DI doesn't emit param
-  // metadata for this subclass and llm/rubricLoader arrive undefined.
   constructor(llm: LlmService, rubricLoader: RubricLoaderService) {
     super(llm, rubricLoader);
   }
@@ -31,7 +31,8 @@ export class PlanAgent extends BasePhaseAgent {
       input.mode ?? undefined,
       input.seniority ?? undefined,
     );
-    const { systemBlocks, userMessage } = buildPlanPrompt(rubric, input);
+    const tool = buildPlanEvalTool(rubric);
+    const { systemBlocks, userMessage } = buildPlanPrompt(rubric, input, { useTools: true });
 
     this.logger.log(
       `Evaluating session ${input.session.id} (planMd=${input.planMd?.length ?? 0} chars, ` +
@@ -43,16 +44,30 @@ export class PlanAgent extends BasePhaseAgent {
       {
         system: systemBlocks,
         maxTokens: PLAN_AGENT_MAX_TOKENS,
+        // Deterministic verdicts: same plan + same rubric → same signals.
+        temperature: 0,
+        tools: [tool],
+        toolChoice: { type: 'tool', name: SUBMIT_EVAL_TOOL_NAME },
         ...(input.model ? { model: input.model } : {}),
       },
     );
 
     this.logger.log(
       `LLM responded (model=${llm.modelUsed}, in=${llm.tokensIn}, out=${llm.tokensOut}, ` +
-        `cacheWrite=${llm.cacheCreationTokens}, cacheRead=${llm.cacheReadTokens})`,
+        `cacheWrite=${llm.cacheCreationTokens}, cacheRead=${llm.cacheReadTokens}, ` +
+        `toolUse=${llm.toolUse ? llm.toolUse.name : 'none'})`,
     );
 
-    const parsed = parseEvalOutput(llm.text);
+    const expectedSignalIds = new Set(rubric.signals.map((s) => s.id));
+    let parsed: ParsedEvalOutput;
+    let auditResponse: string;
+    if (llm.toolUse && llm.toolUse.name === SUBMIT_EVAL_TOOL_NAME) {
+      parsed = validateEvalToolArgs(llm.toolUse.input, expectedSignalIds);
+      auditResponse = JSON.stringify(llm.toolUse.input, null, 2);
+    } else {
+      parsed = parseEvalOutput(llm.text);
+      auditResponse = llm.text;
+    }
 
     const validated = validateEvidence(parsed.signals, input.planMd, input.hints);
     if (validated.downgraded.length > 0) {
@@ -73,10 +88,11 @@ export class PlanAgent extends BasePhaseAgent {
       );
     }
 
-    // Separator matches the flatten-style providers so rebuilding from
-    // this column alone reproduces the exact LLM input.
     const renderedPrompt =
-      systemBlocks.map((b) => b.text).join('\n\n') + '\n\n---\n\n' + userMessage;
+      systemBlocks.map((b) => b.text).join('\n\n') +
+      '\n\n---\n\n' +
+      userMessage +
+      `\n\n[tool: ${tool.name}]\n${JSON.stringify(tool.inputSchema, null, 2)}`;
 
     return {
       phase: this.phase,
@@ -86,7 +102,7 @@ export class PlanAgent extends BasePhaseAgent {
       topActionableItems: parsed.topActions,
       audit: {
         prompt: renderedPrompt,
-        rawResponse: llm.text,
+        rawResponse: auditResponse,
         modelUsed: llm.modelUsed,
         tokensIn: llm.tokensIn,
         tokensOut: llm.tokensOut,

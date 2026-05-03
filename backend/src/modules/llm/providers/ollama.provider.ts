@@ -34,10 +34,14 @@ export class OllamaProvider implements LlmProvider {
       ollamaMessages.push({ role: m.role, content: m.content });
     }
 
+    const ollamaOptions: Record<string, unknown> = {};
+    if (opts.maxTokens !== undefined) ollamaOptions.num_predict = opts.maxTokens;
+    if (opts.temperature !== undefined) ollamaOptions.temperature = opts.temperature;
+
     const result = await this.client.chat({
       model,
       messages: ollamaMessages,
-      options: opts.maxTokens ? { num_predict: opts.maxTokens } : undefined,
+      options: Object.keys(ollamaOptions).length > 0 ? ollamaOptions : undefined,
     });
 
     if (!result.message?.content) {

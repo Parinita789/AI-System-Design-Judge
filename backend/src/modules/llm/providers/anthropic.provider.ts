@@ -2,7 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { AnthropicClientService } from '../services/anthropic-client.service';
-import { ChatMessage, LlmCallOptions, LlmResponse, SystemBlock } from '../types/llm.types';
+import {
+  ChatMessage,
+  LlmCallOptions,
+  LlmResponse,
+  SystemBlock,
+  ToolChoice,
+  ToolDefinition,
+  ToolUsePayload,
+} from '../types/llm.types';
 import { LLM_ENV } from '../constants';
 import { LlmProvider } from './llm-provider.interface';
 
@@ -27,12 +35,17 @@ export class AnthropicProvider implements LlmProvider {
       opts.maxTokens ?? parseInt(requireEnv(this.config, LLM_ENV.LLM_MAX_TOKENS), 10);
 
     const systemParam = this.buildSystem(opts.system);
+    const toolsParam = opts.tools ? toAnthropicTools(opts.tools) : undefined;
+    const toolChoiceParam = opts.toolChoice ? toAnthropicToolChoice(opts.toolChoice) : undefined;
 
     const params: Anthropic.MessageCreateParamsNonStreaming = {
       model,
       max_tokens: maxTokens,
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
       ...(systemParam !== undefined ? { system: systemParam } : {}),
+      ...(toolsParam !== undefined ? { tools: toolsParam } : {}),
+      ...(toolChoiceParam !== undefined ? { tool_choice: toolChoiceParam } : {}),
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     };
 
     const result = await this.client.createMessage(params);
@@ -42,6 +55,13 @@ export class AnthropicProvider implements LlmProvider {
       .map((b) => b.text)
       .join('\n');
 
+    const toolUseBlock = result.content.find(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+    );
+    const toolUse: ToolUsePayload | undefined = toolUseBlock
+      ? { name: toolUseBlock.name, input: toolUseBlock.input }
+      : undefined;
+
     const usage = result.usage as Anthropic.Usage & {
       cache_creation_input_tokens?: number | null;
       cache_read_input_tokens?: number | null;
@@ -49,6 +69,7 @@ export class AnthropicProvider implements LlmProvider {
 
     return {
       text,
+      ...(toolUse ? { toolUse } : {}),
       modelUsed: result.model,
       tokensIn: usage.input_tokens,
       tokensOut: usage.output_tokens,
@@ -57,8 +78,6 @@ export class AnthropicProvider implements LlmProvider {
     };
   }
 
-  // For arrays, mark only the LAST cacheable block with cache_control —
-  // that breakpoint caches everything (tools + earlier blocks) before it.
   private buildSystem(
     system: LlmCallOptions['system'],
   ): string | Anthropic.TextBlockParam[] | undefined {
@@ -75,5 +94,24 @@ export class AnthropicProvider implements LlmProvider {
       text: b.text,
       ...(i === lastCacheableIdx ? { cache_control: { type: 'ephemeral' } } : {}),
     }));
+  }
+}
+
+function toAnthropicTools(tools: ToolDefinition[]): Anthropic.Tool[] {
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.inputSchema as Anthropic.Tool.InputSchema,
+  }));
+}
+
+function toAnthropicToolChoice(choice: ToolChoice): Anthropic.MessageCreateParams['tool_choice'] {
+  switch (choice.type) {
+    case 'auto':
+      return { type: 'auto' };
+    case 'any':
+      return { type: 'any' };
+    case 'tool':
+      return { type: 'tool', name: choice.name };
   }
 }
