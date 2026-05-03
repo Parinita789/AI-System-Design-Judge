@@ -172,13 +172,8 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   );
 
   const perSignalData = useMemo(() => {
-    const colorFor = (
-      polarity: 'good' | 'bad',
-      weight: WeightTier,
-      kind: ResultKind,
-    ): string => {
+    const colorFor = (polarity: 'good' | 'bad', kind: ResultKind): string => {
       if (kind !== 'hit' && kind !== 'partial') return '#d1d5db'; // gray-300
-      if (weight === 'medium') return '#eab308'; // yellow-500
       return polarity === 'good' ? '#16a34a' : '#dc2626';
     };
 
@@ -195,7 +190,7 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
         max,
         earned,
         kind,
-        earnedColor: colorFor(s.polarity, s.weight as WeightTier, kind),
+        earnedColor: colorFor(s.polarity, kind),
         judgmentLabel: RESULT_LABEL[kind],
         description: s.description,
         evidence: result?.evidence ?? '',
@@ -294,8 +289,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
           signal credited (HIT or PARTIAL),{' '}
           <span className="font-semibold text-rose-700">red</span> = bad signal
           fired (HIT or PARTIAL),{' '}
-          <span className="font-semibold text-yellow-700">yellow</span> =
-          medium-weight signal credited/fired (any polarity),{' '}
           <span className="font-semibold text-gray-500">gray</span> = miss / not
           evaluated.
         </div>
