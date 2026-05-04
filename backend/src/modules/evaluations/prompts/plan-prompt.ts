@@ -1,10 +1,12 @@
 import { Rubric } from '../types/rubric.types';
 import { SystemBlock } from '../../llm/types/llm.types';
 import { PhaseEvalInput } from '../types/evaluation.types';
+import { dedupePlanMd } from '../helpers/dedupe-plan-md';
 
 export interface BuiltPrompt {
   systemBlocks: SystemBlock[];
   userMessage: string;
+  preprocessing: { removedParagraphs: number; removedChars: number };
 }
 
 export interface BuildPlanPromptOptions {
@@ -19,12 +21,20 @@ export function buildPlanPrompt(
   // Both blocks are cacheable: the rubric is frozen across evaluations
   // and the session question is constant within a session, so prompt
   // caching catches them.
+  const deduped = dedupePlanMd(input.planMd);
+  const inputForRender: PhaseEvalInput =
+    deduped.removedParagraphs > 0 ? { ...input, planMd: deduped.text } : input;
+
   return {
     systemBlocks: [
       { text: renderRubricSystemPrompt(rubric, opts.useTools === true), cacheable: true },
       { text: `## Session question\n${input.session.prompt}`, cacheable: true },
     ],
-    userMessage: renderUserPayload(input),
+    userMessage: renderUserPayload(inputForRender),
+    preprocessing: {
+      removedParagraphs: deduped.removedParagraphs,
+      removedChars: deduped.removedChars,
+    },
   };
 }
 

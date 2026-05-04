@@ -32,12 +32,20 @@ export class PlanAgent extends BasePhaseAgent {
       input.seniority ?? undefined,
     );
     const tool = buildPlanEvalTool(rubric);
-    const { systemBlocks, userMessage } = buildPlanPrompt(rubric, input, { useTools: true });
+    const { systemBlocks, userMessage, preprocessing } = buildPlanPrompt(rubric, input, {
+      useTools: true,
+    });
 
     this.logger.log(
       `Evaluating session ${input.session.id} (planMd=${input.planMd?.length ?? 0} chars, ` +
         `${input.snapshots.length} snapshots, ${input.hints.length} hints)`,
     );
+    if (preprocessing.removedParagraphs > 0) {
+      this.logger.log(
+        `Stripped ${preprocessing.removedParagraphs} duplicate paragraph(s) ` +
+          `from plan.md before LLM call (saved ${preprocessing.removedChars} chars)`,
+      );
+    }
 
     const llm = await this.llm.call(
       [{ role: ChatRole.User, content: userMessage }],
