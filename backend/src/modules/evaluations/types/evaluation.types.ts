@@ -49,6 +49,7 @@ export interface EvaluationAuditPayload {
   tokensOut: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  latencyMs?: number;
 }
 
 export interface SynthesisResult {

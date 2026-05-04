@@ -10,27 +10,58 @@ export class QuestionsRepository {
     return this.prisma.question.create({ data });
   }
 
-  findAll() {
-    return this.prisma.question.findMany({
+  async findAll() {
+    const rows = await this.prisma.question.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         sessions: {
-          include: { phaseEvaluations: { orderBy: { evaluatedAt: 'desc' } } },
+          include: {
+            phaseEvaluations: {
+              orderBy: { evaluatedAt: 'desc' },
+              include: { audit: { select: { modelUsed: true } } },
+            },
+          },
           orderBy: { startedAt: 'asc' },
         },
       },
     });
+    return rows.map(flattenQuestion);
   }
 
-  findById(id: string) {
-    return this.prisma.question.findUnique({
+  async findById(id: string) {
+    const row = await this.prisma.question.findUnique({
       where: { id },
       include: {
         sessions: {
-          include: { phaseEvaluations: { orderBy: { evaluatedAt: 'desc' } } },
+          include: {
+            phaseEvaluations: {
+              orderBy: { evaluatedAt: 'desc' },
+              include: { audit: { select: { modelUsed: true } } },
+            },
+          },
           orderBy: { startedAt: 'asc' },
         },
       },
     });
+    return row ? flattenQuestion(row) : null;
   }
+}
+
+function flattenQuestion<
+  T extends {
+    sessions: Array<{
+      phaseEvaluations: Array<{ audit: { modelUsed: string } | null } & Record<string, unknown>>;
+    }>;
+  },
+>(question: T): T {
+  return {
+    ...question,
+    sessions: question.sessions.map((s) => ({
+      ...s,
+      phaseEvaluations: s.phaseEvaluations.map(({ audit, ...rest }) => ({
+        ...rest,
+        modelUsed: audit?.modelUsed ?? null,
+      })),
+    })),
+  } as T;
 }

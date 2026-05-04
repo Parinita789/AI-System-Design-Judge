@@ -65,6 +65,7 @@ erDiagram
         int tokens_out
         int cache_read_tokens
         int cache_creation_tokens
+        int latency_ms "wall-clock LLM call duration (NULL for pre-2026-05-04 rows)"
         timestamp created_at
     }
 

@@ -9,4 +9,8 @@ export class LlmService {
   call(messages: ChatMessage[], opts: LlmCallOptions = {}): Promise<LlmResponse> {
     return this.factory.get().call(messages, opts);
   }
+
+  supportsToolUse(): boolean {
+    return this.factory.get().supportsToolUse;
+  }
 }

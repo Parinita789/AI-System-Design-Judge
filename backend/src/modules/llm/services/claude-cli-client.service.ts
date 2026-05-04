@@ -10,6 +10,32 @@ import {
 export interface ClaudeCliResult {
   text: string;
   model: string;
+  tokensIn: number;
+  tokensOut: number;
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+}
+
+// Shape of `claude -p --output-format json` stdout. Only the fields we
+// actually consume are typed; the CLI emits more (modelUsage,
+// inference_geo, iterations, etc.) which we ignore.
+interface ClaudeCliJsonEnvelope {
+  type: string;
+  is_error: boolean;
+  result: string;
+  usage?: {
+    input_tokens?: number;
+    output_tokens?: number;
+    cache_read_input_tokens?: number;
+    cache_creation_input_tokens?: number;
+  };
+  modelUsage?: Record<
+    string,
+    {
+      inputTokens?: number;
+      outputTokens?: number;
+    }
+  >;
 }
 
 @Injectable()
@@ -18,12 +44,15 @@ export class ClaudeCliClientService {
 
   constructor(private readonly config: ConfigService) {}
 
-  // Spawns `claude -p [--model <id>]` with the prompt piped on stdin.
-  // The user must already be logged into Claude Code.
   async run(prompt: string, model?: string): Promise<ClaudeCliResult> {
     const bin =
       this.config.get<string>(LLM_ENV.CLAUDE_CLI_BIN) ?? CLAUDE_CLI_DEFAULT_BIN;
-    const args = model ? ['-p', '--model', model] : ['-p'];
+    const args = [
+      '-p',
+      '--output-format',
+      'json',
+      ...(model ? ['--model', model] : []),
+    ];
     this.logger.log(
       `spawn ${bin} ${args.join(' ')} (prompt=${prompt.length} chars)`,
     );
@@ -67,13 +96,67 @@ export class ClaudeCliClientService {
           );
           return;
         }
-        // The CLI doesn't echo which model it used; fall back to a
-        // marker when the caller didn't pin one.
-        resolve({ text: stdout.trim(), model: model ?? 'claude-cli' });
+
+        let envelope: ClaudeCliJsonEnvelope;
+        try {
+          envelope = JSON.parse(stdout) as ClaudeCliJsonEnvelope;
+        } catch (err) {
+          reject(
+            new Error(
+              `claude CLI returned non-JSON stdout: ${(err as Error).message}. ` +
+                `First 500 chars: ${stdout.slice(0, 500)}`,
+            ),
+          );
+          return;
+        }
+
+        if (envelope.is_error) {
+          reject(
+            new Error(
+              `claude CLI returned an error envelope: ${envelope.result || '(no message)'}`,
+            ),
+          );
+          return;
+        }
+
+        const usage = envelope.usage ?? {};
+        resolve({
+          text: (envelope.result ?? '').trim(),
+          model: pickActualModel(envelope.modelUsage, model),
+          tokensIn: usage.input_tokens ?? 0,
+          tokensOut: usage.output_tokens ?? 0,
+          cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+          cacheCreationTokens: usage.cache_creation_input_tokens ?? 0,
+        });
       });
 
       child.stdin.write(prompt);
       child.stdin.end();
     });
   }
+}
+
+// Pick the canonical model id. Prefer the caller's explicit choice;
+// otherwise read modelUsage and use the entry that actually produced
+// output tokens (Claude Code may briefly invoke Haiku for routing
+// before delegating the real work to the requested model). Strip
+// suffixes like "[1m]" or "-20251001" so the id matches frontend
+// rate-table keys (claude-opus-4-7, claude-haiku-4-5, ...).
+function pickActualModel(
+  modelUsage: ClaudeCliJsonEnvelope['modelUsage'],
+  explicit?: string,
+): string {
+  if (explicit) return explicit;
+  if (!modelUsage) return 'claude-cli';
+  let bestKey: string | null = null;
+  let bestOut = -1;
+  for (const [key, info] of Object.entries(modelUsage)) {
+    const out = info?.outputTokens ?? 0;
+    if (out > bestOut) {
+      bestOut = out;
+      bestKey = key;
+    }
+  }
+  if (!bestKey) return 'claude-cli';
+  return bestKey.replace(/\[.*?\]$/, '').replace(/-\d{8}$/, '');
 }

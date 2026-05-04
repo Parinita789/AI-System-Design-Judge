@@ -86,11 +86,14 @@ export function parseEvalOutput(rawText: string): ParsedEvalOutput {
   }
   const obj = candidate as Record<string, unknown>;
 
-  // score
-  const score = obj.score;
-  if (typeof score !== 'number' || Number.isNaN(score)) {
-    throw new EvaluationParseError('Missing or non-numeric "score"', rawText);
-  }
+  // score is optional — computeScore overrides it deterministically downstream.
+  // Accept any number; default to 0 when absent or non-numeric so the rest of
+  // the pipeline still runs.
+  const scoreCandidate = obj.score;
+  const score =
+    typeof scoreCandidate === 'number' && !Number.isNaN(scoreCandidate)
+      ? scoreCandidate
+      : 0;
 
   // signals
   if (!obj.signals || typeof obj.signals !== 'object') {

@@ -122,6 +122,7 @@ model EvaluationAudit {
   tokensOut           Int      @map("tokens_out")
   cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
   cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  latencyMs           Int?     @map("latency_ms")
   createdAt           DateTime @default(now()) @map("created_at")
 
   phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)

@@ -31,14 +31,16 @@ export class PlanAgent extends BasePhaseAgent {
       input.mode ?? undefined,
       input.seniority ?? undefined,
     );
-    const tool = buildPlanEvalTool(rubric);
+    const useTools = this.llm.supportsToolUse();
+    const tool = useTools ? buildPlanEvalTool(rubric) : null;
     const { systemBlocks, userMessage, preprocessing } = buildPlanPrompt(rubric, input, {
-      useTools: true,
+      useTools,
     });
 
     this.logger.log(
       `Evaluating session ${input.session.id} (planMd=${input.planMd?.length ?? 0} chars, ` +
-        `${input.snapshots.length} snapshots, ${input.hints.length} hints)`,
+        `${input.snapshots.length} snapshots, ${input.hints.length} hints, ` +
+        `useTools=${useTools})`,
     );
     if (preprocessing.removedParagraphs > 0) {
       this.logger.log(
@@ -47,6 +49,7 @@ export class PlanAgent extends BasePhaseAgent {
       );
     }
 
+    const llmStart = Date.now();
     const llm = await this.llm.call(
       [{ role: ChatRole.User, content: userMessage }],
       {
@@ -54,16 +57,21 @@ export class PlanAgent extends BasePhaseAgent {
         maxTokens: PLAN_AGENT_MAX_TOKENS,
         // Deterministic verdicts: same plan + same rubric → same signals.
         temperature: 0,
-        tools: [tool],
-        toolChoice: { type: 'tool', name: SUBMIT_EVAL_TOOL_NAME },
+        ...(tool
+          ? {
+              tools: [tool],
+              toolChoice: { type: 'tool', name: SUBMIT_EVAL_TOOL_NAME },
+            }
+          : {}),
         ...(input.model ? { model: input.model } : {}),
       },
     );
+    const latencyMs = Date.now() - llmStart;
 
     this.logger.log(
-      `LLM responded (model=${llm.modelUsed}, in=${llm.tokensIn}, out=${llm.tokensOut}, ` +
-        `cacheWrite=${llm.cacheCreationTokens}, cacheRead=${llm.cacheReadTokens}, ` +
-        `toolUse=${llm.toolUse ? llm.toolUse.name : 'none'})`,
+      `LLM responded in ${latencyMs}ms (model=${llm.modelUsed}, in=${llm.tokensIn}, ` +
+        `out=${llm.tokensOut}, cacheWrite=${llm.cacheCreationTokens}, ` +
+        `cacheRead=${llm.cacheReadTokens}, toolUse=${llm.toolUse ? llm.toolUse.name : 'none'})`,
     );
 
     const expectedSignalIds = new Set(rubric.signals.map((s) => s.id));
@@ -100,7 +108,7 @@ export class PlanAgent extends BasePhaseAgent {
       systemBlocks.map((b) => b.text).join('\n\n') +
       '\n\n---\n\n' +
       userMessage +
-      `\n\n[tool: ${tool.name}]\n${JSON.stringify(tool.inputSchema, null, 2)}`;
+      (tool ? `\n\n[tool: ${tool.name}]\n${JSON.stringify(tool.inputSchema, null, 2)}` : '');
 
     return {
       phase: this.phase,
@@ -116,6 +124,7 @@ export class PlanAgent extends BasePhaseAgent {
         tokensOut: llm.tokensOut,
         cacheReadTokens: llm.cacheReadTokens,
         cacheCreationTokens: llm.cacheCreationTokens,
+        latencyMs,
       },
     };
   }

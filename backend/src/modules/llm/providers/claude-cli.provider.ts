@@ -11,6 +11,7 @@ import { flattenSystem } from './ollama.provider';
 @Injectable()
 export class ClaudeCliProvider implements LlmProvider {
   readonly name = 'claude_cli';
+  readonly supportsToolUse = false;
   private readonly logger = new Logger(ClaudeCliProvider.name);
 
   constructor(private readonly client: ClaudeCliClientService) {}
@@ -28,10 +29,10 @@ export class ClaudeCliProvider implements LlmProvider {
     return {
       text: result.text,
       modelUsed: result.model,
-      tokensIn: 0, // CLI doesn't expose token counts.
-      tokensOut: 0,
-      cacheCreationTokens: 0,
-      cacheReadTokens: 0,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      cacheCreationTokens: result.cacheCreationTokens,
+      cacheReadTokens: result.cacheReadTokens,
     };
   }
 }

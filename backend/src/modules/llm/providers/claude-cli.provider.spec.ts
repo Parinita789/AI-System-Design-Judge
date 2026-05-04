@@ -5,25 +5,57 @@ describe('ClaudeCliProvider', () => {
   let provider: ClaudeCliProvider;
   const client = { run: jest.fn() };
 
+  function cliResult(overrides: Partial<{
+    text: string;
+    model: string;
+    tokensIn: number;
+    tokensOut: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+  }> = {}) {
+    return {
+      text: 'r',
+      model: 'claude-cli',
+      tokensIn: 0,
+      tokensOut: 0,
+      cacheReadTokens: 0,
+      cacheCreationTokens: 0,
+      ...overrides,
+    };
+  }
+
   beforeEach(() => {
     jest.clearAllMocks();
     provider = new ClaudeCliProvider(client as never);
   });
 
-  it('returns the CLI text and reports zero token counts', async () => {
-    client.run.mockResolvedValue({ text: 'hi from cli', model: 'claude-cli' });
+  it('forwards the CLI result, including token counts, onto the LlmResponse', async () => {
+    client.run.mockResolvedValue(
+      cliResult({
+        text: 'hi from cli',
+        model: 'claude-opus-4-7',
+        tokensIn: 10,
+        tokensOut: 4,
+        cacheReadTokens: 8000,
+        cacheCreationTokens: 200,
+      }),
+    );
 
     const result = await provider.call([{ role: ChatRole.User, content: 'hello' }], {});
 
     expect(client.run).toHaveBeenCalled();
-    expect(result.text).toBe('hi from cli');
-    expect(result.modelUsed).toBe('claude-cli');
-    expect(result.tokensIn).toBe(0);
-    expect(result.tokensOut).toBe(0);
+    expect(result).toMatchObject({
+      text: 'hi from cli',
+      modelUsed: 'claude-opus-4-7',
+      tokensIn: 10,
+      tokensOut: 4,
+      cacheReadTokens: 8000,
+      cacheCreationTokens: 200,
+    });
   });
 
   it('flattens system + messages into a single prompt with role labels', async () => {
-    client.run.mockResolvedValue({ text: 'r', model: 'claude-cli' });
+    client.run.mockResolvedValue(cliResult());
 
     await provider.call(
       [
@@ -42,7 +74,7 @@ describe('ClaudeCliProvider', () => {
   });
 
   it('forwards opts.model to the CLI client (per-call picker)', async () => {
-    client.run.mockResolvedValue({ text: 'r', model: 'claude-haiku-4-5' });
+    client.run.mockResolvedValue(cliResult({ model: 'claude-haiku-4-5' }));
 
     await provider.call([{ role: ChatRole.User, content: 'hi' }], {
       model: 'claude-haiku-4-5',
@@ -53,7 +85,7 @@ describe('ClaudeCliProvider', () => {
   });
 
   it('passes undefined model when opts.model is absent (CLI uses its default)', async () => {
-    client.run.mockResolvedValue({ text: 'r', model: 'claude-cli' });
+    client.run.mockResolvedValue(cliResult());
     await provider.call([{ role: ChatRole.User, content: 'hi' }], {});
     expect(client.run.mock.calls[0][1]).toBeUndefined();
   });

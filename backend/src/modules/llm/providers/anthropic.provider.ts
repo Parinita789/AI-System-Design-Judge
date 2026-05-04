@@ -23,6 +23,7 @@ function requireEnv(config: ConfigService, key: string): string {
 @Injectable()
 export class AnthropicProvider implements LlmProvider {
   readonly name = 'anthropic';
+  readonly supportsToolUse = true;
 
   constructor(
     private readonly client: AnthropicClientService,

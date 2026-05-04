@@ -32,6 +32,7 @@ describe('EvaluationsRepository', () => {
       tokensOut: 200,
       cacheReadTokens: 800,
       cacheCreationTokens: 0,
+      latencyMs: 4321,
     },
   };
 
@@ -71,6 +72,7 @@ describe('EvaluationsRepository', () => {
           tokensOut: audit.tokensOut,
           cacheReadTokens: audit.cacheReadTokens,
           cacheCreationTokens: audit.cacheCreationTokens,
+          latencyMs: audit.latencyMs,
         },
       });
       expect(result).toEqual({ id: 'aid-1' });
@@ -93,19 +95,39 @@ describe('EvaluationsRepository', () => {
   });
 
   describe('findBySession / findById', () => {
-    it('lists evaluations for a session, newest first', async () => {
-      phaseEvaluation.findMany.mockResolvedValue([{ id: 'eid-1' }]);
-      await repo.findBySession('sid-1');
+    it('lists evaluations for a session, newest first, with audit.modelUsed flattened', async () => {
+      phaseEvaluation.findMany.mockResolvedValue([
+        { id: 'eid-1', score: 4, audit: { modelUsed: 'claude-opus-4-7' } },
+        { id: 'eid-2', score: 3, audit: null },
+      ]);
+      const out = await repo.findBySession('sid-1');
       expect(phaseEvaluation.findMany).toHaveBeenCalledWith({
         where: { sessionId: 'sid-1' },
         orderBy: { evaluatedAt: 'desc' },
+        include: { audit: { select: { modelUsed: true } } },
       });
+      expect(out).toEqual([
+        { id: 'eid-1', score: 4, modelUsed: 'claude-opus-4-7' },
+        { id: 'eid-2', score: 3, modelUsed: null },
+      ]);
     });
 
-    it('looks up a single evaluation by id', async () => {
-      phaseEvaluation.findUnique.mockResolvedValue({ id: 'eid-1' });
-      await repo.findById('eid-1');
-      expect(phaseEvaluation.findUnique).toHaveBeenCalledWith({ where: { id: 'eid-1' } });
+    it('looks up a single evaluation by id, flattening audit.modelUsed', async () => {
+      phaseEvaluation.findUnique.mockResolvedValue({
+        id: 'eid-1',
+        audit: { modelUsed: 'claude-haiku-4-5' },
+      });
+      const out = await repo.findById('eid-1');
+      expect(phaseEvaluation.findUnique).toHaveBeenCalledWith({
+        where: { id: 'eid-1' },
+        include: { audit: { select: { modelUsed: true } } },
+      });
+      expect(out).toEqual({ id: 'eid-1', modelUsed: 'claude-haiku-4-5' });
+    });
+
+    it('returns null from findById when the row does not exist', async () => {
+      phaseEvaluation.findUnique.mockResolvedValue(null);
+      expect(await repo.findById('missing')).toBeNull();
     });
   });
 });

@@ -15,6 +15,7 @@ function requireEnv(config: ConfigService, key: string): string {
 @Injectable()
 export class OllamaProvider implements LlmProvider {
   readonly name = 'ollama';
+  readonly supportsToolUse = false;
   private readonly logger = new Logger(OllamaProvider.name);
 
   constructor(

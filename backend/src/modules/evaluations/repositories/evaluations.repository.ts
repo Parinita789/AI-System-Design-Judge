@@ -32,19 +32,31 @@ export class EvaluationsRepository {
         tokensOut: audit.tokensOut,
         cacheReadTokens: audit.cacheReadTokens,
         cacheCreationTokens: audit.cacheCreationTokens,
+        latencyMs: audit.latencyMs ?? null,
       },
     });
   }
 
-  findBySession(sessionId: string) {
-    return this.prisma.phaseEvaluation.findMany({
+  async findBySession(sessionId: string) {
+    const rows = await this.prisma.phaseEvaluation.findMany({
       where: { sessionId },
       orderBy: { evaluatedAt: 'desc' },
+      include: { audit: { select: { modelUsed: true } } },
     });
+    return rows.map(({ audit, ...rest }) => ({
+      ...rest,
+      modelUsed: audit?.modelUsed ?? null,
+    }));
   }
 
-  findById(evaluationId: string) {
-    return this.prisma.phaseEvaluation.findUnique({ where: { id: evaluationId } });
+  async findById(evaluationId: string) {
+    const row = await this.prisma.phaseEvaluation.findUnique({
+      where: { id: evaluationId },
+      include: { audit: { select: { modelUsed: true } } },
+    });
+    if (!row) return null;
+    const { audit, ...rest } = row;
+    return { ...rest, modelUsed: audit?.modelUsed ?? null };
   }
 
   findAuditByEvaluation(phaseEvaluationId: string) {

@@ -36,7 +36,7 @@ export class OrchestratorService {
     const rubricVersion =
       session.question.rubricVersion ??
       this.config.get<string>('RUBRIC_VERSION') ??
-      'v1.0';
+      'v2.0';
 
     const planMd =
       (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;

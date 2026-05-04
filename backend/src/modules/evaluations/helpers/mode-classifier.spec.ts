@@ -9,6 +9,11 @@ describe('classifyMode', () => {
     ['Design a distributed system for global counters.', 'design'],
     ['Design a sharded key-value store.', 'design'],
     ['Design a multi-region replicated cache.', 'design'],
+    // Adjectives between the K/M/B number and the scale noun:
+    ['Design a URL Shortener to handle 100M daily requests.', 'design'],
+    ['Design a chat application that handles 50M concurrent users.', 'design'],
+    ['Design a feed for 100M monthly active users.', 'design'],
+    ['Design a service for 1B DAU.', 'design'],
   ])('%s → design', (prompt, expected) => {
     expect(classifyMode(prompt)).toBe(expected);
   });
