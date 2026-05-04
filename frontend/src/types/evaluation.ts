@@ -14,6 +14,7 @@ export interface PhaseEvaluation {
   feedbackText: string;
   topActionableItems: string[];
   evaluatedAt: string;
+  modelUsed?: string | null;
 }
 
 export interface EvaluationAudit {
@@ -26,5 +27,6 @@ export interface EvaluationAudit {
   tokensOut: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  latencyMs?: number | null;
   createdAt: string;
 }

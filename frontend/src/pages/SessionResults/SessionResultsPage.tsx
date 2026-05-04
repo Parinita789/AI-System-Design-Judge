@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sessionsService } from '@/services/sessions.service';
@@ -11,6 +11,7 @@ import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { EvaluationAudit, PhaseEvaluation, SignalResult } from '@/types/evaluation';
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
+import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -37,6 +38,33 @@ const WEIGHT_STYLES: Record<WeightTier, string> = {
 function formatScore(score: number | string): string {
   const n = typeof score === 'string' ? parseFloat(score) : score;
   return Number.isFinite(n) ? n.toFixed(2) : String(score);
+}
+
+// Closes a popover when the user mousedowns outside the wrapper element.
+// Listens only while `active` so we don't leak handlers across renders.
+function useOutsideClickToClose(
+  ref: RefObject<HTMLElement>,
+  active: boolean,
+  onClose: () => void,
+): void {
+  useEffect(() => {
+    if (!active) return;
+    const handler = (e: MouseEvent) => {
+      if (!ref.current) return;
+      if (!ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [ref, active, onClose]);
+}
+
+// "claude-opus-4-7" → "Opus 4.7"; "llama3.1" stays as-is.
+function formatModelName(model: string | null | undefined): string {
+  if (!model) return '—';
+  const m = model.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/i);
+  if (!m) return model;
+  const tier = m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase();
+  return `${tier} ${m[2]}.${m[3]}`;
 }
 
 // < 3 = Failed, [3, 4) = Average, [4, 5) = Good, >= 5 = Great.
@@ -81,9 +109,12 @@ export function SessionResultsPage() {
 
   const questionId = sessionQuery.data?.questionId;
   const rubricVersion = sessionQuery.data?.question.rubricVersion;
+  const rubricMode = sessionQuery.data?.question.mode ?? null;
+  const rubricSeniority = sessionQuery.data?.seniority ?? null;
   const rubricQuery = useQuery({
-    queryKey: ['rubric', rubricVersion, 'plan'],
-    queryFn: () => rubricsService.get(rubricVersion!, 'plan'),
+    queryKey: ['rubric', rubricVersion, 'plan', rubricMode, rubricSeniority],
+    queryFn: () =>
+      rubricsService.get(rubricVersion!, 'plan', rubricMode, rubricSeniority),
     enabled: !!rubricVersion,
   });
 
@@ -165,6 +196,12 @@ export function SessionResultsPage() {
       {retryMutation.isError && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           Couldn't start a new attempt: {(retryMutation.error as Error).message}
+        </div>
+      )}
+
+      {reEvalMutation.isError && (
+        <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Re-evaluation failed: {(reEvalMutation.error as Error).message}
         </div>
       )}
 
@@ -619,7 +656,12 @@ function AttemptsSection({
                 <Fragment key={a.id}>
                   <tr className={isCurrent ? 'bg-blue-50' : ''}>
                     <td className="px-3 py-1.5 text-gray-500 tabular-nums">
-                      {ordered.length - i}
+                      {i + 1}
+                      {i === 0 && (
+                        <span className="ml-1 text-[9px] uppercase tracking-wide text-emerald-700">
+                          latest
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-1.5 text-xs text-gray-700">
                       {new Date(a.startedAt).toLocaleString()}
@@ -682,14 +724,17 @@ function AttemptsSection({
                     </td>
                   </tr>
                   {isExpanded && hasHistory && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={5} className="px-3 py-2">
-                        <EvaluationHistoryForAttempt
-                          planEvals={planEvals}
-                          isCurrentAttempt={isCurrent}
-                          selectedEvalId={selectedEvalId}
-                          onSelectEval={onSelectEval}
-                        />
+                    <tr className="bg-slate-100">
+                      <td colSpan={5} className="p-0">
+                        <div className="mx-4 my-2 rounded-md border border-slate-200 border-l-4 border-l-blue-400 bg-white shadow-sm p-3">
+                          <EvaluationHistoryForAttempt
+                            planEvals={planEvals}
+                            isCurrentAttempt={isCurrent}
+                            selectedEvalId={selectedEvalId}
+                            onSelectEval={onSelectEval}
+                            attemptNumber={i + 1}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -708,25 +753,37 @@ function EvaluationHistoryForAttempt({
   isCurrentAttempt,
   selectedEvalId,
   onSelectEval,
+  attemptNumber,
 }: {
   planEvals: PhaseEvaluation[];
   isCurrentAttempt: boolean;
   selectedEvalId: string | null;
   onSelectEval: (id: string | null) => void;
+  attemptNumber?: number;
 }) {
   // View column is current-attempt-only — pinning a historical eval
   // from another session would require navigating to it first.
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">
-        Evaluation history ({planEvals.length} run
-        {planEvals.length === 1 ? '' : 's'} on this attempt)
+      <div className="flex items-baseline gap-2 mb-2 pb-1 border-b border-slate-200">
+        <span className="text-[11px] uppercase tracking-wider font-semibold text-blue-700">
+          ↳ Evaluation history
+        </span>
+        {attemptNumber !== undefined && (
+          <span className="text-[10px] text-gray-500">
+            for attempt #{attemptNumber}
+          </span>
+        )}
+        <span className="text-[10px] text-gray-500">
+          · {planEvals.length} run{planEvals.length === 1 ? '' : 's'}
+        </span>
       </div>
       <table className="w-full text-xs">
         <thead className="text-gray-600">
           <tr>
             <th className="text-left font-medium w-10">#</th>
             <th className="text-left font-medium">When</th>
+            <th className="text-left font-medium">Model</th>
             <th className="text-right font-medium">Score</th>
             {isCurrentAttempt && (
               <th className="text-right font-medium w-28"></th>
@@ -743,7 +800,7 @@ function EvaluationHistoryForAttempt({
             return (
               <tr key={e.id} className={isShowing ? 'bg-blue-50' : ''}>
                 <td className="py-1 text-gray-500 tabular-nums">
-                  {planEvals.length - i}
+                  {i + 1}
                   {i === 0 && (
                     <span className="ml-1 text-[9px] uppercase tracking-wide text-emerald-700">
                       latest
@@ -752,6 +809,12 @@ function EvaluationHistoryForAttempt({
                 </td>
                 <td className="py-1 text-gray-700">
                   {new Date(e.evaluatedAt).toLocaleString()}
+                </td>
+                <td
+                  className="py-1 text-gray-600 font-mono text-[11px]"
+                  title={e.modelUsed ?? ''}
+                >
+                  {formatModelName(e.modelUsed)}
                 </td>
                 <td className="py-1 text-right font-semibold tabular-nums">
                   {formatScore(e.score)}
@@ -965,13 +1028,28 @@ function AuditTrailModal({
                 model: <span className="font-mono text-gray-800">{query.data.modelUsed}</span>
               </span>
               <span>
-                tokens in: <span className="font-mono text-gray-800">{query.data.tokensIn.toLocaleString()}</span>
+                took:{' '}
+                <span className="font-mono text-gray-800">
+                  {formatLatency(query.data.latencyMs)}
+                </span>
               </span>
               <span>
-                tokens out: <span className="font-mono text-gray-800">{query.data.tokensOut.toLocaleString()}</span>
+                cost:{' '}
+                <span className="font-mono text-gray-800">
+                  {formatCostUsd(computeCostUsd(query.data))}
+                </span>
               </span>
-              <span>
+              <span title="New input tokens billed at full rate (excludes cached portions)">
+                input (new): <span className="font-mono text-gray-800">{query.data.tokensIn.toLocaleString()}</span>
+              </span>
+              <span title="Tokens written into cache this call (1.25x input rate); read for free on the next call within ~5 min">
+                cache write: <span className="font-mono text-gray-800">{query.data.cacheCreationTokens.toLocaleString()}</span>
+              </span>
+              <span title="Tokens read from cache at 0.1x the regular input rate">
                 cache read: <span className="font-mono text-gray-800">{query.data.cacheReadTokens.toLocaleString()}</span>
+              </span>
+              <span>
+                output: <span className="font-mono text-gray-800">{query.data.tokensOut.toLocaleString()}</span>
               </span>
               <span>
                 captured: <span className="font-mono text-gray-800">{new Date(query.data.createdAt).toLocaleString()}</span>
@@ -980,10 +1058,24 @@ function AuditTrailModal({
 
             <div className="border-b border-gray-200 px-5 flex gap-1 text-xs">
               <TabButton active={tab === 'prompt'} onClick={() => setTab('prompt')}>
-                Prompt sent ({query.data.prompt.length.toLocaleString()} chars)
+                Prompt sent (
+                {(() => {
+                  const totalIn =
+                    query.data.tokensIn +
+                    query.data.cacheCreationTokens +
+                    query.data.cacheReadTokens;
+                  return totalIn > 0
+                    ? `${totalIn.toLocaleString()} tokens`
+                    : `${query.data.prompt.length.toLocaleString()} chars`;
+                })()}
+                )
               </TabButton>
               <TabButton active={tab === 'response'} onClick={() => setTab('response')}>
-                Raw response ({query.data.rawResponse.length.toLocaleString()} chars)
+                Raw response (
+                {query.data.tokensOut > 0
+                  ? `${query.data.tokensOut.toLocaleString()} tokens`
+                  : `${query.data.rawResponse.length.toLocaleString()} chars`}
+                )
               </TabButton>
             </div>
 
@@ -1075,10 +1167,15 @@ function RetryButton({
   onRetry: (seniority?: Seniority) => void;
 }) {
   const [showPicker, setShowPicker] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useOutsideClickToClose(wrapperRef, showPicker, () => setShowPicker(false));
+  useEffect(() => {
+    if (isPending) setShowPicker(false);
+  }, [isPending]);
   const supportsSeniority = currentSeniority !== null;
 
   return (
-    <div className="relative inline-flex">
+    <div ref={wrapperRef} className="relative inline-flex">
       <button
         type="button"
         onClick={() => onRetry()}
@@ -1152,8 +1249,17 @@ function ReEvaluateButton({
   onRun: (model?: string) => void;
 }) {
   const [showPicker, setShowPicker] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  useOutsideClickToClose(wrapperRef, showPicker, () => setShowPicker(false));
+  // Close as soon as a re-eval is in flight — picking a model fires onRun
+  // immediately, but the user might also have clicked the plain
+  // Re-evaluate button while the picker was open.
+  useEffect(() => {
+    if (isPending) setShowPicker(false);
+  }, [isPending]);
+
   return (
-    <div className="relative inline-flex">
+    <div ref={wrapperRef} className="relative inline-flex">
       <button
         type="button"
         onClick={() => onRun()}
