@@ -28,11 +28,13 @@ const SIGNAL_SUB_SCHEMA = {
   },
 } as const;
 
+const SIGNAL_REF = { $ref: '#/$defs/signal' } as const;
+
 export function buildPlanEvalTool(rubric: Rubric): ToolDefinition {
   const signalIds = rubric.signals.map((s) => s.id);
   const signalProperties: Record<string, unknown> = {};
   for (const id of signalIds) {
-    signalProperties[id] = SIGNAL_SUB_SCHEMA;
+    signalProperties[id] = SIGNAL_REF;
   }
 
   return {
@@ -42,6 +44,9 @@ export function buildPlanEvalTool(rubric: Rubric): ToolDefinition {
       type: 'object',
       additionalProperties: false,
       required: ['signals', 'feedback', 'top_actions'],
+      $defs: {
+        signal: SIGNAL_SUB_SCHEMA,
+      },
       properties: {
         signals: {
           type: 'object',

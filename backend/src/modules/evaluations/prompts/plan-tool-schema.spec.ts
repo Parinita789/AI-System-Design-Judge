@@ -76,33 +76,37 @@ describe('buildPlanEvalTool', () => {
     expect(schema.additionalProperties).toBe(false);
   });
 
-  it('per-signal sub-schema requires reasoning, result, evidence in that order', () => {
-    const tool = buildPlanEvalTool(rubric([signal('a')]));
+  it('every signal entry is a $ref to #/$defs/signal (no inlined copies)', () => {
+    const tool = buildPlanEvalTool(
+      rubric([signal('a'), signal('b'), signal('c', 'bad')]),
+    );
     const schema = tool.inputSchema as Record<string, unknown>;
     const signalsSchema = (schema.properties as Record<string, unknown>).signals as Record<
       string,
       unknown
     >;
-    const sub = (signalsSchema.properties as Record<string, unknown>).a as Record<
-      string,
-      unknown
-    >;
+    const props = signalsSchema.properties as Record<string, unknown>;
+
+    for (const id of ['a', 'b', 'c']) {
+      expect(props[id]).toEqual({ $ref: '#/$defs/signal' });
+    }
+  });
+
+  it('the shared signal schema lives at $defs.signal with reasoning → result → evidence order', () => {
+    const tool = buildPlanEvalTool(rubric([signal('a')]));
+    const schema = tool.inputSchema as Record<string, unknown>;
+    const defs = schema.$defs as Record<string, unknown>;
+    const sub = defs.signal as Record<string, unknown>;
 
     expect(sub.required).toEqual(['reasoning', 'result', 'evidence']);
     expect(Object.keys(sub.properties as object)).toEqual(['reasoning', 'result', 'evidence']);
   });
 
-  it('result is an enum of the four valid values', () => {
+  it('result is an enum of the four valid values (in $defs.signal)', () => {
     const tool = buildPlanEvalTool(rubric([signal('a')]));
     const schema = tool.inputSchema as Record<string, unknown>;
-    const signalsSchema = (schema.properties as Record<string, unknown>).signals as Record<
-      string,
-      unknown
-    >;
-    const sub = (signalsSchema.properties as Record<string, unknown>).a as Record<
-      string,
-      unknown
-    >;
+    const defs = schema.$defs as Record<string, unknown>;
+    const sub = defs.signal as Record<string, unknown>;
     const result = (sub.properties as Record<string, unknown>).result as Record<string, unknown>;
 
     expect(result.enum).toEqual(['hit', 'partial', 'miss', 'cannot_evaluate']);
@@ -112,5 +116,16 @@ describe('buildPlanEvalTool', () => {
     const tool = buildPlanEvalTool(rubric([signal('a')]));
     const schema = tool.inputSchema as Record<string, unknown>;
     expect(schema.required).toEqual(['signals', 'feedback', 'top_actions']);
+  });
+
+  it('schema size scales with signal count (refs, not inlined copies)', () => {
+    // 25 signals with $ref should be much smaller than the same with inlined sub-schemas.
+    // The sub-schema serializes to ~400 chars, so 25 inlined copies add ~10KB.
+    // Each $ref is ~28 chars; 25 refs add ~700 chars. The bulk of bytes should be the
+    // single $defs/signal entry, not the per-signal properties.
+    const ids = Array.from({ length: 25 }, (_, i) => `s${i}`);
+    const tool = buildPlanEvalTool(rubric(ids.map((id) => signal(id))));
+    const serialized = JSON.stringify(tool.inputSchema);
+    expect(serialized.length).toBeLessThan(2500);
   });
 });

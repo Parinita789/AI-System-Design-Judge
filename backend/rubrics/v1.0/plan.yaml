@@ -689,9 +689,6 @@ scoring:
     planning-only phase — the plan must contain the equivalent of design
     artifacts to score in the upper range.
 
-# JSON Schema the LLM must satisfy. The agent appends this to the prompt
-# and validates the response before persisting. Invalid -> 1 retry, then
-# fall back to cannot_evaluate for unfilled signals.
 output_schema:
   type: object
   required: [score, signals, feedback, top_actions]
