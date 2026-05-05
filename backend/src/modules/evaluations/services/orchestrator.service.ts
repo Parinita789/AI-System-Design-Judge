@@ -8,6 +8,7 @@ import { AIInteractionsRepository } from '../../hints/repositories/ai-interactio
 import { PlanAgent } from '../agents/plan.agent';
 import { PhaseEvalInput } from '../types/evaluation.types';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
+import { MentorService } from '../../mentor/services/mentor.service';
 
 @Injectable()
 export class OrchestratorService {
@@ -21,6 +22,8 @@ export class OrchestratorService {
     private readonly planAgent: PlanAgent,
     private readonly evalsRepo: EvaluationsRepository,
     private readonly config: ConfigService,
+    @Inject(forwardRef(() => MentorService))
+    private readonly mentorService: MentorService,
   ) {}
 
   async run(
@@ -78,6 +81,20 @@ export class OrchestratorService {
       // Audit FK requires persisted.id, so insert order is fixed.
       await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
+
+      // Fire-and-forget mentor generation. Doesn't block the eval HTTP
+      // response — the orchestrator returns once the eval row + audit
+      // are persisted. The mentor LLM call runs in the background;
+      // success persists a mentor_artifacts row + writes prompt+response
+      // to disk. Failures are swallowed by MentorService and only
+      // surface in the logs. The frontend lazy-loads the artifact when
+      // the user opens the section, by which time the call has usually
+      // finished (10-30s typical).
+      this.mentorService.generate(persisted.id, options?.model).catch((err) => {
+        this.logger.warn(
+          `Background mentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
+        );
+      });
     }
     return out;
   }

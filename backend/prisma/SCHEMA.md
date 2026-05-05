@@ -13,6 +13,7 @@ erDiagram
     Session  ||--o{ AIInteraction : "AIInteraction.session_id → Session.id"
     Session  ||--o| FinalArtifacts : "FinalArtifacts.session_id → Session.id (PK+FK)"
     PhaseEvaluation ||--o| EvaluationAudit : "EvaluationAudit.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
+    PhaseEvaluation ||--o| MentorArtifact : "MentorArtifact.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
 
     Question {
         uuid id PK
@@ -69,6 +70,23 @@ erDiagram
         timestamp created_at
     }
 
+    MentorArtifact {
+        uuid id PK
+        uuid phase_evaluation_id FK "UNIQUE"
+        jsonb strengths "[{ topic, principle }] x 2-3"
+        jsonb gaps "[{ topic, concept }] x 2-3"
+        jsonb defensible_decision "{ decision, alternative }"
+        text closing "optional sign-off paragraph"
+        text model_used
+        int tokens_in
+        int tokens_out
+        int cache_read_tokens
+        int cache_creation_tokens
+        int latency_ms
+        timestamp created_at
+        timestamp updated_at
+    }
+
     AIInteraction {
         uuid id PK
         uuid session_id FK
@@ -106,6 +124,7 @@ linkage Postgres uses to enforce the relationship.
 | Session → AIInteraction | 1 : N | `ai_interactions.session_id` → `sessions.id` | `Cascade` | Hint chat log. |
 | Session → FinalArtifacts | 1 : 0..1 | `final_artifacts.session_id` → `sessions.id` (also PK on the child, which enforces 0..1) | `Cascade` | Optional snapshot of the session's final output (one per session). |
 | PhaseEvaluation → EvaluationAudit | 1 : 0..1 | `evaluation_audits.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child, which enforces 0..1) | `Cascade` | One audit per evaluation. Deleting an evaluation drops its audit. |
+| PhaseEvaluation → MentorArtifact | 1 : 0..1 | `mentor_artifacts.phase_evaluation_id` → `phase_evaluations.id` (UNIQUE on child) | `Cascade` | Optional mentor reflection per evaluation, generated on user request. |
 
 ## Design highlights
 

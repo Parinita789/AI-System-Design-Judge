@@ -15,6 +15,7 @@ import { PhaseTaggerModule } from '../phase-tagger/phase-tagger.module';
 import { SessionsModule } from '../sessions/sessions.module';
 import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { HintsModule } from '../hints/hints.module';
+import { MentorModule } from '../mentor/mentor.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { HintsModule } from '../hints/hints.module';
     SnapshotsModule,
     HintsModule,
     forwardRef(() => SessionsModule),
+    forwardRef(() => MentorModule),
   ],
   controllers: [EvaluationsController, RubricsController],
   providers: [
@@ -36,6 +38,6 @@ import { HintsModule } from '../hints/hints.module';
     WrapAgent,
     SynthesizerAgent,
   ],
-  exports: [EvaluationsService],
+  exports: [EvaluationsService, EvaluationsRepository],
 })
 export class EvaluationsModule {}

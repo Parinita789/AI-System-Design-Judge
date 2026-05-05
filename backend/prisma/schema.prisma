@@ -98,8 +98,9 @@ model PhaseEvaluation {
   topActionableItems  Json     @map("top_actionable_items")
   evaluatedAt         DateTime @default(now()) @map("evaluated_at")
 
-  session Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  audit   EvaluationAudit?
+  session  Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  audit    EvaluationAudit?
+  mentor   MentorArtifact?
 
   // Each Re-evaluate inserts a new row (no upsert); history is preserved.
   // Ordered index makes "latest plan eval for session X" a single seek.
@@ -128,6 +129,27 @@ model EvaluationAudit {
   phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
 
   @@map("evaluation_audits")
+}
+
+// Mentor-voice artifact, 1:1 with a phase_evaluation. Generated on user
+// request from a separate LLM call; not part of the eval HTTP path.
+// Calling generate again upserts (overwrites) so re-runs aren't an append.
+model MentorArtifact {
+  id                  String   @id @default(uuid()) @db.Uuid
+  phaseEvaluationId   String   @unique @map("phase_evaluation_id") @db.Uuid
+  content             String
+  modelUsed           String   @map("model_used")
+  tokensIn            Int      @map("tokens_in")
+  tokensOut           Int      @map("tokens_out")
+  cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
+  cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  latencyMs           Int?     @map("latency_ms")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
+
+  @@map("mentor_artifacts")
 }
 
 model AIInteraction {

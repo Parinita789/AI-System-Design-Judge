@@ -10,6 +10,7 @@ import { PhaseTaggerModule } from './modules/phase-tagger/phase-tagger.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HintsModule } from './modules/hints/hints.module';
 import { QuestionsModule } from './modules/questions/questions.module';
+import { MentorModule } from './modules/mentor/mentor.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { QuestionsModule } from './modules/questions/questions.module';
     QuestionsModule,
     DashboardModule,
     HintsModule,
+    MentorModule,
   ],
 })
 export class AppModule {}
