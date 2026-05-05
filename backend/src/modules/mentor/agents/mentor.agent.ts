@@ -1,10 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ChatRole } from '../../llm/constants';
 import { LlmService } from '../../llm/services/llm.service';
+import { truncatePlanMd } from '../../evaluations/helpers/truncate-plan-md';
 import { buildMentorPrompt, flattenForAudit } from '../prompts/mentor-prompt';
 import { MentorInput, MentorResult } from '../types/mentor.types';
 
 const MENTOR_AGENT_MAX_TOKENS = 4096;
+// Warn when total input tokens (regular + cache writes + cache reads)
+// exceed this. Same threshold as PlanAgent — keeps overflow risk
+// visible on smaller-context models.
+const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
 export class MentorAgent {
@@ -13,12 +18,23 @@ export class MentorAgent {
   constructor(private readonly llm: LlmService) {}
 
   async generate(input: MentorInput): Promise<MentorResult> {
-    const built = buildMentorPrompt(input);
+    // Hard-cap plan.md before it enters the LLM payload. Same risk as
+    // the plan agent — verbose plans inflate the user message.
+    const truncated = truncatePlanMd(input.planMd);
+    if (truncated.droppedChars > 0) {
+      this.logger.warn(
+        `plan.md truncated for mentor: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
+          `(kept ${truncated.text.length.toLocaleString()} of ${truncated.originalLength.toLocaleString()})`,
+      );
+    }
+    const inputForPrompt: MentorInput = { ...input, planMd: truncated.text };
+
+    const built = buildMentorPrompt(inputForPrompt);
     const renderedPrompt = flattenForAudit(built);
 
     this.logger.log(
       `Generating mentor artifact for eval ${input.evaluationId} ` +
-        `(planMd=${input.planMd?.length ?? 0} chars, ` +
+        `(planMd=${truncated.text.length} chars, ` +
         `signals=${Object.keys(input.signalResults).length})`,
     );
 
@@ -45,6 +61,16 @@ export class MentorAgent {
         `out=${response.tokensOut}, cacheWrite=${response.cacheCreationTokens}, ` +
         `cacheRead=${response.cacheReadTokens})`,
     );
+
+    const totalInputTokens =
+      response.tokensIn + response.cacheCreationTokens + response.cacheReadTokens;
+    if (totalInputTokens > INPUT_TOKEN_WARN_THRESHOLD) {
+      this.logger.warn(
+        `Mentor input tokens ${totalInputTokens.toLocaleString()} exceed ` +
+          `${INPUT_TOKEN_WARN_THRESHOLD.toLocaleString()} threshold ` +
+          `— at risk of overflow on smaller-context models.`,
+      );
+    }
 
     return {
       artifact: { content: (response.text ?? '').trim() },

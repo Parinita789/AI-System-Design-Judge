@@ -12,8 +12,14 @@ import { parseEvalOutput, ParsedEvalOutput } from '../validators/parse-eval-outp
 import { validateEvalToolArgs } from '../validators/validate-eval-tool-args';
 import { validateEvidence } from '../validators/evidence-validator';
 import { computeScore } from '../services/score-computer';
+import { truncatePlanMd } from '../helpers/truncate-plan-md';
 
 const PLAN_AGENT_MAX_TOKENS = 4096;
+// Warn when total input tokens (regular + cache writes + cache reads)
+// exceed this. Catches overflow risk on smaller-context models. 150K
+// is comfortably below Sonnet/Haiku 4.5's 200K window with headroom
+// for the response.
+const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
 export class PlanAgent extends BasePhaseAgent {
@@ -33,12 +39,26 @@ export class PlanAgent extends BasePhaseAgent {
     );
     const useTools = this.llm.supportsToolUse();
     const tool = useTools ? buildPlanEvalTool(rubric) : null;
-    const { systemBlocks, userMessage, preprocessing } = buildPlanPrompt(rubric, input, {
+
+    // Hard-cap plan.md size before it enters the LLM payload. Verbose
+    // plans (50K+ chars of code dumps, scratch notes) silently fill the
+    // context window on smaller-context models. Truncation keeps head +
+    // tail with an explicit omission marker.
+    const truncated = truncatePlanMd(input.planMd);
+    if (truncated.droppedChars > 0) {
+      this.logger.warn(
+        `plan.md truncated: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
+          `(kept ${truncated.text.length.toLocaleString()} of ${truncated.originalLength.toLocaleString()})`,
+      );
+    }
+    const inputForPrompt: PhaseEvalInput = { ...input, planMd: truncated.text };
+
+    const { systemBlocks, userMessage, preprocessing } = buildPlanPrompt(rubric, inputForPrompt, {
       useTools,
     });
 
     this.logger.log(
-      `Evaluating session ${input.session.id} (planMd=${input.planMd?.length ?? 0} chars, ` +
+      `Evaluating session ${input.session.id} (planMd=${truncated.text.length} chars, ` +
         `${input.snapshots.length} snapshots, ${input.hints.length} hints, ` +
         `useTools=${useTools})`,
     );
@@ -73,6 +93,16 @@ export class PlanAgent extends BasePhaseAgent {
         `out=${llm.tokensOut}, cacheWrite=${llm.cacheCreationTokens}, ` +
         `cacheRead=${llm.cacheReadTokens}, toolUse=${llm.toolUse ? llm.toolUse.name : 'none'})`,
     );
+
+    const totalInputTokens =
+      llm.tokensIn + llm.cacheCreationTokens + llm.cacheReadTokens;
+    if (totalInputTokens > INPUT_TOKEN_WARN_THRESHOLD) {
+      this.logger.warn(
+        `Input tokens ${totalInputTokens.toLocaleString()} exceed ` +
+          `${INPUT_TOKEN_WARN_THRESHOLD.toLocaleString()} threshold ` +
+          `— at risk of overflow on smaller-context models. Consider lowering DEFAULT_PLAN_MD_CAP.`,
+      );
+    }
 
     const expectedSignalIds = new Set(rubric.signals.map((s) => s.id));
     let parsed: ParsedEvalOutput;
