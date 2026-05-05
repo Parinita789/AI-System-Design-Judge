@@ -12,6 +12,8 @@ import { EvaluationAudit, PhaseEvaluation, SignalResult } from '@/types/evaluati
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
+import { mentorService } from '@/services/mentor.service';
+import { MentorArtifactView } from '@/components/MentorArtifactView';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -348,14 +350,10 @@ function PlanEvaluationView({
       {rubric && <ScoreBreakdown rubric={rubric} evaluation={evaluation} />}
 
       {evaluation.feedbackText && (
-        <section>
-          <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-1">
-            Feedback
-          </h3>
-          <div className="rounded border border-gray-300 bg-white p-3 text-sm whitespace-pre-wrap">
-            {evaluation.feedbackText}
-          </div>
-        </section>
+        <DeepDiveDisclosure
+          evaluationId={evaluation.id}
+          feedbackText={evaluation.feedbackText}
+        />
       )}
 
       {evaluation.topActionableItems.length > 0 && (
@@ -1306,5 +1304,187 @@ function ReEvaluateButton({
         </div>
       )}
     </div>
+  );
+}
+
+// Mentor's notes — separate LLM call, user-triggered, lazy-loaded.
+// The eval pipeline doesn't fire this; only opens here on user request.
+// Owns the whole Feedback section. Header has the "Feedback" label on
+// the left and a quiet disclosure link on the right that toggles the
+// deep-dive (mentor) feedback. The eval orchestrator fires the mentor
+// call in the background after the eval persists; this component polls
+// every 5s until the artifact lands.
+//
+// Disclosure states:
+//   1. Generating — quiet text + spinner, no click target.
+//   2. Ready, collapsed — "▶ Read the deep-dive feedback" link.
+//   3. Ready, expanded — "▼ Hide deep-dive feedback" + Regenerate link.
+function DeepDiveDisclosure({
+  evaluationId,
+  feedbackText,
+}: {
+  evaluationId: string;
+  feedbackText: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['mentor', evaluationId],
+    queryFn: () => mentorService.get(evaluationId),
+    retry: false,
+    refetchInterval: (q) => {
+      const data = q.state.data;
+      const err = q.state.error as { response?: { status?: number } } | null;
+      if (data) return false;
+      if (err?.response?.status === 404) return 5000;
+      return false;
+    },
+  });
+
+  const generateMutation = useMutation({
+    mutationFn: () => mentorService.generate(evaluationId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['mentor', evaluationId], data);
+      setExpanded(true);
+    },
+  });
+
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!generateMutation.isPending) {
+      setElapsed(0);
+      return;
+    }
+    const start = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [generateMutation.isPending]);
+
+  const artifact = query.data?.artifact;
+  const audit = query.data?.audit;
+  const has404 =
+    query.error && typeof query.error === 'object' && 'response' in query.error
+      ? (query.error as { response?: { status?: number } }).response?.status === 404
+      : false;
+  // For fresh evals we usually see a 404 followed by polling-detected
+  // success because the orchestrator fires mentor in the background.
+  // For older evals or after a failed background fire, has404 sits
+  // until the user explicitly clicks to generate.
+  const backgroundLikelyRunning = has404 && !artifact && !generateMutation.isPending;
+
+  const deepDiveRef = useRef<HTMLDivElement>(null);
+  const handleClick = () => {
+    if (artifact) {
+      const willExpand = !expanded;
+      setExpanded(willExpand);
+      if (willExpand) {
+        // Defer to next frame so the panel exists in the DOM before
+        // we scroll it into view.
+        requestAnimationFrame(() => {
+          deepDiveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    } else if (!generateMutation.isPending) {
+      generateMutation.mutate();
+    }
+  };
+
+  const buttonLabel = generateMutation.isPending
+    ? `Generating deep-dive feedback…  ${elapsed}s`
+    : backgroundLikelyRunning
+      ? 'Generating deep-dive feedback…'
+      : artifact
+        ? expanded
+          ? 'Hide deep-dive feedback'
+          : 'Read the deep-dive feedback'
+        : 'Read the deep-dive feedback';
+
+  return (
+    <section>
+      <div className="flex items-baseline justify-between mb-1 gap-3 flex-wrap">
+        <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide">
+          Feedback
+        </h3>
+        {audit && (
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-gray-500">
+              {formatModelName(audit.modelUsed)} · {formatLatency(audit.latencyMs)}
+            </span>
+            {!generateMutation.isPending && (
+              <button
+                type="button"
+                onClick={() => generateMutation.mutate()}
+                className="text-gray-500 hover:text-gray-800 hover:underline"
+                title="Re-run the mentor; overwrites the existing artifact"
+              >
+                regenerate
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded border border-gray-300 bg-white p-3 text-sm whitespace-pre-wrap">
+        {feedbackText}
+      </div>
+
+      {/* Prominent disclosure button. Solid bg, centered, with a subtle
+          ring-pulse when freshly available so the user notices a new
+          deep-dive landed. */}
+      <div className="mt-3 flex justify-center">
+        <button
+          type="button"
+          onClick={handleClick}
+          disabled={generateMutation.isPending}
+          aria-expanded={expanded}
+          aria-controls="deep-dive-panel"
+          className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold shadow-sm transition-all ${
+            expanded
+              ? 'bg-indigo-100 text-indigo-900 ring-1 ring-indigo-300 hover:bg-indigo-200'
+              : artifact
+                ? 'bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-md ring-2 ring-indigo-200 ring-offset-2 ring-offset-white'
+                : 'bg-gray-200 text-gray-700 cursor-wait'
+          }`}
+          title={
+            artifact
+              ? 'Toggle the deep-dive feedback'
+              : backgroundLikelyRunning
+                ? "Mentor is generating in the background — click to force a foreground call"
+                : 'Generate the deep-dive feedback now'
+          }
+        >
+          {(generateMutation.isPending || backgroundLikelyRunning) && (
+            <span
+              className="inline-block w-4 h-4 rounded-full border-2 border-current border-t-transparent animate-spin"
+              aria-hidden="true"
+            />
+          )}
+          <span>{buttonLabel}</span>
+          {artifact && !generateMutation.isPending && (
+            <span aria-hidden="true" className="text-xs opacity-80">
+              {expanded ? '▲' : '▼'}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {generateMutation.isError && (
+        <div className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
+          Mentor generation failed: {(generateMutation.error as Error).message}
+        </div>
+      )}
+
+      {expanded && artifact && (
+        <div
+          id="deep-dive-panel"
+          ref={deepDiveRef}
+          tabIndex={-1}
+          className="mt-3 rounded border border-indigo-200 border-l-4 border-l-indigo-500 bg-white p-4 shadow-sm scroll-mt-4"
+        >
+          <MentorArtifactView artifact={artifact} />
+        </div>
+      )}
+    </section>
   );
 }
