@@ -246,6 +246,151 @@ add_signals:
       Low weight; effectively skipped on non-AI questions.
     evidence_hint: "Quote the section or note absence."
 
+  # ---------- Agent-infrastructure GOOD signals ----------
+  # All seven of these are gated by the existing relevance rule in
+  # plan-prompt.ts: the LLM marks them cannot_evaluate (not miss) when
+  # the question doesn't involve AI agents / LLMs / inference. The
+  # score-computer excludes cannot_evaluate from both numerator and
+  # denominator, so non-agentic questions are unaffected.
+
+  - id: inference_cost_articulated
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid: high
+      senior: high
+      staff: high
+    description: |
+      Plan articulates per-request inference cost (tokens, dollars, or
+      a rough cost class) and how it scales with usage. At minimum:
+      which model tier, why that tier, and a back-of-envelope of the
+      dominant cost-per-action.
+    judge_notes: |
+      "Each query runs Sonnet at ~$0.02/call; at 1M DAU x 5
+      queries/day that's $100K/day — we cap free tier at 50/day and
+      route over-cap to Haiku" passes. "Will use Claude" fails. "We
+      accept that LLM costs are non-trivial" without numbers fails.
+      Cost reasoning is the single most overlooked concern in junior
+      agentic-system designs and the strongest signal of senior
+      thinking.
+    evidence_hint: "Quote the cost reasoning passage."
+    requires_evidence: [plan]
+
+  - id: latency_strategy_for_agent_calls
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: high
+      staff: high
+    description: |
+      Plan addresses the latency stack-up from sequential or fanned-out
+      LLM calls (e.g., agent loops with N tool calls, multi-step
+      planning, RAG retrieval + generation). Names a UX pattern
+      appropriate to that latency budget — streaming, async with
+      callback, optimistic UI, batch boundary, etc.
+    judge_notes: |
+      "Agent loop is up to 4 tool calls @ ~3s p95 each → 12s wall;
+      we stream incremental thoughts to the UI and only block the
+      submit button on the final write" passes. Silence on latency
+      fails. "We'll use streaming" with no consideration of what's
+      actually slow fails.
+    evidence_hint: "Quote the latency reasoning and UX pattern."
+    requires_evidence: [plan]
+
+  - id: output_validation_layer
+    polarity: good
+    weight: high
+    description: |
+      Plan articulates how agent outputs are validated before being
+      trusted (schema check, safety filter, hallucination check,
+      re-prompt path on failure). Without this, the system has no way
+      to detect when the agent failed.
+    judge_notes: |
+      "Tool-call args are validated against a JSON schema; on parse
+      failure we re-prompt with the error once, then surface a manual
+      review queue" passes. "We trust the model output" fails. Mere
+      mention of "we'll validate" without saying how fails.
+    evidence_hint: "Quote the validation strategy."
+    requires_evidence: [plan]
+
+  - id: provider_abstraction_and_failover
+    polarity: good
+    weight: medium
+    description: |
+      Plan abstracts the LLM provider behind an interface and
+      considers failover or degraded-mode operation when the primary
+      provider is unavailable, rate-limited, or returns malformed
+      output.
+    judge_notes: |
+      "All calls go through LlmClient; on 429 or 5xx we fall back to
+      a cheaper model, then to a static template" passes. Hard-coded
+      "anthropic.messages.create()" everywhere fails. Naming the
+      abstraction without a degraded-mode story is partial.
+    evidence_hint: "Quote the abstraction + failover sentence."
+    requires_evidence: [plan]
+
+  - id: nondeterminism_handling
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: medium
+      staff: high
+    description: |
+      Plan acknowledges that agent outputs are non-deterministic and
+      addresses caching, retries, and idempotency in light of that.
+      Differs from a service: same input ≠ same output, so naive
+      retry-on-error can produce divergent answers.
+    judge_notes: |
+      "We cache by (prompt-hash, model, temperature=0); retries on
+      transient errors are safe because we're at temperature 0; user
+      retries explicit-only" passes. Caching strategy that assumes
+      deterministic behavior fails. Silence on idempotency fails.
+    evidence_hint: "Quote the caching/retry reasoning."
+    requires_evidence: [plan]
+
+  - id: agent_observability
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: medium
+      staff: high
+    description: |
+      Plan addresses logging the *content* of agent interactions
+      (prompts, completions, tool calls, intermediate reasoning),
+      not just metrics. You can't debug an agent failure with p95
+      latency alone; you need the actual prompt that produced the
+      bad output.
+    judge_notes: |
+      "Every LLM call is persisted with prompt + response + model +
+      tokens + parent-trace-id" passes. "Standard APM" without
+      content logging fails. "We'll add logging" generically is
+      partial.
+    evidence_hint: "Quote the content-logging strategy."
+    requires_evidence: [plan]
+
+  - id: agent_state_management
+    polarity: good
+    weight: medium
+    description: |
+      Plan addresses how agent state is maintained across calls — or
+      explicitly justifies stateless design. For multi-turn or
+      long-horizon agents: where does conversation history live, how
+      is it bounded, and how is it isolated per user/session?
+    judge_notes: |
+      "Each session has a Redis-backed memory; we cap at 8K tokens
+      and summarize older turns" passes. "Agent is stateless because
+      the task is single-turn" passes for an obviously-stateless
+      design. Silence on state for a multi-turn agent fails.
+    evidence_hint: "Quote the state strategy or stateless justification."
+    requires_evidence: [plan]
+
 # Add design-mode-specific required sections.
 override_pass_bar:
   add_sections:

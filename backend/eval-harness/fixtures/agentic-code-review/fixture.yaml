@@ -1,0 +1,28 @@
+description: "Multi-agent code-review system at scale. Plan engages with cost, validation, observability, abstraction; misses on latency stack-up and nondeterminism. Should score Average to Good."
+question: "Design the infrastructure for a multi-agent code-review system that handles 10K pull requests/day, target sub-30s per-PR end-to-end latency, $50K/month inference budget. Each PR runs through a pipeline of 3-5 LLM agents (security audit, style check, logic review, test coverage, summary)."
+rubricVersion: v2.0
+mode: design
+seniority: senior
+
+expectedScore:
+  min: 3.0
+  max: 4.5
+
+expectedSignals:
+  # The plan engages substantively with these new agentic signals.
+  credited:
+    - inference_cost_articulated
+    - output_validation_layer
+    - provider_abstraction_and_failover
+    - agent_observability
+    - agent_state_management
+  # Missed agentic signals — plan doesn't address sequential latency
+  # stack-up across agents nor caching/idempotency under nondeterminism.
+  miss:
+    - latency_strategy_for_agent_calls
+    - nondeterminism_handling
+  hit: []
+  # Unrelated AI signals stay skipped via relevance gate (the question
+  # is agentic, but ai_strategy_explicit/absent are about the candidate
+  # delegating to AI for the build, not about the system using AI).
+  skipped: []
