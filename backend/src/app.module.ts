@@ -11,6 +11,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { HintsModule } from './modules/hints/hints.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { MentorModule } from './modules/mentor/mentor.module';
+import { SignalMentorModule } from './modules/signal-mentor/signal-mentor.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { MentorModule } from './modules/mentor/mentor.module';
     DashboardModule,
     HintsModule,
     MentorModule,
+    SignalMentorModule,
   ],
 })
 export class AppModule {}

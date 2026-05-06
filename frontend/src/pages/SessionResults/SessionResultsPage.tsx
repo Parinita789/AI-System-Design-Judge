@@ -13,6 +13,7 @@ import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
 import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
 import { mentorService } from '@/services/mentor.service';
+import { signalMentorService } from '@/services/signalMentor.service';
 import { MentorArtifactView } from '@/components/MentorArtifactView';
 import { MarkdownView } from '@/components/MarkdownView';
 
@@ -304,12 +305,28 @@ function PlanEvaluationView({
   const goodSignals = rubric?.signals.filter((s) => s.polarity === 'good') ?? [];
   const badSignals = rubric?.signals.filter((s) => s.polarity === 'bad') ?? [];
 
-  // Surface IDs the LLM invented (common hallucination mode).
   const extraSignalIds = useMemo(() => {
     if (!rubric) return [];
     const known = new Set(rubric.signals.map((s) => s.id));
     return Object.keys(evaluation.signalResults).filter((id) => !known.has(id));
   }, [rubric, evaluation.signalResults]);
+
+  const signalMentorQuery = useQuery({
+    queryKey: ['signal-mentor', evaluation.id],
+    queryFn: () => signalMentorService.get(evaluation.id),
+    retry: false,
+    refetchInterval: (q) => {
+      const data = q.state.data;
+      const err = q.state.error as { response?: { status?: number } } | null;
+      if (data) return false;
+      if (err?.response?.status === 404) return 5000;
+      return false;
+    },
+  });
+  const signalAnnotations: Record<string, string> =
+    signalMentorQuery.data?.artifact.annotations ?? {};
+  const signalAnnotationsLoading =
+    !signalMentorQuery.data && !signalMentorQuery.isError;
 
   return (
     <>
@@ -392,12 +409,16 @@ function PlanEvaluationView({
             signals={goodSignals}
             results={evaluation.signalResults}
             weightValues={rubric.weightValues}
+            signalAnnotations={signalAnnotations}
+            signalAnnotationsLoading={signalAnnotationsLoading}
           />
           <SignalGroup
             title="Bad signals — presence is negative; CRITICAL ones cap the final score"
             signals={badSignals}
             results={evaluation.signalResults}
             weightValues={rubric.weightValues}
+            signalAnnotations={signalAnnotations}
+            signalAnnotationsLoading={signalAnnotationsLoading}
           />
           {extraSignalIds.length > 0 && (
             <section>
@@ -468,14 +489,17 @@ function SignalGroup({
   signals,
   results,
   weightValues,
+  signalAnnotations,
+  signalAnnotationsLoading,
 }: {
   title: string;
   signals: RubricSignal[];
   results: Record<string, SignalResult>;
   weightValues: Record<WeightTier, number>;
+  signalAnnotations?: Record<string, string>;
+  signalAnnotationsLoading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  // Heaviest first, alphabetical within a tier for stable order.
   const sorted = useMemo(
     () =>
       [...signals].sort((a, b) => {
@@ -503,7 +527,13 @@ function SignalGroup({
       {open && (
         <div className="mt-2 rounded border border-gray-200 divide-y divide-gray-200 bg-white">
           {sorted.map((s) => (
-            <SignalRow key={s.id} signal={s} llmResult={results[s.id]} />
+            <SignalRow
+              key={s.id}
+              signal={s}
+              llmResult={results[s.id]}
+              mentorAnnotation={signalAnnotations?.[s.id]}
+              annotationsLoading={signalAnnotationsLoading}
+            />
           ))}
         </div>
       )}
@@ -514,12 +544,20 @@ function SignalGroup({
 function SignalRow({
   signal,
   llmResult,
+  mentorAnnotation,
+  annotationsLoading,
 }: {
   signal: RubricSignal;
   llmResult: SignalResult | undefined;
+  mentorAnnotation?: string;
+  annotationsLoading?: boolean;
 }) {
   const kind: ResultKind = llmResult ? llmResult.result : 'not_evaluated';
   const resultStyle = RESULT_STYLES[kind];
+  const isGap =
+    (signal.polarity === 'good' && (kind === 'miss' || kind === 'partial')) ||
+    (signal.polarity === 'bad' && (kind === 'hit' || kind === 'partial'));
+  const showCoachLoader = isGap && !mentorAnnotation && annotationsLoading;
   return (
     <div className="px-3 py-2 flex items-start gap-3">
       <span
@@ -557,8 +595,54 @@ function SignalRow({
             The LLM did not return a judgment for this signal.
           </div>
         )}
+        {mentorAnnotation && (
+          <div className="mt-2 rounded border-l-2 border-indigo-300 bg-indigo-50/40 px-2 py-1.5">
+            <div className="flex items-center gap-1 mb-0.5">
+              <CoachBadge />
+            </div>
+            <p className="text-xs leading-relaxed text-gray-800 whitespace-pre-wrap">
+              {mentorAnnotation}
+            </p>
+          </div>
+        )}
+        {showCoachLoader && (
+          <div className="mt-2 flex items-center gap-1 text-[11px] italic text-gray-400">
+            <CoachBadge muted />
+            <span>thinking…</span>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+function CoachBadge({ muted = false }: { muted?: boolean }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-flex items-center gap-1 text-[10px] uppercase tracking-wide font-medium ${
+        muted ? 'text-gray-400' : 'text-indigo-700'
+      }`}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="w-3 h-3"
+      >
+        <path d="M12 8V4H8" />
+        <rect width="16" height="12" x="4" y="8" rx="2" />
+        <path d="M2 14h2" />
+        <path d="M20 14h2" />
+        <path d="M15 13v2" />
+        <path d="M9 13v2" />
+      </svg>
+      Coach
+    </span>
   );
 }
 
@@ -1349,13 +1433,28 @@ function DeepDiveDisclosure({
     },
   });
 
+  const abortRef = useRef<AbortController | null>(null);
   const generateMutation = useMutation({
-    mutationFn: () => mentorService.generate(evaluationId),
+    mutationFn: () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
+      return mentorService.generate(evaluationId, undefined, controller.signal);
+    },
+    onSettled: () => {
+      abortRef.current = null;
+    },
     onSuccess: (data) => {
       queryClient.setQueryData(['mentor', evaluationId], data);
       setExpanded(true);
     },
   });
+  const cancelGenerate = () => {
+    abortRef.current?.abort();
+  };
+  const wasCancelled =
+    generateMutation.isError &&
+    (generateMutation.error as { name?: string; code?: string } | undefined)?.code ===
+      'ERR_CANCELED';
 
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
@@ -1439,7 +1538,7 @@ function DeepDiveDisclosure({
       {/* Prominent disclosure button. Solid bg, centered, with a subtle
           ring-pulse when freshly available so the user notices a new
           deep-dive landed. */}
-      <div className="mt-3 flex justify-center">
+      <div className="mt-3 flex items-center justify-center gap-2">
         <button
           type="button"
           onClick={handleClick}
@@ -1474,9 +1573,19 @@ function DeepDiveDisclosure({
             </span>
           )}
         </button>
+        {generateMutation.isPending && (
+          <button
+            type="button"
+            onClick={cancelGenerate}
+            className="rounded-full px-4 py-2 text-sm font-medium border border-gray-300 bg-white text-gray-700 hover:bg-gray-100"
+            title="Abort the in-flight mentor generation"
+          >
+            Cancel
+          </button>
+        )}
       </div>
 
-      {generateMutation.isError && (
+      {generateMutation.isError && !wasCancelled && (
         <div className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
           Mentor generation failed: {(generateMutation.error as Error).message}
         </div>

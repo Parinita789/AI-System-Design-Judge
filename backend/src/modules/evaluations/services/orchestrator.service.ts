@@ -9,6 +9,7 @@ import { PlanAgent } from '../agents/plan.agent';
 import { PhaseEvalInput } from '../types/evaluation.types';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
 import { MentorService } from '../../mentor/services/mentor.service';
+import { SignalMentorService } from '../../signal-mentor/services/signal-mentor.service';
 
 @Injectable()
 export class OrchestratorService {
@@ -24,6 +25,8 @@ export class OrchestratorService {
     private readonly config: ConfigService,
     @Inject(forwardRef(() => MentorService))
     private readonly mentorService: MentorService,
+    @Inject(forwardRef(() => SignalMentorService))
+    private readonly signalMentorService: SignalMentorService,
   ) {}
 
   async run(
@@ -93,6 +96,11 @@ export class OrchestratorService {
       this.mentorService.generate(persisted.id, options?.model).catch((err) => {
         this.logger.warn(
           `Background mentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
+        );
+      });
+      this.signalMentorService.generate(persisted.id, options?.model).catch((err) => {
+        this.logger.warn(
+          `Background signalMentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
         );
       });
     }

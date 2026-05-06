@@ -7,9 +7,6 @@ export interface BuiltMentorPrompt {
 }
 
 export function buildMentorPrompt(input: MentorInput): BuiltMentorPrompt {
-  // Two cacheable system blocks: the persona (frozen across sessions
-  // at the same seniority) and the question (frozen within a session).
-  // The candidate's plan + evaluator output go in the user message.
   const seniorityLabel = input.seniority ?? 'engineer';
   return {
     systemBlocks: [
@@ -20,8 +17,6 @@ export function buildMentorPrompt(input: MentorInput): BuiltMentorPrompt {
   };
 }
 
-// Concatenate all system blocks + user message into one string for
-// disk persistence. Mirrors how the providers flatten internally.
 export function flattenForAudit(p: BuiltMentorPrompt): string {
   return p.systemBlocks.map((b) => b.text).join('\n\n') + '\n\n---\n\n' + p.userMessage;
 }

@@ -4,9 +4,11 @@ A practice-and-feedback tool for system-design interviews. You paste a
 question, write a `plan.md` (with embedded Mermaid diagrams) in a
 Monaco editor, and an LLM evaluates it against a structured rubric —
 returning per-signal verdicts, a deterministic score, written feedback,
-and concrete next actions. A second post-eval LLM call produces a
-"deep-dive" mentor artifact: prose feedback that translates the rubric
-verdicts into senior-engineer teaching.
+and concrete next actions. Two post-eval LLM calls layer on coaching:
+a "deep-dive" mentor artifact (a 6-section senior-engineer reflection
+on the whole plan) and a per-signal mentor artifact (2–4 sentence
+plan-specific coaching shown inline beside each *gap* row — missed
+good signals or fired bad signals).
 
 The interesting parts aren't the editor or the score; they're the
 guardrails that keep the LLM honest:
@@ -68,6 +70,7 @@ backend/
       hints/                 Socratic-coach chatbot during the session
       llm/                   provider factory (Anthropic | Ollama | Claude CLI)
       mentor/                post-eval teaching artifact (separate LLM call)
+      signal-mentor/         per-signal inline coaching (batched LLM call)
       phase-tagger/          maps Claude Code JSONL events to phases (stub)
       questions/             question + first-attempt creation
       sessions/              attempt lifecycle (start, pause, end)
@@ -91,8 +94,8 @@ frontend/
       ActiveSession/         editor + autosave + hint panel + Mermaid preview
                              (Edit / Split / Preview toggle, paste-source dialog,
                               deep-link to mermaid.live, resizable coach pane)
-      SessionResults/        per-signal breakdown, attempts, audit modal,
-                             deep-dive mentor disclosure
+      SessionResults/        per-signal breakdown with inline Coach blocks,
+                             attempts, audit modal, deep-dive mentor disclosure
     services/                axios clients (questions, sessions, hints, evaluations)
     types/                   shapes mirrored from the backend API
 ```
@@ -206,6 +209,17 @@ Once a session ends (or the user clicks Re-evaluate), the
    row with the evaluation, plus to disk for audit, and rendered
    on the results page behind a "Read the deep-dive feedback"
    disclosure (with collapsible sections).
+9. **Fire the per-signal mentor.** In parallel with step 8, a
+   `SignalMentorAgent` call produces 2–4 sentences of plan-specific
+   coaching for every *gap* signal — missed-good (good polarity +
+   miss/partial) or fired-bad (bad polarity + hit/partial). One
+   batched LLM call returns a `{signal_id → annotation}` map enforced
+   by a tool schema with `required: [<gap ids>]` and
+   `additionalProperties: false`. Annotations render inline inside
+   each rubric row on the results page, beneath the evaluator's
+   evidence quote, on an indigo "Coach" block. Wins (HIT-good and
+   MISS-bad) get no annotation — coaching the obvious is noise.
+   Persisted 1:1 with the evaluation in `signal_mentor_artifacts`.
 
 ## Common workflows
 

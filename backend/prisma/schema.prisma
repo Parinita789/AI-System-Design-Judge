@@ -99,8 +99,9 @@ model PhaseEvaluation {
   evaluatedAt         DateTime @default(now()) @map("evaluated_at")
 
   session  Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  audit    EvaluationAudit?
-  mentor   MentorArtifact?
+  audit         EvaluationAudit?
+  mentor        MentorArtifact?
+  signalMentor  SignalMentorArtifact?
 
   // Each Re-evaluate inserts a new row (no upsert); history is preserved.
   // Ordered index makes "latest plan eval for session X" a single seek.
@@ -150,6 +151,28 @@ model MentorArtifact {
   phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
 
   @@map("mentor_artifacts")
+}
+
+// Per-signal coaching artifact, 1:1 with a phase_evaluation. Generated
+// in the background after evaluation persists; populated only for "gap"
+// signals (missed-good and fired-bad). Stored as a JSON map of
+// {signal_id → annotation_text}.
+model SignalMentorArtifact {
+  id                  String   @id @default(uuid()) @db.Uuid
+  phaseEvaluationId   String   @unique @map("phase_evaluation_id") @db.Uuid
+  annotations         Json
+  modelUsed           String   @map("model_used")
+  tokensIn            Int      @map("tokens_in")
+  tokensOut           Int      @map("tokens_out")
+  cacheReadTokens     Int      @default(0) @map("cache_read_tokens")
+  cacheCreationTokens Int      @default(0) @map("cache_creation_tokens")
+  latencyMs           Int?     @map("latency_ms")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  phaseEvaluation PhaseEvaluation @relation(fields: [phaseEvaluationId], references: [id], onDelete: Cascade)
+
+  @@map("signal_mentor_artifacts")
 }
 
 model AIInteraction {

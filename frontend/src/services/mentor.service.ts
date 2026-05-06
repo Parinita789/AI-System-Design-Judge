@@ -10,9 +10,13 @@ export const mentorService = {
   },
   // Generate or regenerate. Server upserts by phaseEvaluationId so a
   // second call overwrites the existing row.
-  generate(evaluationId: string, model?: string) {
+  generate(evaluationId: string, model?: string, signal?: AbortSignal) {
     return api
-      .post<MentorArtifactRow>(`/mentor/${evaluationId}`, model ? { model } : {})
+      .post<MentorArtifactRow>(
+        `/mentor/${evaluationId}`,
+        model ? { model } : {},
+        signal ? { signal } : undefined,
+      )
       .then((r) => r.data);
   },
 };

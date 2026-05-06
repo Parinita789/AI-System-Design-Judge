@@ -401,7 +401,11 @@ export function ActiveSessionPage() {
               <PreviewPane
                 content={previewContent}
                 onInsertExample={(snippet) => {
-                  const next = (content.endsWith('\n') ? content : content + '\n') + snippet;
+                  const firstFence = content.search(/```\s*mermaid/i);
+                  const next =
+                    firstFence === -1
+                      ? (content.endsWith('\n') ? content : content + '\n') + snippet
+                      : content.slice(0, firstFence) + snippet + content.slice(firstFence);
                   setContent(next);
                   setPreviewContent(next);
                   saveMutation.mutate(next);
