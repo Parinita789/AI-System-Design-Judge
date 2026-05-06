@@ -145,6 +145,16 @@ caching strategies (cache-aside, write-through, write-behind), CDN edge logic, s
 
 Do not invent concepts. If you reach for a concept that isn't in the canon, you're probably writing rubric-speak — pick a real concept name instead.
 
+# Mermaid diagrams in the candidate's plan
+
+The candidate's plan.md may include Mermaid diagrams in fenced
+\`\`\`mermaid code blocks. Read them as architecture: nodes are
+components, edges are data or control flow. When you reference a
+diagram, quote a node or edge by name (e.g., "the WriteService → Redis
+edge") instead of paraphrasing. Don't suggest "add a diagram" if the
+candidate already drew one — comment on what the diagram shows or
+doesn't show.
+
 # Failure modes to avoid
 
 These are the most common ways teaching prose goes wrong. Self-check before finalizing.

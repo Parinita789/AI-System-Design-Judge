@@ -180,6 +180,38 @@ Temporal check: ${rubric.passBar.temporalCheck}
 Required sections in the artifact:
 ${sectionsBlock}
 
+## How to find evidence (READ THIS BEFORE JUDGING SIGNALS)
+The "required sections" above are organizational hints, NOT a literal
+checklist. The candidate's plan.md is freeform Markdown — they may use
+different headers, fold multiple concepts into one section, place a
+concept in a paragraph that has no header at all, or put a Mermaid
+diagram in lieu of prose. **For every signal, search the entire
+plan.md (and the activity logs / hint history when relevant) for the
+concept before deciding HIT / PARTIAL / MISS.** Do NOT downgrade a
+signal just because the concept doesn't appear under the expected
+header — judge by presence and clarity of the *idea*, anywhere in
+the artifact.
+
+Concrete examples of what counts as the concept being present:
+- \`scope_cuts\` / \`scope_realism\`: any statement of what's in vs out,
+  even buried inside an "Overview" or "Approach" paragraph.
+- \`shape_and_seams\`: a Mermaid block that names components and the
+  edges between them counts; so does a prose paragraph naming the
+  same boundaries.
+- \`capacity_estimation\`: any back-of-envelope number — QPS, storage,
+  bandwidth — even if it's one line in a different section.
+- \`data_model_committed\`: a sketch of entities/columns counts, even
+  if the candidate didn't write a "Data model" header.
+- \`caching_strategy_articulated\`: naming a cache layer in a
+  diagram + saying when it's invalidated/bypassed counts.
+- \`failure_modes_articulated\`: any concrete failure named (timeouts,
+  partial outage, cache miss storms) with a posture toward it.
+
+If you can't find the concept anywhere after searching the whole
+artifact, MISS is correct. But "I expected it under section X and
+didn't find it there" is NOT a reason to MISS or PARTIAL — extend the
+search to the rest of the document first.
+
 ## Weight values (use these when scoring)
 high = ${rubric.weightValues.high}, medium = ${rubric.weightValues.medium}, low = ${rubric.weightValues.low}
 
@@ -201,6 +233,15 @@ ${calibrationBlock}
 
 ${aiUsageBlock}
 
+## Mermaid diagrams in plan.md
+The candidate's plan.md may include Mermaid diagrams in fenced
+\`\`\`mermaid code blocks. Treat the diagram source as part of their
+architectural articulation: read nodes as components, edges as data
+or control flow, and judge it the same as prose. A clear diagram
+counts toward signals like \`shape_and_seams\`, \`component_boundaries\`,
+\`interfaces_sketched\`, and \`data_model_committed\` — quote a node or
+edge by name in evidence when a diagram is what supports the signal.
+
 ## Relevance gating (IMPORTANT — read before judging)
 Some signals only apply to questions in a specific domain. If a signal is
 domain-specific and the SESSION QUESTION does not invoke that domain, mark
@@ -209,17 +250,26 @@ the signal "cannot_evaluate" with evidence "not applicable to this question
 implies the candidate had the chance to address it and didn't, which
 unfairly penalizes designs for an unrelated topic.
 
-Use this rule for AI / LLM / agentic signals when the question is a
-non-AI design problem (e.g., URL shortener, rate limiter, chat app
-without an LLM, log pipeline). Examples of signals to skip in that
-case: any signal whose description references AI, LLMs, agents,
-prompts, model selection, or RAG. The same rule applies to other
-domain-specific signals (e.g., real-time/streaming concerns on a
-batch-only problem) — if the question never opens the door to that
-concern, skip rather than miss.
+### Hard rule: \`applies_to\`
+Each signal that has an \`applies_to: [...]\` tag (visible in the signal
+header above) is domain-restricted. Mark it "cannot_evaluate" UNLESS the
+SESSION QUESTION clearly belongs to one of the listed domains.
 
-When in doubt, prefer "miss" over "cannot_evaluate" — only skip when
-the question genuinely has no surface area for the signal.
+- \`applies_to: agentic\` covers signals about agent infrastructure
+  (inference cost, agent latency, output validation, provider failover,
+  nondeterminism, agent observability, agent state). Mark these
+  "cannot_evaluate" for traditional system-design questions (URL
+  shortener, rate limiter, log pipeline, chat without LLM, ride-share
+  matching, payments ledger, news feed, etc.). Score them only when
+  the question explicitly involves LLM-driven agents, multi-agent
+  orchestration, or LLM tool-use as the core of the design.
+
+When a signal has no \`applies_to\` tag, it's universal — judge it
+normally.
+
+When in doubt about a non-tagged signal, prefer "miss" over
+"cannot_evaluate" — only skip when the question genuinely has no
+surface area for the signal.
 
 Aggregate scoring: skipped ("cannot_evaluate") signals are excluded
 from both earned and max totals so they do not change the score.
@@ -259,10 +309,14 @@ function formatSignal(s: {
   evidenceHint?: string;
   critical?: boolean;
   capAtScore?: number;
+  appliesTo?: string[];
 }): string {
   const tags = [`weight: ${s.weight}`];
   if (s.critical) tags.push('CRITICAL');
   if (s.capAtScore !== undefined) tags.push(`caps score at ${s.capAtScore}`);
+  if (s.appliesTo && s.appliesTo.length > 0) {
+    tags.push(`applies_to: ${s.appliesTo.join(', ')}`);
+  }
   return `### ${s.id} (${tags.join(', ')})
 description: ${s.description}
 judge_notes: ${s.judgeNotes}${s.evidenceHint ? `\nevidence_hint: ${s.evidenceHint}` : ''}`;

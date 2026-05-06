@@ -1,4 +1,4 @@
-# Plan — AI System Design Judge
+# Plan — Interview Assistant
 
 This document defines *what* is built and *how*. For *why* behind decisions, see `decisions.md`.
 

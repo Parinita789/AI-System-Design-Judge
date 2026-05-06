@@ -1,9 +1,12 @@
-# AI System Design Judge
+# Interview Assistant
 
 A practice-and-feedback tool for system-design interviews. You paste a
-question, write a `plan.md` in a Monaco editor, and an LLM evaluates it
-against a structured rubric — returning per-signal verdicts, a
-deterministic score, written feedback, and concrete next actions.
+question, write a `plan.md` (with embedded Mermaid diagrams) in a
+Monaco editor, and an LLM evaluates it against a structured rubric —
+returning per-signal verdicts, a deterministic score, written feedback,
+and concrete next actions. A second post-eval LLM call produces a
+"deep-dive" mentor artifact: prose feedback that translates the rubric
+verdicts into senior-engineer teaching.
 
 The interesting parts aren't the editor or the score; they're the
 guardrails that keep the LLM honest:
@@ -13,14 +16,28 @@ guardrails that keep the LLM honest:
 - **Evidence validator** that ground-checks every quoted snippet
   against the candidate's own `plan.md` and chat history; ungrounded
   evidence triggers an automatic verdict downgrade.
+- **Hallucinated-ID filter** in the text-mode parser: providers without
+  tool-use (Claude CLI, Ollama) can still return signal verdicts, but
+  any id not in the rubric is silently dropped and logged so it never
+  reaches the audit row or the score.
+- **`applies_to` domain gating** — signals tagged `applies_to: [agentic]`
+  in YAML are surfaced to the judge with explicit instructions to mark
+  them `cannot_evaluate` on non-agentic questions, so a URL-shortener
+  plan isn't penalized for not articulating per-call inference cost.
 - **Deterministic score** computed from signal verdicts via a
   threshold table — the LLM never gets to pick the final number.
+  `cannot_evaluate` signals are excluded from both numerator and
+  denominator.
 - **Per-attempt seniority calibration** (Junior / Mid / Senior /
   Staff) that shifts per-signal weights so the same plan is judged
   appropriately for the candidate's level.
 - **Per-attempt mode classification** (build vs. design) so a
   small "build a counter" question and a "design Twitter" question
   use different rubric variants.
+- **plan.md truncation + token-budget telemetry**: hard 50K-char cap
+  on plan.md before it enters the prompt (60/40 head-tail split with
+  an explicit omission marker); WARN log when total input tokens
+  exceed 150K so overflow risk on smaller-context models stays visible.
 
 ## Stack
 
@@ -28,7 +45,7 @@ guardrails that keep the LLM honest:
   Anthropic SDK is the production LLM path; Ollama and the Claude
   Code CLI are alternative providers for local dev.
 - **Frontend**: React 18 + TypeScript, Vite, Tailwind, Monaco
-  editor, React Query, Recharts.
+  editor, React Query, Recharts, Mermaid (lazy-imported).
 - **Eval harness**: standalone ts-node CLI (`npm run eval:plan`)
   that runs the real `PlanAgent` against versioned plan.md fixtures
   with expected score ranges.
@@ -50,6 +67,7 @@ backend/
         types/               evaluation/rubric data shapes
       hints/                 Socratic-coach chatbot during the session
       llm/                   provider factory (Anthropic | Ollama | Claude CLI)
+      mentor/                post-eval teaching artifact (separate LLM call)
       phase-tagger/          maps Claude Code JSONL events to phases (stub)
       questions/             question + first-attempt creation
       sessions/              attempt lifecycle (start, pause, end)
@@ -66,10 +84,15 @@ backend/
 frontend/
   src/
     components/              ScoreBreakdown chart, HintChatPanel, layout
+                             MarkdownView + MermaidBlock (SVG renderer),
+                             MentorArtifactView (collapsible sections)
     pages/
       SessionStart/          new-question form (mode + seniority pickers)
-      ActiveSession/         editor + autosave + hint panel
-      SessionResults/        per-signal breakdown, attempts, audit modal
+      ActiveSession/         editor + autosave + hint panel + Mermaid preview
+                             (Edit / Split / Preview toggle, paste-source dialog,
+                              deep-link to mermaid.live, resizable coach pane)
+      SessionResults/        per-signal breakdown, attempts, audit modal,
+                             deep-dive mentor disclosure
     services/                axios clients (questions, sessions, hints, evaluations)
     types/                   shapes mirrored from the backend API
 ```
@@ -137,29 +160,52 @@ Once a session ends (or the user clicks Re-evaluate), the
 
 1. **Load the rubric.** `RubricLoaderService.load(version, phase, mode, seniority)`
    reads YAML, merges shared + variant for v2.0, resolves
-   per-signal `weight_by_seniority` to a single `weight`.
-2. **Build the prompt + tool schema.** `buildPlanPrompt` renders
-   the rubric, mode-specific framing, and seniority calibration.
-   `buildPlanEvalTool` constructs an Anthropic tool whose
-   `input_schema` enumerates every signal id with
-   `additionalProperties: false` and a `reasoning → result →
+   per-signal `weight_by_seniority` to a single `weight`, and
+   carries each signal's `applies_to` tag through to the prompt.
+2. **Truncate plan.md.** `truncatePlanMd` enforces a 50K-char cap
+   with a 60/40 head-tail split and an explicit omission marker.
+   Mermaid diagrams ride along inside `plan.md` as fenced
+   `​`​`​`mermaid` blocks; the judge reads them as architectural
+   articulation. The "How to find evidence" prompt directive tells
+   the judge to search the *whole* artifact for each signal's
+   concept rather than restricting itself to expected section
+   headers — section headers are organizational hints, not gates.
+3. **Build the prompt + tool schema.** `buildPlanPrompt` renders
+   the rubric, mode-specific framing, seniority calibration, and
+   per-signal `applies_to` tags. `buildPlanEvalTool` constructs an
+   Anthropic tool whose `input_schema` enumerates every signal id
+   with `additionalProperties: false` and a `reasoning → result →
    evidence` field order per signal.
-3. **Force the LLM to call the tool.** With `tool_choice: {type:
+4. **Force the LLM to call the tool.** With `tool_choice: {type:
    'tool', name: 'submit_evaluation'}` and `temperature: 0`, the
    model can't return prose, can't omit a signal, can't invent an
-   id. Ollama and Claude CLI fall back to a JSON-in-prose path.
-4. **Validate evidence.** `validateEvidence` runs sliding 30-char
+   id. Ollama and Claude CLI fall back to a JSON-in-prose path; the
+   text-mode parser still drops any signal ids outside the rubric
+   (logged WARN) so hallucinated ids never reach the audit row.
+5. **Validate evidence.** `validateEvidence` runs sliding 30-char
    and 5-word-gram matches against `plan.md` + hint history. Any
    HIT/PARTIAL whose evidence isn't grounded is downgraded one
    notch (HIT → PARTIAL, PARTIAL → MISS) and annotated.
-5. **Compute the score.** `computeScore` ignores anything the LLM
+6. **Compute the score.** `computeScore` ignores anything the LLM
    said about scoring. It applies per-signal weights, a paired
    good ↔ bad pairing rule, a threshold table (`ratio ≥ 0.85
    ∧ no high-weight miss → 5`, etc.), and critical-signal caps.
-6. **Persist the audit.** Every evaluation row is paired 1:1
+   `cannot_evaluate` signals are excluded from numerator and
+   denominator so domain-gated signals don't drag scores down.
+7. **Persist the audit.** Every evaluation row is paired 1:1
    with an `EvaluationAudit` row that captures the rendered
    prompt, the tool schema, the raw response, the model used,
-   token counts, and cache hit/miss tokens.
+   token counts, and cache hit/miss tokens. A WARN log fires when
+   total input tokens exceed 150K.
+8. **Fire the mentor.** Once the eval persists, a separate LLM
+   call (`MentorAgent`) produces a 6-section Markdown teaching
+   artifact: what the candidate got right, what they missed, a
+   defensible-but-non-obvious decision to examine, the clarifying
+   question they didn't ask, one thing to add in three more
+   minutes, and a concept ledger. The artifact is saved on a 1:1
+   row with the evaluation, plus to disk for audit, and rendered
+   on the results page behind a "Read the deep-dive feedback"
+   disclosure (with collapsible sections).
 
 ## Common workflows
 

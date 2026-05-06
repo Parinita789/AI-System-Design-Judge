@@ -17,8 +17,7 @@ export interface RubricSignal {
   capAtScore?: number;
   pairedWith?: string;
   requiresEvidence?: string[];
-  // Resolved by RubricLoaderService.applySeniority — downstream code
-  // only sees the resolved `weight`, never this map.
+  appliesTo?: string[];
   weightBySeniority?: Record<Seniority, WeightTier>;
 }
 

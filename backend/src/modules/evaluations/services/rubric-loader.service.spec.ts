@@ -150,11 +150,41 @@ describe('RubricLoaderService — v2.0 build/design merge (real files)', () => {
       expect(ids.has('consistency_model_chosen')).toBe(true);
     });
 
-    it('demotes build_sequence_planned and validation_plan_concrete to low weight', async () => {
+    it('design variant omits build/validation companion signals (build-only)', async () => {
+      const rubric = await loader.load('v2.0', 'plan', 'design');
+      const ids = new Set(rubric.signals.map((s) => s.id));
+      // Design exercises don't ship code, so these signals are dropped
+      // from the design variant entirely (they live only in plan.build.yaml).
+      expect(ids.has('build_sequence_planned')).toBe(false);
+      expect(ids.has('no_build_sequence')).toBe(false);
+      expect(ids.has('validation_plan_concrete')).toBe(false);
+      expect(ids.has('no_validation_plan')).toBe(false);
+    });
+
+    it('parses applies_to on agent-infrastructure signals', async () => {
       const rubric = await loader.load('v2.0', 'plan', 'design');
       const byId = new Map(rubric.signals.map((s) => [s.id, s]));
-      expect(byId.get('build_sequence_planned')?.weight).toBe('low');
-      expect(byId.get('validation_plan_concrete')?.weight).toBe('low');
+      const agenticIds = [
+        'inference_cost_articulated',
+        'latency_strategy_for_agent_calls',
+        'output_validation_layer',
+        'provider_abstraction_and_failover',
+        'nondeterminism_handling',
+        'agent_observability',
+        'agent_state_management',
+      ];
+      for (const id of agenticIds) {
+        const sig = byId.get(id);
+        expect(sig).toBeDefined();
+        expect(sig?.appliesTo).toEqual(['agentic']);
+      }
+    });
+
+    it('leaves appliesTo undefined on universal signals', async () => {
+      const rubric = await loader.load('v2.0', 'plan', 'design');
+      const byId = new Map(rubric.signals.map((s) => [s.id, s]));
+      expect(byId.get('shape_and_seams')?.appliesTo).toBeUndefined();
+      expect(byId.get('capacity_estimation')?.appliesTo).toBeUndefined();
     });
 
     it('design variant uses longer time bounds (25–45 min)', async () => {

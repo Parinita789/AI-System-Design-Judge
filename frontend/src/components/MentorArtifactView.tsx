@@ -1,11 +1,19 @@
-import { useMemo, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import { isValidElement, ReactNode, useMemo, useState } from 'react';
+import ReactMarkdown, { Components } from 'react-markdown';
 import { MentorArtifact } from '@/types/mentor';
+import { MermaidBlock } from './MermaidBlock';
 
-// The mentor artifact arrives as one Markdown blob with `##` section
-// headers. We split it on `^## ` boundaries so each section becomes a
-// collapsible disclosure. All sections start collapsed — click a header
-// to expand, or use the toggle in the corner.
+function isMermaidPreChild(children: ReactNode): boolean {
+  if (!isValidElement(children)) {
+    if (Array.isArray(children) && children.length === 1) {
+      return isMermaidPreChild(children[0]);
+    }
+    return false;
+  }
+  const props = children.props as { className?: string };
+  return typeof props.className === 'string' && /\blanguage-mermaid\b/.test(props.className);
+}
+
 export function MentorArtifactView({ artifact }: { artifact: MentorArtifact }) {
   const sections = useMemo(() => splitMarkdownSections(artifact.content), [artifact.content]);
   const [openSet, setOpenSet] = useState<Set<number>>(new Set());
@@ -22,8 +30,6 @@ export function MentorArtifactView({ artifact }: { artifact: MentorArtifact }) {
   const collapseAll = () => setOpenSet(new Set());
 
   if (sections.length === 0) {
-    // Defensive: if the LLM produced output without any `##` section
-    // headers, fall back to rendering the whole blob as Markdown.
     return (
       <article className="prose prose-sm max-w-none">
         <ReactMarkdown components={MARKDOWN_COMPONENTS}>{artifact.content}</ReactMarkdown>
@@ -116,46 +122,49 @@ function CollapsibleSection({
   );
 }
 
-// react-markdown component overrides for Tailwind-friendly rendering.
-const MARKDOWN_COMPONENTS = {
-  // Demote inner ## headings (rare, since the body has the section's
-  // header already split out) to a smaller weight so they don't compete
-  // with the disclosure header.
-  h2: ({ children }: { children?: React.ReactNode }) => (
+const MARKDOWN_COMPONENTS: Components = {
+  h2: ({ children }) => (
     <h2 className="text-sm font-semibold mt-4 mb-2 text-gray-900">{children}</h2>
   ),
-  h3: ({ children }: { children?: React.ReactNode }) => (
+  h3: ({ children }) => (
     <h3 className="text-sm font-semibold mt-3 mb-2 text-gray-900">{children}</h3>
   ),
-  p: ({ children }: { children?: React.ReactNode }) => (
+  p: ({ children }) => (
     <p className="text-sm leading-relaxed mb-3 text-gray-800">{children}</p>
   ),
-  blockquote: ({ children }: { children?: React.ReactNode }) => (
+  blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-gray-400 bg-gray-50 px-3 py-2 my-3 text-sm italic text-gray-700">
       {children}
     </blockquote>
   ),
-  ul: ({ children }: { children?: React.ReactNode }) => (
+  ul: ({ children }) => (
     <ul className="list-disc pl-5 mb-3 space-y-1 text-sm text-gray-800">{children}</ul>
   ),
-  ol: ({ children }: { children?: React.ReactNode }) => (
+  ol: ({ children }) => (
     <ol className="list-decimal pl-5 mb-3 space-y-1 text-sm text-gray-800">{children}</ol>
   ),
-  li: ({ children }: { children?: React.ReactNode }) => (
-    <li className="text-sm leading-relaxed">{children}</li>
-  ),
-  strong: ({ children }: { children?: React.ReactNode }) => (
+  li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+  strong: ({ children }) => (
     <strong className="font-semibold text-gray-900">{children}</strong>
   ),
-  em: ({ children }: { children?: React.ReactNode }) => <em className="italic">{children}</em>,
-  code: ({ children }: { children?: React.ReactNode }) => (
-    <code className="font-mono text-[12px] bg-gray-100 px-1 py-0.5 rounded">{children}</code>
-  ),
+  em: ({ children }) => <em className="italic">{children}</em>,
+  code: ({ className, children }) => {
+    if (typeof className === 'string' && /\blanguage-mermaid\b/.test(className)) {
+      const source = String(children ?? '').replace(/\n$/, '');
+      return <MermaidBlock source={source} />;
+    }
+    return (
+      <code className="font-mono text-[12px] bg-gray-100 px-1 py-0.5 rounded">{children}</code>
+    );
+  },
+  pre: ({ children, ...rest }) => {
+    if (isMermaidPreChild(children)) {
+      return <>{children}</>;
+    }
+    return <pre {...rest}>{children}</pre>;
+  },
 };
 
-// Split a Markdown document on top-level `## ` headings. Returns one
-// entry per section. Anything before the first `##` becomes an
-// "Overview" pseudo-section so we don't drop preamble text.
 function splitMarkdownSections(md: string): Array<{ title: string; body: string }> {
   const lines = md.split('\n');
   const sections: Array<{ title: string; body: string[] }> = [];

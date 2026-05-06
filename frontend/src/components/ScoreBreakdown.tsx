@@ -54,21 +54,18 @@ function buildPolarityPie(
     not_evaluated: 0,
   };
   for (const s of signals) counts[classifyResult(s, results)]++;
-  const skipped = counts.cannot_evaluate + counts.not_evaluated;
 
   if (polarity === 'good') {
     return [
       { name: 'Hit', value: counts.hit, fill: '#15803d' }, // green-700
       { name: 'Partial', value: counts.partial, fill: '#86efac' }, // green-300
       { name: 'Miss', value: counts.miss, fill: '#9ca3af' }, // gray-400
-      { name: 'N/A', value: skipped, fill: '#e5e7eb' }, // gray-200
     ].filter((d) => d.value > 0);
   }
   return [
     { name: 'Fired (HIT)', value: counts.hit, fill: '#b91c1c' }, // red-700
     { name: 'Partial fire', value: counts.partial, fill: '#fca5a5' }, // red-300
     { name: 'Didn’t fire', value: counts.miss, fill: '#9ca3af' }, // gray-400
-    { name: 'N/A', value: skipped, fill: '#e5e7eb' }, // gray-200
   ].filter((d) => d.value > 0);
 }
 
@@ -151,12 +148,20 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   const goodHitCount = goodTiers.reduce((acc, t) => acc + t.hit, 0);
   const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
   const goodCreditedCount = goodHitCount + goodPartial;
-  const goodTotalCount = goodSignals.length;
+  // Exclude cannot_evaluate / not_evaluated from totals — they're not
+  // part of "what could have been earned" for this specific question.
+  const goodTotalCount = goodTiers.reduce(
+    (acc, t) => acc + t.hit + t.partial + t.miss,
+    0,
+  );
 
   const badHitCount = badTiers.reduce((acc, t) => acc + t.hit, 0);
   const badPartial = badTiers.reduce((acc, t) => acc + t.partial, 0);
   const badFiredCount = badHitCount + badPartial;
-  const badTotalCount = badSignals.length;
+  const badTotalCount = badTiers.reduce(
+    (acc, t) => acc + t.hit + t.partial + t.miss,
+    0,
+  );
   const badMaxPenalty = badTiers.reduce((acc, t) => acc + t.max, 0);
   const badPenalty = badTiers.reduce((acc, t) => acc + t.earned, 0);
 
@@ -177,25 +182,32 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
       return polarity === 'good' ? '#16a34a' : '#dc2626';
     };
 
-    const all = rubric.signals.map((s) => {
-      const result = evaluation.signalResults[s.id] as SignalResult | undefined;
-      const kind = classifyResult(s, evaluation.signalResults);
-      const max = rubric.weightValues[s.weight];
-      const earned = pointsFor(kind, max);
-      return {
-        id: s.id,
-        shortId: s.id.length > 22 ? s.id.slice(0, 20) + '…' : s.id,
-        polarity: s.polarity,
-        weight: s.weight as WeightTier,
-        max,
-        earned,
-        kind,
-        earnedColor: colorFor(s.polarity, kind),
-        judgmentLabel: RESULT_LABEL[kind],
-        description: s.description,
-        evidence: result?.evidence ?? '',
-      };
-    });
+    const all = rubric.signals
+      .filter((s) => {
+        const kind = classifyResult(s, evaluation.signalResults);
+        if (kind === 'not_evaluated' || kind === 'cannot_evaluate') return false;
+        if (s.polarity === 'bad') return kind === 'hit' || kind === 'partial';
+        return true;
+      })
+      .map((s) => {
+        const result = evaluation.signalResults[s.id] as SignalResult | undefined;
+        const kind = classifyResult(s, evaluation.signalResults);
+        const max = rubric.weightValues[s.weight];
+        const earned = pointsFor(kind, max);
+        return {
+          id: s.id,
+          shortId: s.id.length > 22 ? s.id.slice(0, 20) + '…' : s.id,
+          polarity: s.polarity,
+          weight: s.weight as WeightTier,
+          max,
+          earned,
+          kind,
+          earnedColor: colorFor(s.polarity, kind),
+          judgmentLabel: RESULT_LABEL[kind],
+          description: s.description,
+          evidence: result?.evidence ?? '',
+        };
+      });
     return all.sort((a, b) => {
       if (a.polarity !== b.polarity) return a.polarity === 'good' ? -1 : 1;
       if (a.max !== b.max) return b.max - a.max;
@@ -260,17 +272,17 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
             Coverage — how the LLM judged each rubric signal, split by polarity
           </div>
           <div className="text-[11px] text-gray-500 mb-2">
-            Each pie counts every signal in its polarity exactly once. Slice
-            sizes show what happened: HIT, PARTIAL, MISS, or N/A
-            (skipped/not-evaluated).
+            Each pie counts only signals that applied to this question. Slice
+            sizes show HIT, PARTIAL, or MISS. Signals the LLM marked
+            not-applicable or didn't judge are excluded from the totals.
           </div>
           <div className="flex-1 min-h-[260px] grid grid-cols-2 gap-2">
             <PolarityPie
-              title={`Good signals (${goodSignals.length})`}
+              title={`Good signals (${goodTotalCount})`}
               data={goodPieData}
             />
             <PolarityPie
-              title={`Bad signals (${badSignals.length})`}
+              title={`Bad signals (${badTotalCount})`}
               data={badPieData}
             />
           </div>
@@ -279,7 +291,10 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
 
       <div className="rounded border border-gray-300 bg-white p-3">
         <div className="text-xs font-medium text-gray-700 mb-1">
-          Per-criterion: weight vs earned ({rubric.signals.length} rubric criteria)
+          Per-criterion: weight vs earned (
+          {perSignalData.filter((d) => d.polarity === 'good').length} good
+          signals applied · {perSignalData.filter((d) => d.polarity === 'bad').length}{' '}
+          bad signals fired)
         </div>
         <div className="text-[11px] text-gray-500 mb-2 leading-snug">
           Each signal has two bars. The gray bar = full weight (what's at stake).

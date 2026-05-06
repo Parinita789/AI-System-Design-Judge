@@ -14,7 +14,16 @@ expectedSignals:
     - shape_and_seams
   miss: []
   hit: []
-  # The headline test of this fixture: AI-related signals are domain-irrelevant
-  # to a log-pipeline problem, so the judge should mark them cannot_evaluate.
+  # The headline test of this fixture: domain-restricted signals must be
+  # marked cannot_evaluate (not miss) on a non-AI log-pipeline problem.
+  # The seven applies_to: [agentic] signals all carry that tag now and
+  # should gate cleanly via the rubric loader -> prompt path.
   skipped:
     - ai_strategy_explicit
+    - inference_cost_articulated
+    - latency_strategy_for_agent_calls
+    - output_validation_layer
+    - provider_abstraction_and_failover
+    - nondeterminism_handling
+    - agent_observability
+    - agent_state_management

@@ -1,4 +1,4 @@
-# Architectural Decisions — AI System Design Judge
+# Architectural Decisions — Interview Assistant
 
 This document captures the *why* behind key architectural choices. For the *what* and *how* of building, see `plan.md`.
 

@@ -14,6 +14,7 @@ import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
 import { mentorService } from '@/services/mentor.service';
 import { MentorArtifactView } from '@/components/MentorArtifactView';
+import { MarkdownView } from '@/components/MarkdownView';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -274,9 +275,15 @@ export function SessionResultsPage() {
           {planMdExpanded ? '▼' : '▶'} plan.md ({planMd ? planMd.length : 0} chars)
         </button>
         {planMdExpanded && (
-          <pre className="mt-2 rounded border border-gray-300 bg-gray-50 p-3 text-xs whitespace-pre-wrap font-mono overflow-x-auto">
-            {planMd ?? '(no plan content captured)'}
-          </pre>
+          <div className="mt-2 rounded border border-gray-300 bg-white p-3 overflow-x-auto">
+            {planMd ? (
+              <MarkdownView markdown={planMd} />
+            ) : (
+              <span className="text-xs text-gray-500 italic">
+                (no plan content captured)
+              </span>
+            )}
+          </div>
         )}
       </section>
     </div>

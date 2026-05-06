@@ -111,8 +111,14 @@ export class PlanAgent extends BasePhaseAgent {
       parsed = validateEvalToolArgs(llm.toolUse.input, expectedSignalIds);
       auditResponse = JSON.stringify(llm.toolUse.input, null, 2);
     } else {
-      parsed = parseEvalOutput(llm.text);
+      parsed = parseEvalOutput(llm.text, expectedSignalIds);
       auditResponse = llm.text;
+    }
+    if (parsed.droppedSignalIds && parsed.droppedSignalIds.length > 0) {
+      this.logger.warn(
+        `Dropped ${parsed.droppedSignalIds.length} hallucinated signal id(s) ` +
+          `not in rubric: ${parsed.droppedSignalIds.join(', ')}`,
+      );
     }
 
     const validated = validateEvidence(parsed.signals, input.planMd, input.hints);

@@ -12,6 +12,7 @@ export interface ParsedEvalOutput {
   signals: Record<string, SignalResult>;
   feedback: string;
   topActions: string[];
+  droppedSignalIds?: string[];
 }
 
 const VALID_RESULTS = new Set(['hit', 'miss', 'partial', 'cannot_evaluate']);
@@ -56,7 +57,10 @@ function extractJsonObject(text: string): string | null {
   return null;
 }
 
-export function parseEvalOutput(rawText: string): ParsedEvalOutput {
+export function parseEvalOutput(
+  rawText: string,
+  expectedSignalIds?: ReadonlySet<string>,
+): ParsedEvalOutput {
   let candidate: unknown;
   const cleaned = stripFences(rawText);
   try {
@@ -100,7 +104,12 @@ export function parseEvalOutput(rawText: string): ParsedEvalOutput {
     throw new EvaluationParseError('Missing or invalid "signals" object', rawText);
   }
   const signals: Record<string, SignalResult> = {};
+  const droppedSignalIds: string[] = [];
   for (const [signalId, val] of Object.entries(obj.signals as Record<string, unknown>)) {
+    if (expectedSignalIds && !expectedSignalIds.has(signalId)) {
+      droppedSignalIds.push(signalId);
+      continue;
+    }
     if (!val || typeof val !== 'object') {
       throw new EvaluationParseError(`Signal "${signalId}" is not an object`, rawText);
     }
@@ -139,5 +148,5 @@ export function parseEvalOutput(rawText: string): ParsedEvalOutput {
     topActions.push(item);
   }
 
-  return { score, signals, feedback, topActions };
+  return { score, signals, feedback, topActions, droppedSignalIds };
 }

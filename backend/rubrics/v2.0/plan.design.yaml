@@ -171,56 +171,6 @@ add_signals:
     evidence_hint: "Quote the consistency choice + the justification."
 
   # ---------- Design-mode demoted-good companions for the bads ----------
-
-  - id: build_sequence_planned
-    polarity: good
-    weight: low
-    paired_with: no_build_sequence
-    description: |
-      (Demoted in design mode.) Plan articulates how the build *would*
-      be sequenced if the candidate were to implement it.
-    judge_notes: |
-      Low weight in design mode — the candidate is not going to build
-      this in the session. A 3-4 step sketch is fine; absence is a
-      minor gap, not a major one.
-    evidence_hint: "Quote the build sequence (if any)."
-
-  - id: no_build_sequence
-    polarity: bad
-    weight: low
-    paired_with: build_sequence_planned
-    description: |
-      (Demoted in design mode.) plan.md doesn't sketch a build order.
-    judge_notes: |
-      Low weight — design exercises can legitimately stop short of
-      build sequencing.
-    evidence_hint: "Note absence."
-
-  - id: validation_plan_concrete
-    polarity: good
-    weight: low
-    paired_with: no_validation_plan
-    description: |
-      (Demoted in design mode.) Plan sketches how the design *would*
-      be validated. Demo-scale verification is sufficient — no
-      production load test needed.
-    judge_notes: |
-      Examples: "Sketch a load test at demo scale (100 req/s) using ab
-      or k6; assert p95 stays under 200ms; verify cache hit rate"
-      passes. "Manual testing" alone fails. Lower weight because the
-      candidate isn't going to run the test in the session.
-    evidence_hint: "Quote the validation sketch."
-
-  - id: no_validation_plan
-    polarity: bad
-    weight: low
-    paired_with: validation_plan_concrete
-    description: |
-      (Demoted in design mode.) plan.md doesn't sketch validation.
-    judge_notes: |
-      Low weight in design mode.
-    evidence_hint: "Note absence."
-
   - id: ai_strategy_explicit
     polarity: good
     weight: low
@@ -247,13 +197,8 @@ add_signals:
     evidence_hint: "Quote the section or note absence."
 
   # ---------- Agent-infrastructure GOOD signals ----------
-  # All seven of these are gated by the existing relevance rule in
-  # plan-prompt.ts: the LLM marks them cannot_evaluate (not miss) when
-  # the question doesn't involve AI agents / LLMs / inference. The
-  # score-computer excludes cannot_evaluate from both numerator and
-  # denominator, so non-agentic questions are unaffected.
-
   - id: inference_cost_articulated
+    applies_to: [agentic]
     polarity: good
     weight: high
     weight_by_seniority:
@@ -278,6 +223,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: latency_strategy_for_agent_calls
+    applies_to: [agentic]
     polarity: good
     weight: medium
     weight_by_seniority:
@@ -301,6 +247,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: output_validation_layer
+    applies_to: [agentic]
     polarity: good
     weight: high
     description: |
@@ -317,6 +264,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: provider_abstraction_and_failover
+    applies_to: [agentic]
     polarity: good
     weight: medium
     description: |
@@ -333,6 +281,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: nondeterminism_handling
+    applies_to: [agentic]
     polarity: good
     weight: medium
     weight_by_seniority:
@@ -354,6 +303,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: agent_observability
+    applies_to: [agentic]
     polarity: good
     weight: medium
     weight_by_seniority:
@@ -376,6 +326,7 @@ add_signals:
     requires_evidence: [plan]
 
   - id: agent_state_management
+    applies_to: [agentic]
     polarity: good
     weight: medium
     description: |

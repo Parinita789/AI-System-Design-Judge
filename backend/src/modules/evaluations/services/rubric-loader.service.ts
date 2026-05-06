@@ -29,6 +29,7 @@ type RawSignal = {
   cap_at_score?: number;
   paired_with?: string;
   requires_evidence?: string[];
+  applies_to?: string[];
   weight_by_seniority?: Record<string, WeightTier>;
 };
 
@@ -339,6 +340,7 @@ function toSignal(s: RawSignal): RubricSignal {
     capAtScore: s.cap_at_score,
     pairedWith: s.paired_with,
     requiresEvidence: s.requires_evidence,
+    appliesTo: s.applies_to,
     weightBySeniority,
   };
 }
