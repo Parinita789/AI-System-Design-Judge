@@ -12,6 +12,7 @@ import { HintsModule } from './modules/hints/hints.module';
 import { QuestionsModule } from './modules/questions/questions.module';
 import { MentorModule } from './modules/mentor/mentor.module';
 import { SignalMentorModule } from './modules/signal-mentor/signal-mentor.module';
+import { BuildSessionsModule } from './modules/build-sessions/build-sessions.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { SignalMentorModule } from './modules/signal-mentor/signal-mentor.module
     HintsModule,
     MentorModule,
     SignalMentorModule,
+    BuildSessionsModule,
   ],
 })
 export class AppModule {}

@@ -62,15 +62,44 @@ model Session {
   overallScore    Decimal?      @map("overall_score") @db.Decimal(3, 2)
   overallFeedback String?       @map("overall_feedback")
 
+  // Build-phase fields (phase 2). buildTokenHash is bcrypt(secret)
+  // where secret is the second half of the CLI's bearer token. Null
+  // until the candidate clicks "Start build phase" on the web app.
+  buildTokenHash   String?   @map("build_token_hash")
+  buildStartedAt   DateTime? @map("build_started_at")
+  buildEndedAt     DateTime? @map("build_ended_at")
+  buildEventCount  Int       @default(0) @map("build_event_count")
+
   question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
   snapshots         Snapshot[]
   phaseEvaluations  PhaseEvaluation[]
   aiInteractions    AIInteraction[]
   finalArtifacts    FinalArtifacts?
+  buildEvents       BuildEvent[]
 
   @@index([questionId])
   @@map("sessions")
+}
+
+// One row per file save captured by the CLI watcher during the build
+// phase. Either `content` (first capture) or `contentDiff` (unified
+// patch) is populated — never both, never neither (except deletes,
+// which carry no payload).
+model BuildEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  sessionId    String   @map("session_id") @db.Uuid
+  filePath     String   @map("file_path")
+  action       String
+  content      String?
+  contentDiff  String?  @map("content_diff")
+  occurredAt   DateTime @map("occurred_at")
+  receivedAt   DateTime @default(now()) @map("received_at")
+
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, occurredAt])
+  @@map("build_events")
 }
 
 model Snapshot {
