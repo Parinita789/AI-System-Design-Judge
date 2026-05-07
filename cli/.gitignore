@@ -1,0 +1,14 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local CLI state — only ever lives under the user's home, but
+# guard anyway in case someone runs the CLI from inside the repo.
+.mentor/
+
+# Jest / coverage
+coverage/
+
+# OS / editor
+.DS_Store
+*.log

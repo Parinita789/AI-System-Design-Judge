@@ -1,0 +1,46 @@
+{
+  "name": "@interview-assistant/mentor",
+  "version": "0.1.0",
+  "description": "Local CLI watcher that captures build-phase file events for the Interview Assistant. Runs alongside the candidate's editor; ships file-save events to the backend in batches.",
+  "private": true,
+  "bin": {
+    "mentor": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --silent"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "axios": "^1.7.0",
+    "chalk": "^4.1.2",
+    "chokidar": "^4.0.1",
+    "commander": "^12.1.0",
+    "diff": "^7.0.0",
+    "ignore": "^6.0.2"
+  },
+  "devDependencies": {
+    "@types/diff": "^6.0.0",
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testRegex": ".*\\.test\\.ts$",
+    "rootDir": "src"
+  }
+}
