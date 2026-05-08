@@ -83,7 +83,10 @@ export class SessionsService {
     return { ok: true };
   }
 
-  private async cleanupArtifacts(sessionId: string): Promise<void> {
+  // Public so callers that delete sessions in bulk (e.g.,
+  // QuestionsService.deleteQuestion) can fire the same async cleanup
+  // for each child session without re-implementing the disk paths.
+  async cleanupArtifacts(sessionId: string): Promise<void> {
     const dirs = [
       path.resolve(
         this.config.get<string>('MENTOR_ARTIFACT_DIR') ?? './data/mentor-artifacts',

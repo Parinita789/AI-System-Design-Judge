@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { Question, Session } from '@prisma/client';
 import { QuestionsRepository } from '../repositories/questions.repository';
 import { SessionsRepository } from '../../sessions/repositories/sessions.repository';
+import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { CreateQuestionDto } from '../dto/create-question.dto';
 import { classifyMode } from '../../evaluations/helpers/mode-classifier';
@@ -15,6 +16,7 @@ export class QuestionsService {
   constructor(
     private readonly questionsRepository: QuestionsRepository,
     private readonly sessionsRepository: SessionsRepository,
+    private readonly sessionsService: SessionsService,
     private readonly snapshotsService: SnapshotsService,
     private readonly config: ConfigService,
   ) {}
@@ -90,5 +92,32 @@ export class QuestionsService {
         `(inherited ${inheritedPlanMd?.length ?? 0} chars of plan.md, seniority=${seniority ?? 'null'})`,
     );
     return session;
+  }
+
+  // Hard delete with cascade through every attempt.
+  //
+  // The question row's FK to sessions is onDelete: Restrict — a single
+  // prisma.question.delete would throw if any session existed. The repo
+  // method does a transactional deleteMany on sessions (cascades through
+  // snapshots, hints, build_events, build_ai_interactions, phase_evals
+  // and their downstream artifacts) followed by deleting the question.
+  //
+  // Per-session disk artifacts are scheduled for async cleanup so the
+  // API response stays snappy regardless of how many attempts the
+  // question accumulated.
+  async deleteQuestion(
+    questionId: string,
+  ): Promise<{ ok: true; deletedSessions: number }> {
+    const question = await this.questionsRepository.findById(questionId);
+    if (!question) throw new NotFoundException(`Question ${questionId} not found`);
+    const deletedIds = await this.questionsRepository.deleteByIdCascading(questionId);
+    this.logger.log(
+      `Question ${questionId} deleted (${deletedIds.length} attempt(s) cascaded). ` +
+        'Scheduling per-session disk cleanup.',
+    );
+    for (const sid of deletedIds) {
+      void this.sessionsService.cleanupArtifacts(sid);
+    }
+    return { ok: true, deletedSessions: deletedIds.length };
   }
 }

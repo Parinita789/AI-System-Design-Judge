@@ -20,4 +20,9 @@ export const questionsService = {
       .post<Session>(`/questions/${id}/attempts`, body)
       .then((r) => r.data);
   },
+  delete(id: string) {
+    return api
+      .delete<{ ok: true; deletedSessions: number }>(`/questions/${id}`)
+      .then((r) => r.data);
+  },
 };

@@ -8,9 +8,13 @@ describe('QuestionsService', () => {
     create: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
+    deleteByIdCascading: jest.fn(),
   };
   const sessionsRepo = {
     create: jest.fn(),
+  };
+  const sessionsService = {
+    cleanupArtifacts: jest.fn().mockResolvedValue(undefined),
   };
   const snapshots = {
     latest: jest.fn(),
@@ -25,6 +29,7 @@ describe('QuestionsService', () => {
     service = new QuestionsService(
       questionsRepo as never,
       sessionsRepo as never,
+      sessionsService as never,
       snapshots as never,
       config as never,
     );
@@ -219,6 +224,36 @@ describe('QuestionsService', () => {
         questionId: 'qid-1',
         seniority: 'junior',
       });
+    });
+  });
+
+  describe('deleteQuestion', () => {
+    it('throws NotFound when the question is missing', async () => {
+      questionsRepo.findById.mockResolvedValue(null);
+      await expect(service.deleteQuestion('missing')).rejects.toBeInstanceOf(NotFoundException);
+      expect(questionsRepo.deleteByIdCascading).not.toHaveBeenCalled();
+    });
+
+    it('cascades through every session and schedules disk cleanup per session', async () => {
+      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', sessions: [] });
+      questionsRepo.deleteByIdCascading.mockResolvedValue(['sid-a', 'sid-b', 'sid-c']);
+
+      const out = await service.deleteQuestion('qid-1');
+
+      expect(out).toEqual({ ok: true, deletedSessions: 3 });
+      expect(questionsRepo.deleteByIdCascading).toHaveBeenCalledWith('qid-1');
+      expect(sessionsService.cleanupArtifacts).toHaveBeenCalledTimes(3);
+      expect(sessionsService.cleanupArtifacts).toHaveBeenCalledWith('sid-a');
+      expect(sessionsService.cleanupArtifacts).toHaveBeenCalledWith('sid-b');
+      expect(sessionsService.cleanupArtifacts).toHaveBeenCalledWith('sid-c');
+    });
+
+    it('handles a question with zero sessions cleanly', async () => {
+      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', sessions: [] });
+      questionsRepo.deleteByIdCascading.mockResolvedValue([]);
+      const out = await service.deleteQuestion('qid-1');
+      expect(out).toEqual({ ok: true, deletedSessions: 0 });
+      expect(sessionsService.cleanupArtifacts).not.toHaveBeenCalled();
     });
   });
 });

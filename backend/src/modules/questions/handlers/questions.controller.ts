@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from '../services/questions.service';
 import { CreateQuestionDto, StartAttemptDto } from '../dto/create-question.dto';
@@ -38,5 +38,16 @@ export class QuestionsController {
   })
   startAttempt(@Param('id') id: string, @Body() body?: StartAttemptDto) {
     return this.questionsService.startAttempt(id, body?.seniority);
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Hard-delete a question and every attempt of it',
+    description:
+      'Removes the question row and all its sessions in a single transaction. Each session cascades through snapshots, hints, build events, captured AI turns, plan + build evaluations and their downstream mentor / signal-mentor artifacts. On-disk per-session prompt+response files are cleaned up fire-and-forget. Returns { ok: true, deletedSessions: N }.',
+  })
+  delete(@Param('id') id: string) {
+    return this.questionsService.deleteQuestion(id);
   }
 }
