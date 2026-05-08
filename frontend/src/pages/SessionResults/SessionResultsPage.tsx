@@ -163,18 +163,21 @@ export function SessionResultsPage() {
   const deleteMutation = useMutation({
     mutationFn: () => sessionsService.delete(id!),
     onSuccess: () => {
-      // Detach this session id from anything React Query has cached.
+      // Order matters. If we prune React Query caches first, this still-
+      // mounted page's sessionQuery subscriber notices it has no data and
+      // refetches; the refetch hits 404 (the row is gone) and the error UI
+      // flashes before the route transition commits. Navigate first to
+      // unmount this page, then drop the caches and invalidate the
+      // destination page's queries.
+      setDeleteOpen(false);
+      if (id) forgetSession(id);
+      navigate(questionId ? `/questions/${questionId}` : '/');
       queryClient.removeQueries({ queryKey: ['session', id] });
       queryClient.removeQueries({ queryKey: ['evals', id] });
       queryClient.removeQueries({ queryKey: ['snapshot', id] });
       queryClient.removeQueries({ queryKey: ['build-events', id] });
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['question', questionId] });
-      // Drop the active-session pointer + persisted pause state for this id
-      // so a localStorage rehydrate doesn't try to fetch the gone row.
-      if (id) forgetSession(id);
-      setDeleteOpen(false);
-      navigate(questionId ? `/questions/${questionId}` : '/');
     },
   });
 
