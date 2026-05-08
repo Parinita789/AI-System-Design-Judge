@@ -118,7 +118,7 @@ export class PlanAgent extends BasePhaseAgent {
       );
     }
 
-    const validated = validateEvidence(parsed.signals, input.planMd, input.hints);
+    const validated = validateEvidence(parsed.signals, truncated.text, input.hints);
     if (validated.downgraded.length > 0) {
       this.logger.warn(
         `Evidence validator downgraded ${validated.downgraded.length} signal(s) ` +

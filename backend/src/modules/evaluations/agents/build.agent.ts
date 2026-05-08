@@ -112,7 +112,7 @@ export class BuildAgent extends BasePhaseAgent {
 
     const validated = validateEvidence(
       parsed.signals,
-      input.planMd,
+      truncated.text,
       buildEvidenceCorpusItems(input, userMessage),
     );
     if (validated.downgraded.length > 0) {

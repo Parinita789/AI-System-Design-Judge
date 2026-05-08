@@ -51,11 +51,11 @@ pass_bar:
       must_contain:
         - "List of failure modes the build will handle"
         - "List of failure modes explicitly punted out of scope"
-    - id: ai_usage_plan
-      name: "AI usage plan"
-      must_contain:
-        - "What will be delegated to AI"
-        - "What the candidate will write themselves"
+    # - id: ai_usage_plan
+    #   name: "AI usage plan"
+    #   must_contain:
+    #     - "What will be delegated to AI"
+    #     - "What the candidate will write themselves"
 
 signals:
   # ---------- Shared GOOD signals ----------
