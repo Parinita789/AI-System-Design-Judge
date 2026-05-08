@@ -13,6 +13,7 @@ import { EvaluationsRepository } from '../repositories/evaluations.repository';
 import { MentorService } from '../../mentor/services/mentor.service';
 import { SignalMentorService } from '../../signal-mentor/services/signal-mentor.service';
 import { BuildContextService } from './build-context.service';
+import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
 
 @Injectable()
 export class OrchestratorService {
@@ -32,6 +33,7 @@ export class OrchestratorService {
     @Inject(forwardRef(() => SignalMentorService))
     private readonly signalMentorService: SignalMentorService,
     private readonly buildContextSvc: BuildContextService,
+    private readonly tasks: BackgroundTaskTracker,
   ) {}
 
   async run(
@@ -97,18 +99,17 @@ export class OrchestratorService {
 
       // Fire-and-forget mentor generation. Doesn't block the eval HTTP
       // response — the orchestrator returns once the eval row + audit
-      // are persisted. Mentor + signal-mentor are now phase-aware, so
-      // both fire for plan and build evals (Phase 5).
-      this.mentorService.generate(persisted.id, options?.model).catch((err) => {
-        this.logger.warn(
-          `Background mentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
-        );
-      });
-      this.signalMentorService.generate(persisted.id, options?.model).catch((err) => {
-        this.logger.warn(
-          `Background signalMentor.generate(${persisted.id}) crashed: ${(err as Error).message}`,
-        );
-      });
+      // are persisted. Tracked so SIGTERM during a long mentor LLM
+      // call gets a chance to drain (BackgroundTaskTracker awaits up
+      // to 30s on shutdown).
+      this.tasks.track(
+        this.mentorService.generate(persisted.id, options?.model),
+        `mentor.generate(${persisted.id})`,
+      );
+      this.tasks.track(
+        this.signalMentorService.generate(persisted.id, options?.model),
+        `signalMentor.generate(${persisted.id})`,
+      );
     }
     return out;
   }

@@ -22,9 +22,18 @@ describe('SessionsService', () => {
     get: jest.fn(),
   };
 
+  const tasks = {
+    track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SessionsService(repo as never, evaluations as never, config as never);
+    service = new SessionsService(
+      repo as never,
+      evaluations as never,
+      config as never,
+      tasks as never,
+    );
   });
 
   describe('get', () => {

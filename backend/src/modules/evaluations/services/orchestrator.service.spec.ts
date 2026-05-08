@@ -70,6 +70,9 @@ function makeOrchestrator(deps: {
   const signalMentorService = { generate: jest.fn().mockResolvedValue(undefined) };
   const buildEventsRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.events ?? []) };
   const buildAiRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.aiTurns ?? []) };
+  const tasks = {
+    track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
+  };
   const buildContextSvc = {
     load: jest.fn().mockImplementation(async (_sid, session) => {
       // Mirror the real service shape: walk the events ourselves so the
@@ -120,6 +123,7 @@ function makeOrchestrator(deps: {
     mentorService as never,
     signalMentorService as never,
     buildContextSvc as never,
+    tasks as never,
   );
 
   return {
@@ -131,6 +135,7 @@ function makeOrchestrator(deps: {
     buildEventsRepo,
     buildAiRepo,
     buildContextSvc,
+    tasks,
     evalsRepo,
   };
 }

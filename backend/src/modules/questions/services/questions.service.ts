@@ -8,6 +8,7 @@ import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { CreateQuestionDto } from '../dto/create-question.dto';
 import { classifyMode } from '../../evaluations/helpers/mode-classifier';
 import { Seniority as PrismaSeniority } from '@prisma/client';
+import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
 
 @Injectable()
 export class QuestionsService {
@@ -19,6 +20,7 @@ export class QuestionsService {
     private readonly sessionsService: SessionsService,
     private readonly snapshotsService: SnapshotsService,
     private readonly config: ConfigService,
+    private readonly tasks: BackgroundTaskTracker,
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
@@ -116,7 +118,10 @@ export class QuestionsService {
         'Scheduling per-session disk cleanup.',
     );
     for (const sid of deletedIds) {
-      void this.sessionsService.cleanupArtifacts(sid);
+      this.tasks.track(
+        this.sessionsService.cleanupArtifacts(sid),
+        `cleanupArtifacts(${sid})`,
+      );
     }
     return { ok: true, deletedSessions: deletedIds.length };
   }

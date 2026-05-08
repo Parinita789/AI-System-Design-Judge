@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { CommonModule } from './common/common.module';
 import { DatabaseModule } from './database/database.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { SnapshotsModule } from './modules/snapshots/snapshots.module';
@@ -17,6 +18,7 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    CommonModule,
     DatabaseModule,
     LlmModule,
     ArtifactsModule,

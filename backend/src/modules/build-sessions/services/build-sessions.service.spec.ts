@@ -36,6 +36,12 @@ function makeEvalsRepo(overrides: Partial<{ findBySession: jest.Mock }> = {}) {
   };
 }
 
+function makeTasks() {
+  return {
+    track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
+  };
+}
+
 describe('BuildSessionsService.startBuildPhase', () => {
   it('throws NotFoundException when the session does not exist', async () => {
     const prisma = makePrisma();
@@ -43,7 +49,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
     const tokens = { mintForSession: jest.fn() };
     const events = makeEvents();
     const ai = makeAi();
-    const svc = new BuildSessionsService(prisma as never, tokens as never, events as never, ai as never, makeOrchestrator() as never, makeEvalsRepo() as never);
+    const svc = new BuildSessionsService(prisma as never, tokens as never, events as never, ai as never, makeOrchestrator() as never, makeEvalsRepo() as never, makeTasks() as never);
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(NotFoundException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
@@ -63,6 +69,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
@@ -83,6 +90,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
@@ -109,6 +117,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     await expect(svc.startBuildPhase(SID)).resolves.toBe(minted);
     expect(tokens.mintForSession).toHaveBeenCalledWith(SID);
@@ -126,6 +135,7 @@ describe('BuildSessionsService.finishBuildPhase', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     await expect(svc.finishBuildPhase(SID)).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.session.update).not.toHaveBeenCalled();
@@ -146,6 +156,7 @@ describe('BuildSessionsService.finishBuildPhase', () => {
       makeAi() as never,
       orchestrator as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
@@ -173,6 +184,7 @@ describe('BuildSessionsService.finishBuildPhase', () => {
       makeAi() as never,
       orchestrator as never,
       evalsRepo as never,
+      makeTasks() as never,
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
@@ -197,6 +209,7 @@ describe('BuildSessionsService.finishBuildPhase', () => {
       makeAi() as never,
       orchestrator as never,
       evalsRepo as never,
+      makeTasks() as never,
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
@@ -215,6 +228,7 @@ describe('BuildSessionsService.insertEvents', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     const batch = [
       { filePath: 'a.ts', action: 'created' as const, occurredAt: '2026-05-07T00:00:00.000Z' },
@@ -235,6 +249,7 @@ describe('BuildSessionsService.insertAiInteractions', () => {
       ai as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     const batch = [
       {
@@ -263,6 +278,7 @@ describe('BuildSessionsService.eventsSummary', () => {
       makeAi() as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     await expect(svc.eventsSummary(SID)).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -291,6 +307,7 @@ describe('BuildSessionsService.eventsSummary', () => {
       ai as never,
       makeOrchestrator() as never,
       makeEvalsRepo() as never,
+      makeTasks() as never,
     );
     const out = await svc.eventsSummary(SID);
     expect(out).toEqual({

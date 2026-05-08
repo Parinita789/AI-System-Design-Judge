@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
+import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
 
 // buildTokenHash is intentionally stripped at the repository — it
 // must never reach the API. The service surfaces the redacted shape.
@@ -26,6 +27,7 @@ export class SessionsService {
     @Inject(forwardRef(() => EvaluationsService))
     private readonly evaluationsService: EvaluationsService,
     private readonly config: ConfigService,
+    private readonly tasks: BackgroundTaskTracker,
   ) {}
 
   async get(sessionId: string) {
@@ -79,7 +81,7 @@ export class SessionsService {
     if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
     await this.sessionsRepository.deleteById(sessionId);
     this.logger.log(`Session ${sessionId} deleted (DB row + cascades). Scheduling disk cleanup.`);
-    void this.cleanupArtifacts(sessionId);
+    this.tasks.track(this.cleanupArtifacts(sessionId), `cleanupArtifacts(${sessionId})`);
     return { ok: true };
   }
 

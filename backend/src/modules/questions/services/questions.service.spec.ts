@@ -23,6 +23,10 @@ describe('QuestionsService', () => {
   const env: Record<string, string | undefined> = {};
   const config = { get: jest.fn((k: string) => env[k]) };
 
+  const tasks = {
+    track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     for (const k of Object.keys(env)) delete env[k];
@@ -32,6 +36,7 @@ describe('QuestionsService', () => {
       sessionsService as never,
       snapshots as never,
       config as never,
+      tasks as never,
     );
   });
 
