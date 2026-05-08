@@ -29,6 +29,7 @@ function makeInput(...gaps: ReturnType<typeof gap>[]): SignalMentorInput {
     feedbackText: 'overall: ok',
     score: 3.2,
     seniority: 'mid',
+    phase: 'plan',
     sessionId: 'sid-1',
     evaluationId: 'eid-1',
   };

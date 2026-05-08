@@ -4,10 +4,12 @@ import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { EvaluationsRepository } from '../../evaluations/repositories/evaluations.repository';
 import { RubricLoaderService } from '../../evaluations/services/rubric-loader.service';
+import { BuildContextService } from '../../evaluations/services/build-context.service';
 import { gapSignalIds } from '../../evaluations/helpers/gap-signals';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { SignalResult } from '../../evaluations/types/evaluation.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import { SignalMentorAgent } from '../agents/signal-mentor.agent';
 import { SignalMentorRepository } from '../repositories/signal-mentor.repository';
 import {
@@ -28,6 +30,7 @@ export class SignalMentorService {
     @Inject(forwardRef(() => SessionsService))
     private readonly sessionsService: SessionsService,
     private readonly snapshotsService: SnapshotsService,
+    private readonly buildContextSvc: BuildContextService,
     private readonly config: ConfigService,
   ) {}
 
@@ -42,13 +45,16 @@ export class SignalMentorService {
     const planMd =
       (latestSnap?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
+    const phase = evalRow.phase as Phase;
     const rubric = await this.rubricLoader.load(
       session.question.rubricVersion,
-      'plan',
+      phase,
       session.question.mode ?? undefined,
       session.seniority ?? undefined,
     );
     const signalResults = evalRow.signalResults as unknown as Record<string, SignalResult>;
+    const buildContext =
+      phase === 'build' ? await this.buildContextSvc.load(evalRow.sessionId, session) : undefined;
 
     const ids = gapSignalIds(rubric, signalResults);
 
@@ -90,6 +96,8 @@ export class SignalMentorService {
       feedbackText: evalRow.feedbackText,
       score: Number(evalRow.score),
       seniority: session.seniority ?? null,
+      phase,
+      buildContext,
       sessionId: evalRow.sessionId,
       evaluationId,
       ...(model ? { model } : {}),

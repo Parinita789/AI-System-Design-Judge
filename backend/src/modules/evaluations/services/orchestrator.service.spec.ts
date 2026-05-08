@@ -69,6 +69,44 @@ function makeOrchestrator(deps: {
   const signalMentorService = { generate: jest.fn().mockResolvedValue(undefined) };
   const buildEventsRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.events ?? []) };
   const buildAiRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.aiTurns ?? []) };
+  const buildContextSvc = {
+    load: jest.fn().mockImplementation(async (_sid, session) => {
+      // Mirror the real service shape: walk the events ourselves so the
+      // spec exercises the dispatch wiring rather than re-mocking each
+      // BuildContext field.
+      const events = (deps.events ?? []) as Array<{
+        filePath: string;
+        action: 'created' | 'modified' | 'deleted';
+        content: string | null;
+        contentDiff: string | null;
+        occurredAt: Date;
+      }>;
+      const tree = events
+        .filter((e) => e.action !== 'deleted')
+        .map((e) => ({
+          path: e.filePath,
+          size: (e.content ?? '').length,
+          sha1: 'abc',
+        }));
+      return {
+        startedAt: session.buildStartedAt,
+        endedAt: session.buildEndedAt,
+        events: events.map((e) => ({
+          filePath: e.filePath,
+          action: e.action,
+          contentDiff: e.contentDiff,
+          occurredAt: e.occurredAt,
+        })),
+        finalTree: tree,
+        keyFileSnippets: events.map((e) => ({ path: e.filePath, content: e.content ?? '' })),
+        allFileContents: events.map((e) => ({ path: e.filePath, content: e.content ?? '' })),
+        aiTurns: (deps.aiTurns ?? []).map((t: Record<string, unknown>) => ({
+          ...t,
+          occurredAt: t.occurredAt instanceof Date ? t.occurredAt : new Date(String(t.occurredAt)),
+        })),
+      };
+    }),
+  };
 
   const svc = new OrchestratorService(
     sessionsService as never,
@@ -80,8 +118,7 @@ function makeOrchestrator(deps: {
     config as never,
     mentorService as never,
     signalMentorService as never,
-    buildEventsRepo as never,
-    buildAiRepo as never,
+    buildContextSvc as never,
   );
 
   return {
@@ -92,6 +129,7 @@ function makeOrchestrator(deps: {
     signalMentorService,
     buildEventsRepo,
     buildAiRepo,
+    buildContextSvc,
     evalsRepo,
   };
 }
@@ -116,15 +154,15 @@ describe('OrchestratorService.run dispatch', () => {
     await expect(t.svc.run(SID, ['validate'])).rejects.toThrow(/validate agent not implemented/);
   });
 
-  it('only fires mentor + signal-mentor on plan-phase evals', async () => {
+  it('fires mentor + signal-mentor for both plan and build evals (Phase 5)', async () => {
     const t = makeOrchestrator({});
     await t.svc.run(SID, ['build']);
-    expect(t.mentorService.generate).not.toHaveBeenCalled();
-    expect(t.signalMentorService.generate).not.toHaveBeenCalled();
-
-    await t.svc.run(SID, ['plan']);
     expect(t.mentorService.generate).toHaveBeenCalledTimes(1);
     expect(t.signalMentorService.generate).toHaveBeenCalledTimes(1);
+
+    await t.svc.run(SID, ['plan']);
+    expect(t.mentorService.generate).toHaveBeenCalledTimes(2);
+    expect(t.signalMentorService.generate).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -173,7 +211,6 @@ describe('OrchestratorService.run buildContext population', () => {
   it('plan-phase calls do not load build artifacts (no DB calls to build repos)', async () => {
     const t = makeOrchestrator({});
     await t.svc.run(SID, ['plan']);
-    expect(t.buildEventsRepo.findAllForSession).not.toHaveBeenCalled();
-    expect(t.buildAiRepo.findAllForSession).not.toHaveBeenCalled();
+    expect(t.buildContextSvc.load).not.toHaveBeenCalled();
   });
 });

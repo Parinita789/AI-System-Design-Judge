@@ -5,10 +5,12 @@ import * as path from 'node:path';
 import { EvaluationsRepository } from '../../evaluations/repositories/evaluations.repository';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
+import { BuildContextService } from '../../evaluations/services/build-context.service';
 import { SignalResult } from '../../evaluations/types/evaluation.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import { MentorAgent } from '../agents/mentor.agent';
 import { MentorRepository } from '../repositories/mentor.repository';
-import { MentorInput, MentorResult } from '../types/mentor.types';
+import { CrossPhaseSummary, MentorInput, MentorResult } from '../types/mentor.types';
 
 @Injectable()
 export class MentorService {
@@ -21,6 +23,7 @@ export class MentorService {
     @Inject(forwardRef(() => SessionsService))
     private readonly sessionsService: SessionsService,
     private readonly snapshotsService: SnapshotsService,
+    private readonly buildContextSvc: BuildContextService,
     private readonly config: ConfigService,
   ) {}
 
@@ -39,6 +42,11 @@ export class MentorService {
     const planMd =
       (latestSnap?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
+    const phase = evalRow.phase as Phase;
+    const buildContext =
+      phase === 'build' ? await this.buildContextSvc.load(evalRow.sessionId, session) : undefined;
+    const crossPhase = await this.loadCrossPhaseSummary(evalRow.sessionId, evaluationId, phase);
+
     const input: MentorInput = {
       question: session.question.prompt,
       planMd,
@@ -47,6 +55,9 @@ export class MentorService {
       topActionableItems: (evalRow.topActionableItems as unknown as string[]) ?? [],
       score: Number(evalRow.score),
       seniority: session.seniority ?? null,
+      phase,
+      buildContext,
+      crossPhase,
       sessionId: evalRow.sessionId,
       evaluationId,
       ...(model ? { model } : {}),
@@ -119,5 +130,42 @@ export class MentorService {
     this.logger.log(
       `Mentor artifact persisted to disk: ${promptPath} + ${responsePath}`,
     );
+  }
+
+  // Pulls the most-recent eval for the OTHER phase, if any, so the mentor
+  // prompt can connect plan strengths to build execution and vice versa.
+  // Returns undefined when no cross-phase eval exists.
+  private async loadCrossPhaseSummary(
+    sessionId: string,
+    selfEvaluationId: string,
+    selfPhase: Phase,
+  ): Promise<CrossPhaseSummary | undefined> {
+    const otherPhase: Phase = selfPhase === 'plan' ? 'build' : 'plan';
+    const all = await this.evalRepo.findBySession(sessionId);
+    const other = all.find((e) => e.phase === otherPhase && e.id !== selfEvaluationId);
+    if (!other) return undefined;
+
+    const signals = (other.signalResults ?? {}) as unknown as Record<string, SignalResult>;
+    // The mentor prompt only needs a few fired signals as anchors —
+    // pick at most 5 hits + 2 fired bad signals for context.
+    const fired: CrossPhaseSummary['topSignalsFired'] = [];
+    for (const [id, sig] of Object.entries(signals)) {
+      if (sig.result === 'hit' || sig.result === 'partial') {
+        fired.push({
+          id,
+          polarity: 'good',
+          result: sig.result,
+          evidence: sig.evidence ?? '',
+        });
+      }
+    }
+    const slim = fired.slice(0, 5);
+
+    return {
+      phase: otherPhase,
+      score: Number(other.score),
+      feedbackText: other.feedbackText ?? '',
+      topSignalsFired: slim,
+    };
   }
 }

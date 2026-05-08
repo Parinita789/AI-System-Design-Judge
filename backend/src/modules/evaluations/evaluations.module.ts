@@ -4,6 +4,7 @@ import { RubricsController } from './handlers/rubrics.controller';
 import { EvaluationsService } from './services/evaluations.service';
 import { EvaluationsRepository } from './repositories/evaluations.repository';
 import { OrchestratorService } from './services/orchestrator.service';
+import { BuildContextService } from './services/build-context.service';
 import { RubricLoaderService } from './services/rubric-loader.service';
 import { PlanAgent } from './agents/plan.agent';
 import { BuildAgent } from './agents/build.agent';
@@ -35,6 +36,7 @@ import { BuildSessionsModule } from '../build-sessions/build-sessions.module';
     EvaluationsService,
     EvaluationsRepository,
     OrchestratorService,
+    BuildContextService,
     RubricLoaderService,
     PlanAgent,
     BuildAgent,
@@ -47,6 +49,7 @@ import { BuildSessionsModule } from '../build-sessions/build-sessions.module';
     EvaluationsRepository,
     RubricLoaderService,
     OrchestratorService,
+    BuildContextService,
   ],
 })
 export class EvaluationsModule {}

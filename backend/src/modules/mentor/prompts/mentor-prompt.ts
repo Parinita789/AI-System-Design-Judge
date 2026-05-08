@@ -1,4 +1,5 @@
 import { SystemBlock } from '../../llm/types/llm.types';
+import { Phase } from '../../phase-tagger/types/phase.types';
 import { MentorInput } from '../types/mentor.types';
 
 export interface BuiltMentorPrompt {
@@ -10,7 +11,7 @@ export function buildMentorPrompt(input: MentorInput): BuiltMentorPrompt {
   const seniorityLabel = input.seniority ?? 'engineer';
   return {
     systemBlocks: [
-      { text: renderPersonaSystemBlock(seniorityLabel), cacheable: true },
+      { text: renderPersonaSystemBlock(seniorityLabel, input.phase), cacheable: true },
       { text: `## Session question\n${input.question}`, cacheable: true },
     ],
     userMessage: renderUserPayload(input),
@@ -21,11 +22,21 @@ export function flattenForAudit(p: BuiltMentorPrompt): string {
   return p.systemBlocks.map((b) => b.text).join('\n\n') + '\n\n---\n\n' + p.userMessage;
 }
 
-function renderPersonaSystemBlock(seniorityLabel: string): string {
-  return `You are a senior staff engineer mentoring a junior engineer on system
-design. The ${seniorityLabel}-level engineer just produced a plan.md for a
+function renderPersonaSystemBlock(seniorityLabel: string, phase: Phase): string {
+  const phaseOpener =
+    phase === 'plan'
+      ? `The ${seniorityLabel}-level engineer just produced a plan.md for a
 system design exercise. A separate evaluator has already scored their
-plan against a rubric and produced structured signal-by-signal judgments.
+plan against a rubric and produced structured signal-by-signal judgments.`
+      : `The ${seniorityLabel}-level engineer just finished the build phase
+of a system design exercise — they ran a watcher while implementing
+the plan, and a separate evaluator has scored the captured artifacts
+(file events, the reconstructed final tree, and Claude Code conversation
+turns) against a build-phase rubric. The candidate's plan.md is also
+available for cross-reference; treat it as the contract the build was
+judged against.`;
+  return `You are a senior staff engineer mentoring a junior engineer on system
+design. ${phaseOpener}
 
 Your job is **not to re-evaluate**. Your job is to translate the
 evaluation into teaching that builds the junior's intuition for next
@@ -173,9 +184,14 @@ function renderUserPayload(input: MentorInput): string {
     `## Candidate's plan.md\n${input.planMd && input.planMd.trim() ? input.planMd : '(empty)'}`,
   );
 
-  parts.push(`## Evaluator's score: ${input.score.toFixed(2)} / 5`);
+  if (input.phase === 'build' && input.buildContext) {
+    parts.push(renderBuildArtifactsBlock(input.buildContext));
+  }
 
-  // Per-signal evidence — ground truth for the mentor.
+  parts.push(
+    `## Evaluator's score: ${input.score.toFixed(2)} / 5 (${input.phase} phase)`,
+  );
+
   const signalEntries = Object.entries(input.signalResults);
   if (signalEntries.length > 0) {
     const block = signalEntries
@@ -197,5 +213,91 @@ function renderUserPayload(input: MentorInput): string {
     );
   }
 
+  if (input.crossPhase) {
+    parts.push(renderCrossPhaseBlock(input.crossPhase));
+  }
+
   return parts.join('\n\n');
+}
+
+function renderBuildArtifactsBlock(ctx: NonNullable<MentorInput['buildContext']>): string {
+  const dur =
+    ctx.startedAt && ctx.endedAt
+      ? Math.max(0, Math.round((ctx.endedAt.getTime() - ctx.startedAt.getTime()) / 60_000))
+      : null;
+  const aiSessions = new Set(ctx.aiTurns.map((t) => t.externalSessionId)).size;
+  const lines = [
+    `Duration: ${dur === null ? 'unknown' : `${dur} minute(s)`}`,
+    `Captured: ${ctx.events.length} file event(s) across ${ctx.finalTree.length} surviving file(s); ` +
+      `${ctx.aiTurns.length} AI conversation turn(s) across ${aiSessions} Claude Code session(s).`,
+  ];
+  const summary = lines.join('\n');
+
+  const treeBlock =
+    ctx.finalTree.length === 0
+      ? '(no files survived the build)'
+      : ctx.finalTree
+          .map((f) => `${f.path} | ${f.size} bytes | ${f.sha1.slice(0, 12)}`)
+          .join('\n');
+
+  const snippetsBlock =
+    ctx.keyFileSnippets.length === 0
+      ? '(none)'
+      : ctx.keyFileSnippets
+          .map((s) => `### ${s.path}\n\`\`\`\n${s.content}\n\`\`\``)
+          .join('\n\n');
+
+  const aiBlock =
+    ctx.aiTurns.length === 0
+      ? '(no Claude Code turns captured)'
+      : ctx.aiTurns
+          .map((t) => {
+            const head = `[${t.occurredAt.toISOString()}] (${t.externalSessionId.slice(0, 8)} #${t.turnIndex}) ${t.role}`;
+            const body =
+              t.text && t.text.trim()
+                ? t.text
+                : t.toolName
+                  ? `tool: ${t.toolName}` +
+                    (t.toolInputSummary ? ` input=${t.toolInputSummary}` : '') +
+                    (t.toolResultSummary ? ` result=${t.toolResultSummary}` : '')
+                  : '(empty turn)';
+            return `${head}\n${body}`;
+          })
+          .join('\n\n');
+
+  return `## Build phase artifacts (the candidate's actual implementation)
+### Build summary
+${summary}
+
+### Final file tree
+${treeBlock}
+
+### Key file snippets (highest-churn files; capped per file)
+${snippetsBlock}
+
+### AI conversation turns (chronological, capped)
+${aiBlock}`;
+}
+
+function renderCrossPhaseBlock(cross: NonNullable<MentorInput['crossPhase']>): string {
+  const lines = [
+    `## Cross-phase context — ${cross.phase} phase result for the same session`,
+    `Score: ${cross.score.toFixed(2)} / 5`,
+  ];
+  if (cross.feedbackText) {
+    lines.push(`Evaluator's feedback prose:\n${cross.feedbackText}`);
+  }
+  if (cross.topSignalsFired.length > 0) {
+    const sigLines = cross.topSignalsFired
+      .map(
+        (s) =>
+          `- ${s.id} (${s.polarity}, ${s.result})${s.evidence ? ` — "${s.evidence.slice(0, 200)}"` : ''}`,
+      )
+      .join('\n');
+    lines.push(`Top fired signals from the ${cross.phase} phase:\n${sigLines}`);
+  }
+  lines.push(
+    `Use this section to connect the two phases. In Section 1 (what you got right), prefer one strength from each phase when both have something to celebrate. In Section 3 (defensible decision), highlight a build-time choice if one stands out, otherwise a plan-time choice.`,
+  );
+  return lines.join('\n\n');
 }

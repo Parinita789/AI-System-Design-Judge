@@ -292,7 +292,6 @@ export function SessionResultsPage() {
             isLatest={true}
             onShowLatest={() => undefined}
             phaseLabel="Build"
-            signalMentorEnabled={false}
           />
         </section>
       )}
