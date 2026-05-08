@@ -40,7 +40,7 @@ export class MentorAgent {
         system: built.systemBlocks,
         maxTokens: AGENTS_CONFIG.mentorAgent.maxTokens,
         temperature: 0,
-        ...(input.model ? { model: input.model } : {}),
+        model: input.model ?? AGENTS_CONFIG.mentorAgent.defaultModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

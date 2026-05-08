@@ -51,7 +51,7 @@ export class SignalMentorAgent {
         ...(tool
           ? { tools: [tool], toolChoice: { type: 'tool', name: SUBMIT_ANNOTATIONS_TOOL_NAME } }
           : {}),
-        ...(input.model ? { model: input.model } : {}),
+        model: input.model ?? AGENTS_CONFIG.signalMentorAgent.defaultModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

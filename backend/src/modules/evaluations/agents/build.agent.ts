@@ -66,7 +66,7 @@ export class BuildAgent extends BasePhaseAgent {
               toolChoice: { type: 'tool', name: SUBMIT_BUILD_EVAL_TOOL_NAME },
             }
           : {}),
-        ...(input.model ? { model: input.model } : {}),
+        model: input.model ?? AGENTS_CONFIG.buildAgent.defaultModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);

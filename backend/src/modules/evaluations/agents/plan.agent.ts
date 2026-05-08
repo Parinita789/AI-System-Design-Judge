@@ -74,7 +74,7 @@ export class PlanAgent extends BasePhaseAgent {
               toolChoice: { type: 'tool', name: SUBMIT_EVAL_TOOL_NAME },
             }
           : {}),
-        ...(input.model ? { model: input.model } : {}),
+        model: input.model ?? AGENTS_CONFIG.planAgent.defaultModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);
