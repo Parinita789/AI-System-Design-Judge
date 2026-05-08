@@ -9,8 +9,8 @@ import {
   SUBMIT_ANNOTATIONS_TOOL_NAME,
 } from '../prompts/signal-mentor-prompt';
 import { SignalMentorInput, SignalMentorResult } from '../types/signal-mentor.types';
+import { AGENTS_CONFIG } from '../../evaluations/agents/agents.config';
 
-const SIGNAL_MENTOR_AGENT_MAX_TOKENS = 4096;
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
@@ -46,7 +46,7 @@ export class SignalMentorAgent {
       [{ role: ChatRole.User, content: built.userMessage }],
       {
         system: built.systemBlocks,
-        maxTokens: SIGNAL_MENTOR_AGENT_MAX_TOKENS,
+        maxTokens: AGENTS_CONFIG.signalMentorAgent.maxTokens,
         temperature: 0,
         ...(tool
           ? { tools: [tool], toolChoice: { type: 'tool', name: SUBMIT_ANNOTATIONS_TOOL_NAME } }

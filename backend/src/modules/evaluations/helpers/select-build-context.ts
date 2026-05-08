@@ -1,7 +1,8 @@
 import { BuildContext } from '../types/evaluation.types';
+import { AGENTS_CONFIG } from '../agents/agents.config';
 
-const TOP_KEY_FILES = 5;
-const KEY_FILE_MAX_CHARS = 4000;
+const TOP_KEY_FILES = AGENTS_CONFIG.buildContext.topKeyFiles;
+const KEY_FILE_MAX_CHARS = AGENTS_CONFIG.buildContext.keyFileMaxChars;
 const RECENT_AI_TURNS = 40;
 const AI_TEXT_CAP = 2000;
 

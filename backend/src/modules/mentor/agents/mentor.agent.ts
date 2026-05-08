@@ -4,8 +4,8 @@ import { LlmService } from '../../llm/services/llm.service';
 import { truncatePlanMd } from '../../evaluations/helpers/truncate-plan-md';
 import { buildMentorPrompt, flattenForAudit } from '../prompts/mentor-prompt';
 import { MentorInput, MentorResult } from '../types/mentor.types';
+import { AGENTS_CONFIG } from '../../evaluations/agents/agents.config';
 
-const MENTOR_AGENT_MAX_TOKENS = 4096;
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
@@ -38,7 +38,7 @@ export class MentorAgent {
       [{ role: ChatRole.User, content: built.userMessage }],
       {
         system: built.systemBlocks,
-        maxTokens: MENTOR_AGENT_MAX_TOKENS,
+        maxTokens: AGENTS_CONFIG.mentorAgent.maxTokens,
         temperature: 0,
         ...(input.model ? { model: input.model } : {}),
       },

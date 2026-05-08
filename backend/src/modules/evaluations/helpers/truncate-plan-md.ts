@@ -1,5 +1,7 @@
 
-export const DEFAULT_PLAN_MD_CAP = 50_000;
+import { AGENTS_CONFIG } from '../agents/agents.config';
+
+export const DEFAULT_PLAN_MD_CAP = AGENTS_CONFIG.truncation.planMdCapChars;
 
 export interface TruncationResult {
   text: string;

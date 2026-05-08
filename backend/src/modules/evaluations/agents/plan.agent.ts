@@ -13,8 +13,8 @@ import { validateEvalToolArgs } from '../validators/validate-eval-tool-args';
 import { validateEvidence } from '../validators/evidence-validator';
 import { computeScore } from '../services/score-computer';
 import { truncatePlanMd } from '../helpers/truncate-plan-md';
+import { AGENTS_CONFIG } from './agents.config';
 
-const PLAN_AGENT_MAX_TOKENS = 4096;
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
@@ -66,7 +66,7 @@ export class PlanAgent extends BasePhaseAgent {
       [{ role: ChatRole.User, content: userMessage }],
       {
         system: systemBlocks,
-        maxTokens: PLAN_AGENT_MAX_TOKENS,
+        maxTokens: AGENTS_CONFIG.planAgent.maxTokens,
         temperature: 0,
         ...(tool
           ? {
