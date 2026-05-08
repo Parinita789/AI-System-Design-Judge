@@ -1,5 +1,5 @@
 import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
-import { Mode, Seniority } from '../../evaluations/types/rubric.types';
+import { QuestionKind, Seniority } from '../../evaluations/types/rubric.types';
 
 export class CreateQuestionDto {
   @IsString()
@@ -7,8 +7,8 @@ export class CreateQuestionDto {
   prompt!: string;
 
   @IsOptional()
-  @IsIn(['build', 'design'])
-  mode?: Mode;
+  @IsIn(['traditional_design', 'agentic_design', 'agentic_build'])
+  kind?: QuestionKind;
 
   @IsOptional()
   @IsIn(['junior', 'mid', 'senior', 'staff'])

@@ -6,7 +6,7 @@ import { SessionsRepository } from '../../sessions/repositories/sessions.reposit
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { CreateQuestionDto } from '../dto/create-question.dto';
-import { classifyMode } from '../../evaluations/helpers/mode-classifier';
+import { classifyKind } from '../../evaluations/helpers/kind-classifier';
 import { Seniority as PrismaSeniority } from '@prisma/client';
 import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
 
@@ -24,17 +24,13 @@ export class QuestionsService {
   ) {}
 
   async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
-    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
-    const mode = rubricVersion === 'v1.0'
-      ? null
-      : (dto.mode ?? classifyMode(dto.prompt));
-    const seniority: PrismaSeniority | null = rubricVersion === 'v1.0'
-      ? null
-      : (dto.seniority ?? 'senior');
+    const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v2.0';
+    const kind = dto.kind ?? classifyKind(dto.prompt);
+    const seniority: PrismaSeniority = dto.seniority ?? 'senior';
     const question = await this.questionsRepository.create({
       prompt: dto.prompt,
       rubricVersion,
-      mode,
+      kind,
     });
     const session = await this.sessionsRepository.create({
       questionId: question.id,

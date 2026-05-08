@@ -1,8 +1,8 @@
 schema_version: 2
 rubric_version: v2.0
 phase: build
-mode: build
-phase_name: "Build (Build mode)"
+kind: agentic_build
+phase_name: "Build (Agentic Build)"
 extends: build.shared.yaml
 
 goal: |

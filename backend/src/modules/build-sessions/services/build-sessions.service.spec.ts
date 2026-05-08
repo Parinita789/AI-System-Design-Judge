@@ -96,12 +96,13 @@ describe('BuildSessionsService.startBuildPhase', () => {
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
 
-  it('mints a token on a session with no prior build', async () => {
+  it('mints a token on an agentic_build session with no prior build', async () => {
     const prisma = makePrisma();
     prisma.session.findUnique.mockResolvedValue({
       id: SID,
       status: 'completed',
       buildEndedAt: null,
+      question: { kind: 'agentic_build' },
     });
     const minted = {
       token: `${SID}.secret`,
@@ -121,6 +122,28 @@ describe('BuildSessionsService.startBuildPhase', () => {
     );
     await expect(svc.startBuildPhase(SID)).resolves.toBe(minted);
     expect(tokens.mintForSession).toHaveBeenCalledWith(SID);
+  });
+
+  it('rejects with 409 when the question kind is not agentic_build', async () => {
+    const prisma = makePrisma();
+    prisma.session.findUnique.mockResolvedValue({
+      id: SID,
+      status: 'completed',
+      buildEndedAt: null,
+      question: { kind: 'traditional_design' },
+    });
+    const tokens = { mintForSession: jest.fn() };
+    const svc = new BuildSessionsService(
+      prisma as never,
+      tokens as never,
+      makeEvents() as never,
+      makeAi() as never,
+      makeOrchestrator() as never,
+      makeEvalsRepo() as never,
+      makeTasks() as never,
+    );
+    await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
+    expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
 });
 

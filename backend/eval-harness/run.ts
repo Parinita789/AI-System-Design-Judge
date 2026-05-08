@@ -101,7 +101,7 @@ function buildInput(fx: Fixture): PhaseEvalInput {
         response: h.response,
       })) ?? [],
     rubricVersion: fx.rubricVersion,
-    mode: fx.mode,
+    kind: fx.kind,
     seniority: fx.seniority ?? 'senior',
   };
   if (fx.phase === 'build') {
@@ -192,13 +192,13 @@ async function main(): Promise<void> {
     const rubricCache = new Map<string, ReadonlySet<string>>();
     for (const fx of fixtures) {
       const seniority = fx.seniority ?? 'senior';
-      const cacheKey = `${fx.rubricVersion}/${fx.phase}/${fx.mode ?? 'default'}/${seniority}`;
+      const cacheKey = `${fx.rubricVersion}/${fx.phase}/${fx.kind ?? 'default'}/${seniority}`;
       let ids = rubricCache.get(cacheKey);
       if (!ids) {
         const rubric = await rubricLoader.load(
           fx.rubricVersion,
           fx.phase as Phase,
-          fx.mode,
+          fx.kind,
           seniority,
         );
         ids = new Set(rubric.signals.map((s) => s.id));
@@ -228,7 +228,7 @@ async function main(): Promise<void> {
         const rubric = await rubricLoader.load(
           fx.rubricVersion,
           fx.phase as Phase,
-          fx.mode,
+          fx.kind,
           seniority,
         );
         const ids = gapSignalIds(rubric, out.signalResults);

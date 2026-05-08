@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as yaml from 'js-yaml';
 import { Phase } from '../../phase-tagger/types/phase.types';
 import {
-  Mode,
+  QuestionKind,
   Rubric,
   RubricAiUsage,
   RubricPassBar,
@@ -81,7 +81,7 @@ type RawVariantRubric = {
   schema_version: number;
   rubric_version: string;
   phase: Phase;
-  mode: Mode;
+  kind: QuestionKind;
   phase_name: string;
   extends?: string;
   goal: string;
@@ -109,18 +109,18 @@ export class RubricLoaderService {
   async load(
     version: string,
     phase: Phase,
-    mode?: Mode,
+    kind?: QuestionKind,
     seniority?: Seniority,
   ): Promise<Rubric> {
-    const cacheKey = `${version}/${phase}/${mode ?? 'default'}/${seniority ?? 'default'}`;
+    const cacheKey = `${version}/${phase}/${kind ?? 'default'}/${seniority ?? 'default'}`;
     const cached = this.cache.get(cacheKey);
     if (cached) return cached;
 
     const rubricDir = this.config.get<string>('rubric.dir') ?? './rubrics';
 
-    if (mode) {
+    if (kind) {
       const sharedPath = path.resolve(rubricDir, version, `${phase}.shared.yaml`);
-      const variantPath = path.resolve(rubricDir, version, `${phase}.${mode}.yaml`);
+      const variantPath = path.resolve(rubricDir, version, `${phase}.${kind}.yaml`);
       if (await fileExists(sharedPath)) {
         const shared = parseYaml<RawSharedRubric>(
           await fs.readFile(sharedPath, 'utf-8'),
@@ -263,7 +263,7 @@ export class RubricLoaderService {
       schemaVersion: variant.schema_version,
       rubricVersion: variant.rubric_version,
       phase: variant.phase,
-      mode: variant.mode,
+      kind: variant.kind,
       phaseName: variant.phase_name,
       goal: variant.goal,
       timeBounds: toTimeBounds(variant.time_bounds),

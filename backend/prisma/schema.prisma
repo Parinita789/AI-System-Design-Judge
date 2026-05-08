@@ -20,13 +20,15 @@ enum Phase {
   wrap
 }
 
-// Rubric variant for a question. v2.0 splits the plan rubric into two
-// variants — `build` for buildable problems (60-min sessions) and
-// `design` for production-scale design exercises. v1.0 questions stay
-// on `mode = null` and route through the legacy single-rubric path.
-enum Mode {
-  build
-  design
+// Three distinct question kinds, each with its own rubric:
+//   traditional_design — design-only, no build phase
+//   agentic_design     — design-only with AI/agent infra signals
+//   agentic_build      — 1-hour buildable, always agentic, plan + build
+// v1.0 questions stay on `kind = null` and route through legacy.
+enum QuestionKind {
+  traditional_design
+  agentic_design
+  agentic_build
 }
 
 // Seniority calibration for an attempt. Same Question can be retried at
@@ -40,11 +42,11 @@ enum Seniority {
 }
 
 model Question {
-  id            String   @id @default(uuid()) @db.Uuid
+  id            String        @id @default(uuid()) @db.Uuid
   prompt        String
-  rubricVersion String   @map("rubric_version")
-  mode          Mode?
-  createdAt     DateTime @default(now()) @map("created_at")
+  rubricVersion String        @map("rubric_version")
+  kind          QuestionKind
+  createdAt     DateTime      @default(now()) @map("created_at")
 
   sessions Session[]
 

@@ -41,59 +41,51 @@ describe('QuestionsService', () => {
   });
 
   describe('create', () => {
-    it('creates a Question + first Session in one shot, using configured rubric version', async () => {
-      env.RUBRIC_VERSION = 'v1.0';
-      questionsRepo.create.mockResolvedValue({ id: 'qid-1', prompt: 'X', rubricVersion: 'v1.0' });
+    it('creates a Question + first Session in one shot, defaulting kind to traditional_design', async () => {
+      env.RUBRIC_VERSION = 'v2.0';
+      questionsRepo.create.mockResolvedValue({ id: 'qid-1', prompt: 'X', rubricVersion: 'v2.0' });
       sessionsRepo.create.mockResolvedValue({ id: 'sid-1', questionId: 'qid-1' });
 
-      const result = await service.create({ prompt: 'X' });
+      const result = await service.create({ prompt: 'A short prompt.' });
 
       expect(questionsRepo.create).toHaveBeenCalledWith({
-        prompt: 'X',
-        rubricVersion: 'v1.0',
-        mode: null,
+        prompt: 'A short prompt.',
+        rubricVersion: 'v2.0',
+        kind: 'traditional_design',
       });
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
-        seniority: null,
+        seniority: 'senior',
       });
       expect(result.question.id).toBe('qid-1');
       expect(result.session.id).toBe('sid-1');
     });
 
-    it('falls back to v1.0 when RUBRIC_VERSION env is missing', async () => {
-      questionsRepo.create.mockResolvedValue({ id: 'q' });
-      sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'X' });
-      expect(questionsRepo.create.mock.calls[0][0].rubricVersion).toBe('v1.0');
-      expect(questionsRepo.create.mock.calls[0][0].mode).toBeNull();
-    });
-
-    it('auto-detects mode for v2.0+ questions when client did not pass one', async () => {
+    it('auto-detects agentic_design for prompts mentioning AI/LLM/agent vocab', async () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'Design a chat for 100M users.' });
-      expect(questionsRepo.create.mock.calls[0][0].mode).toBe('design');
+      await service.create({ prompt: 'Design a chat app with an LLM-based moderation layer.' });
+      expect(questionsRepo.create.mock.calls[0][0].kind).toBe('agentic_design');
     });
 
-    it('auto-detects build mode for prompts without production-scale signals', async () => {
+    it('auto-detects traditional_design for non-agentic prompts', async () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'Design a simple URL shortener.' });
-      expect(questionsRepo.create.mock.calls[0][0].mode).toBe('build');
+      await service.create({ prompt: 'Design a URL shortener for 10K req/s.' });
+      expect(questionsRepo.create.mock.calls[0][0].kind).toBe('traditional_design');
     });
 
-    it('honors the client-supplied mode override on v2.0', async () => {
+    it('honors the client-supplied kind override', async () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
       await service.create({
-        prompt: 'Design a chat for 100M users.',
-        mode: 'build',
+        prompt: 'Design a URL shortener for 10K req/s.',
+        kind: 'agentic_build',
       });
-      expect(questionsRepo.create.mock.calls[0][0].mode).toBe('build');
+      expect(questionsRepo.create.mock.calls[0][0].kind).toBe('agentic_build');
     });
 
     it('defaults seniority to "senior" on v2.0+ when client did not pass one', async () => {

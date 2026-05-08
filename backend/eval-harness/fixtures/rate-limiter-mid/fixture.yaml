@@ -1,7 +1,7 @@
 description: "Mid-quality rate limiter plan (build mode): scopes well, has a build sequence, but skips concrete validation and explicit AI strategy. Should score Average."
 question: "Design a token-bucket rate limiter for a multi-tenant API."
 rubricVersion: v2.0
-mode: build
+kind: traditional_design
 
 expectedScore:
   min: 2.5

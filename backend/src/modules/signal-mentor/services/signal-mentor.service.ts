@@ -49,7 +49,7 @@ export class SignalMentorService {
     const rubric = await this.rubricLoader.load(
       session.question.rubricVersion,
       phase,
-      session.question.mode ?? undefined,
+      session.question.kind ?? undefined,
       session.seniority ?? undefined,
     );
     const signalResults = evalRow.signalResults as unknown as Record<string, SignalResult>;

@@ -34,7 +34,12 @@ export class BuildSessionsService {
   async startBuildPhase(sessionId: string): Promise<MintedToken> {
     const session = await this.prisma.session.findUnique({
       where: { id: sessionId },
-      select: { id: true, status: true, buildEndedAt: true },
+      select: {
+        id: true,
+        status: true,
+        buildEndedAt: true,
+        question: { select: { kind: true } },
+      },
     });
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
     if (session.status === 'abandoned') {
@@ -45,6 +50,12 @@ export class BuildSessionsService {
     if (session.buildEndedAt) {
       throw new ConflictException(
         `Build phase for session ${sessionId} has already finished`,
+      );
+    }
+    if (session.question.kind !== 'agentic_build') {
+      throw new ConflictException(
+        `Session ${sessionId} belongs to a "${session.question.kind}" question; ` +
+          'only agentic_build questions have a build phase.',
       );
     }
     return this.tokens.mintForSession(sessionId);

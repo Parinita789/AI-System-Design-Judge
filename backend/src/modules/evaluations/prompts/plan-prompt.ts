@@ -75,41 +75,27 @@ Good modes: ${aiUsage.goodModes.join('; ')}
 Bad modes: ${aiUsage.badModes.join('; ')}`
     : '';
 
-  const modeOpener = rubric.mode
-    ? `## How to read this rubric (the ${rubric.mode} variant has already been chosen)
-You are evaluating a system-design plan in the **${rubric.mode}** variant
-of the v2.0 plan rubric:
-  - **build**  = small/buildable problem; candidate could realistically
-                 implement and verify in the same session.
-  - **design** = production-scale design exercise; candidate articulates,
-                 does not implement.
-The signals, weights, and anchors below already reflect ${rubric.mode}-mode
-expectations — score against them directly. Do not classify the question
-yourself; the routing was done at session creation time. Open the
-\`feedback\` field with one line confirming the variant
-(e.g. "${rubric.mode}: <one-sentence rationale tied to the question's scope>").`
-    : `## How to read this rubric (IMPORTANT — read before judging)
-
-This is a 1-hour session. Before scoring any signal, classify the question
-into one of two modes — your judgment depth depends on which:
-
-### Mode A — "buildable" (small, concrete problem, no large-scale NFRs)
-The question asks for something the candidate could realistically design
-AND build a working version of in ~1 hour.
-Expectations: build_sequence_planned and validation_plan_concrete should
-be concrete; failure_modes_articulated should name exercisable failures;
-a short-but-complete plan can score HIT across most signals.
-
-### Mode B — "design-only" (large-scale, distributed, infeasible to build in 1h)
-The question stipulates production-grade NFRs or a distributed system.
-Expectations: score articulation and reasoning, NOT execution evidence.
-Every signal description starts with "Plan articulates ..." — interpret
-literally. Question NFRs describe the TARGET system, not the validation
-bar. A 4–6 step build sequence is plenty; full DDL is not required.
-
-### How to use these modes
-State your mode classification at the top of \`feedback\`. If genuinely
-ambiguous, default to Mode B and note the ambiguity.`;
+  const kindOpener = rubric.kind === 'agentic_build'
+    ? `## How to read this rubric (agentic_build variant)
+This question is a 1-hour buildable agentic exercise. The candidate is
+expected to articulate a buildable contract — concrete build sequence,
+validation plan, AI delegation strategy, named test seams. Score
+against execution-readiness, not articulation depth alone.`
+    : rubric.kind === 'agentic_design'
+    ? `## How to read this rubric (agentic_design variant)
+This is a design-only exercise about a system whose core is an
+LLM/agent. Score articulation depth and agent-infra reasoning
+(inference cost, latency, output validation, provider failover,
+nondeterminism, observability, state). The candidate is not expected
+to build anything in this session.`
+    : rubric.kind === 'traditional_design'
+    ? `## How to read this rubric (traditional_design variant)
+This is a design-only exercise about a production-scale traditional
+system (URL shortener, log pipeline, rate limiter, etc.). Score
+articulation depth and scale-aware reasoning (capacity estimation,
+bottlenecks, sharding, replication, consistency). The candidate is
+not expected to build anything in this session.`
+    : '';
 
   const seniorityOpener = rubric.seniority
     ? `## Calibrate to the candidate's seniority: ${rubric.seniority}
@@ -134,34 +120,22 @@ Open the \`feedback\` field by acknowledging the seniority, e.g.
 
 Read the artifacts the user will provide and return a structured JSON evaluation matching the schema at the bottom of this prompt. Be specific and cite evidence from the artifacts. Do not invent content that isn't in the artifacts.
 
-${modeOpener}
+${kindOpener}
 
 ${seniorityOpener}
 
-### Feedback prose must align with the mode (IMPORTANT)
-The \`feedback\` and \`top_actions\` fields MUST be self-consistent with
-your mode classification. They are read by the candidate after the
-breakdown and they should not contradict it. Specifically:
+### Feedback prose must align with the kind
+For **traditional_design** and **agentic_design**, the candidate is
+not building. Do not criticize the plan for "no build sequence",
+"no validation plan", "missing load tests", or "no benchmarks" —
+those expectations belong to agentic_build only. If the design
+articulates the concept even briefly, that's enough; otherwise
+treat it as out-of-scope, not a gap. \`top_actions\` should be
+achievable and worthwhile within the same 1-hour design session.
 
-- In **Mode B**, do NOT criticize the plan for "no build sequence",
-  "no validation plan", "missing load tests", "no benchmarks", or
-  similar — those expectations don't apply to a 1-hour design exercise
-  on a production-scale problem. If the plan articulates the concept
-  even briefly, that's enough; if it doesn't, treat it as out-of-scope
-  rather than a gap.
-- In **Mode B**, do NOT criticize the plan for "no AI strategy" /
-  "missing AI usage section" UNLESS the question itself invokes AI,
-  LLMs, or agentic systems. For non-AI questions (URL shortener, log
-  pipeline, rate limiter, etc.), AI signals are not applicable —
-  silently omit them from feedback.
-- In **Mode A**, the above critiques ARE fair game when the plan
-  genuinely lacks them, since the candidate could realistically build
-  and test the system in 1 hour.
-- \`top_actions\` should only include actions that are achievable and
-  worthwhile within the same 1-hour design session. "Run a 10K req/s
-  load test" is NOT a valid action; "sketch how you'd validate at demo
-  scale" is. "Implement retry logic" is NOT valid; "name two failure
-  modes you'd handle vs punt" is.
+For **agentic_build**, the build-readiness critiques ARE fair game
+when the plan genuinely lacks them — the candidate is going to
+execute against this plan in the next 30-45 minutes.
 
 ## Phase goal
 ${rubric.goal}
@@ -238,37 +212,10 @@ counts toward signals like \`shape_and_seams\`, \`component_boundaries\`,
 \`interfaces_sketched\`, and \`data_model_committed\` — quote a node or
 edge by name in evidence when a diagram is what supports the signal.
 
-## Relevance gating (IMPORTANT — read before judging)
-Some signals only apply to questions in a specific domain. If a signal is
-domain-specific and the SESSION QUESTION does not invoke that domain, mark
-the signal "cannot_evaluate" with evidence "not applicable to this question
-(<one-sentence reason>)". Do NOT score it as "miss" — a missed signal
-implies the candidate had the chance to address it and didn't, which
-unfairly penalizes designs for an unrelated topic.
-
-### Hard rule: \`applies_to\`
-Each signal that has an \`applies_to: [...]\` tag (visible in the signal
-header above) is domain-restricted. Mark it "cannot_evaluate" UNLESS the
-SESSION QUESTION clearly belongs to one of the listed domains.
-
-- \`applies_to: agentic\` covers signals about agent infrastructure
-  (inference cost, agent latency, output validation, provider failover,
-  nondeterminism, agent observability, agent state). Mark these
-  "cannot_evaluate" for traditional system-design questions (URL
-  shortener, rate limiter, log pipeline, chat without LLM, ride-share
-  matching, payments ledger, news feed, etc.). Score them only when
-  the question explicitly involves LLM-driven agents, multi-agent
-  orchestration, or LLM tool-use as the core of the design.
-
-When a signal has no \`applies_to\` tag, it's universal — judge it
-normally.
-
-When in doubt about a non-tagged signal, prefer "miss" over
-"cannot_evaluate" — only skip when the question genuinely has no
-surface area for the signal.
-
-Aggregate scoring: skipped ("cannot_evaluate") signals are excluded
-from both earned and max totals so they do not change the score.
+When a signal genuinely has no surface area in the question, mark it
+"cannot_evaluate" rather than miss; otherwise prefer miss. Aggregate
+scoring: skipped ("cannot_evaluate") signals are excluded from both
+earned and max totals so they do not change the score.
 
 ${renderOutputBlock(rubric, useTools)}`;
 }
@@ -280,7 +227,7 @@ Submit your evaluation by calling the \`submit_evaluation\` tool. Every signal l
 
 For each signal, write \`reasoning\` first (your brief justification), then commit to \`result\` (one of "hit", "partial", "miss", "cannot_evaluate"), then quote \`evidence\` verbatim from plan.md or activity logs (≤500 chars). For "cannot_evaluate", evidence must explain why the signal is not applicable to this question.
 
-\`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
+\`feedback\` (≤3000 chars) is a SYNTHESIS — open with one line confirming the variant (e.g., "agentic_design: question is core-LLM with multi-turn dialog and stated 10K DAU."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
 \`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
 
@@ -291,7 +238,7 @@ Return ONLY a single valid JSON object. No prose. No markdown fences. No explana
 Every signal listed above (both good and bad) must appear as a key in the "signals" object with one of: "hit", "miss", "partial", "cannot_evaluate".
 "evidence" should quote or paraphrase the specific text from plan.md or activity logs that justifies your judgment (≤500 chars). For "cannot_evaluate", evidence must explain why the signal is not applicable to this question.
 
-\`feedback\` (≤3000 chars) is a SYNTHESIS — open with the mode classification (e.g., "Mode B (design-only): question stipulates 10K req/s and 200M URLs."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
+\`feedback\` (≤3000 chars) is a SYNTHESIS — open with one line confirming the variant (e.g., "agentic_design: question is core-LLM with multi-turn dialog and stated 10K DAU."), then explain the score in 2–4 themes (what the plan got right, what it missed, what the candidate should learn). Do NOT enumerate per-signal pass/fail in feedback — that's what \`signals[*].evidence\` is for.
 
 \`top_actions\` (≤5 items, each ≤200 chars) must be achievable in the same 1-hour design session. "Run a 10K req/s load test" is NOT valid; "sketch how you'd validate at demo scale" is.
 

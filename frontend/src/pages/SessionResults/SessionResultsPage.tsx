@@ -10,7 +10,7 @@ import { useSessionStore } from '@/store/sessionStore';
 import { ScoreBreakdown } from '@/components/ScoreBreakdown';
 import { EvaluationAudit, GapTopic, PhaseEvaluation, SignalResult } from '@/types/evaluation';
 import { Rubric, RubricSignal, WeightTier } from '@/types/rubric';
-import { QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
+import { QuestionKind, QuestionWithSessions, SENIORITIES, Seniority } from '@/types/question';
 import { computeCostUsd, formatCostUsd, formatLatency } from '@/lib/llm-cost';
 import { mentorService } from '@/services/mentor.service';
 import { signalMentorService } from '@/services/signalMentor.service';
@@ -111,20 +111,21 @@ export function SessionResultsPage() {
 
   const questionId = sessionQuery.data?.questionId;
   const rubricVersion = sessionQuery.data?.question.rubricVersion;
-  const rubricMode = sessionQuery.data?.question.mode ?? null;
+  const rubricKind = sessionQuery.data?.question.kind ?? null;
   const rubricSeniority = sessionQuery.data?.seniority ?? null;
+  const isAgenticBuild = rubricKind === 'agentic_build';
   const rubricQuery = useQuery({
-    queryKey: ['rubric', rubricVersion, 'plan', rubricMode, rubricSeniority],
+    queryKey: ['rubric', rubricVersion, 'plan', rubricKind, rubricSeniority],
     queryFn: () =>
-      rubricsService.get(rubricVersion!, 'plan', rubricMode, rubricSeniority),
+      rubricsService.get(rubricVersion!, 'plan', rubricKind, rubricSeniority),
     enabled: !!rubricVersion,
   });
 
   const buildRubricQuery = useQuery({
-    queryKey: ['rubric', rubricVersion, 'build', rubricMode, rubricSeniority],
+    queryKey: ['rubric', rubricVersion, 'build', rubricKind, rubricSeniority],
     queryFn: () =>
-      rubricsService.get(rubricVersion!, 'build', rubricMode, rubricSeniority),
-    enabled: !!rubricVersion,
+      rubricsService.get(rubricVersion!, 'build', rubricKind, rubricSeniority),
+    enabled: !!rubricVersion && isAgenticBuild,
   });
 
   const questionQuery = useQuery({
@@ -265,7 +266,7 @@ export function SessionResultsPage() {
           count={questionQuery.data?.sessions.length ?? 0}
           rubricVersion={formatRubricTag(
             session.question.rubricVersion,
-            session.question.mode,
+            session.question.kind,
             session.seniority,
           )}
           open={attemptsOpen}
@@ -316,9 +317,9 @@ export function SessionResultsPage() {
         />
       )}
 
-      {session.status === 'completed' && <BuildPhaseSection session={session} />}
+      {session.status === 'completed' && isAgenticBuild && <BuildPhaseSection session={session} />}
 
-      {session.status === 'completed' && buildEvals[0] && (
+      {session.status === 'completed' && isAgenticBuild && buildEvals[0] && (
         <section>
           <h3 className="text-xs font-medium text-gray-700 uppercase tracking-wide mb-2">
             Build evaluation
@@ -1426,11 +1427,11 @@ function TabButton({
 
 function formatRubricTag(
   version: string,
-  mode: 'build' | 'design' | null | undefined,
+  kind: QuestionKind | null | undefined,
   seniority: Seniority | null | undefined,
 ): string {
   const parts: string[] = [];
-  if (mode) parts.push(mode);
+  if (kind) parts.push(kind);
   if (seniority) parts.push(seniority);
   return parts.length ? `${version} (${parts.join(' / ')})` : version;
 }

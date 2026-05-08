@@ -2,7 +2,12 @@ import { Phase } from '../../phase-tagger/types/phase.types';
 
 export type SignalPolarity = 'good' | 'bad';
 export type WeightTier = 'high' | 'medium' | 'low';
-export type Mode = 'build' | 'design';
+export type QuestionKind = 'traditional_design' | 'agentic_design' | 'agentic_build';
+export const QUESTION_KINDS: readonly QuestionKind[] = [
+  'traditional_design',
+  'agentic_design',
+  'agentic_build',
+];
 export type Seniority = 'junior' | 'mid' | 'senior' | 'staff';
 export const SENIORITIES: readonly Seniority[] = ['junior', 'mid', 'senior', 'staff'];
 
@@ -62,7 +67,7 @@ export interface Rubric {
   schemaVersion: number;
   rubricVersion: string;
   phase: Phase;
-  mode?: Mode;
+  kind?: QuestionKind;
   seniority?: Seniority;
   phaseName: string;
   goal: string;

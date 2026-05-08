@@ -1,5 +1,5 @@
 import { Phase } from '../../phase-tagger/types/phase.types';
-import { Mode, Seniority } from './rubric.types';
+import { QuestionKind, Seniority } from './rubric.types';
 
 export interface PhaseEvalInput {
   session: {
@@ -21,7 +21,7 @@ export interface PhaseEvalInput {
     response: string;
   }>;
   rubricVersion: string;
-  mode?: Mode | null;
+  kind?: QuestionKind | null;
   seniority?: Seniority | null;
   model?: string;
   buildContext?: BuildContext;

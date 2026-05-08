@@ -1,9 +1,9 @@
 import { api } from './api';
-import { Mode, Question, QuestionWithSessions, Seniority } from '@/types/question';
+import { Question, QuestionKind, QuestionWithSessions, Seniority } from '@/types/question';
 import { Session } from '@/types/session';
 
 export const questionsService = {
-  create(data: { prompt: string; mode?: Mode; seniority?: Seniority }) {
+  create(data: { prompt: string; kind?: QuestionKind; seniority?: Seniority }) {
     return api
       .post<{ question: Question; session: Session }>('/questions', data)
       .then((r) => r.data);

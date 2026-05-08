@@ -1,7 +1,7 @@
 description: "Well-scoped URL shortener with capacity, data model, and validation. Should score Good."
 question: "Design a URL shortener for 10K req/s and 200M URLs."
 rubricVersion: v2.0
-mode: design
+kind: traditional_design
 
 expectedScore:
   min: 3.5

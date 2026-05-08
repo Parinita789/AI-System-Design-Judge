@@ -9,12 +9,12 @@ import {
   FixtureHint,
   FixturePhase,
   FixtureSeniority,
-  RubricMode,
+  RubricKind,
   SignalMode,
 } from './types';
 
 const VALID_MODES: SignalMode[] = ['hit', 'partial', 'miss', 'credited', 'skipped'];
-const VALID_RUBRIC_MODES: RubricMode[] = ['build', 'design'];
+const VALID_RUBRIC_KINDS: RubricKind[] = ['traditional_design', 'agentic_design', 'agentic_build'];
 const VALID_SENIORITIES: FixtureSeniority[] = ['junior', 'mid', 'senior', 'staff'];
 const VALID_PHASES: FixturePhase[] = ['plan', 'build'];
 
@@ -23,7 +23,7 @@ interface RawFixtureYaml {
   question?: string;
   rubricVersion?: string;
   phase?: string;
-  mode?: string;
+  kind?: string;
   seniority?: string;
   expectedScore?: { min?: number; max?: number };
   expectedSignals?: Partial<Record<string, string[]>>;
@@ -89,17 +89,17 @@ function loadOne(rootDir: string, name: string): Fixture {
     phase = raw.phase as FixturePhase;
   }
 
-  let mode: RubricMode | undefined;
-  if (raw.mode !== undefined) {
-    if (!VALID_RUBRIC_MODES.includes(raw.mode as RubricMode)) {
+  let kind: RubricKind | undefined;
+  if (raw.kind !== undefined) {
+    if (!VALID_RUBRIC_KINDS.includes(raw.kind as RubricKind)) {
       throw new Error(
-        `${name}: mode "${raw.mode}" must be one of: ${VALID_RUBRIC_MODES.join(', ')}`,
+        `${name}: kind "${raw.kind}" must be one of: ${VALID_RUBRIC_KINDS.join(', ')}`,
       );
     }
-    mode = raw.mode as RubricMode;
+    kind = raw.kind as RubricKind;
   } else if (rubricVersion !== 'v1.0') {
     throw new Error(
-      `${name}: mode is required when rubricVersion is "${rubricVersion}" (v2.0+ rubrics)`,
+      `${name}: kind is required when rubricVersion is "${rubricVersion}" (v2.0+ rubrics)`,
     );
   }
 
@@ -144,7 +144,7 @@ function loadOne(rootDir: string, name: string): Fixture {
     question,
     rubricVersion,
     phase,
-    mode,
+    kind,
     seniority,
     planMd: planMd.length > 0 ? planMd : null,
     expectedScore,

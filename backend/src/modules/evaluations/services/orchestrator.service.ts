@@ -75,7 +75,7 @@ export class OrchestratorService {
         response: h.response,
       })),
       rubricVersion,
-      mode: session.question.mode ?? null,
+      kind: session.question.kind ?? null,
       seniority: session.seniority ?? null,
       model: options?.model,
     };

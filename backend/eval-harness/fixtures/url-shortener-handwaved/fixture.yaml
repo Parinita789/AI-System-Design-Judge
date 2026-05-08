@@ -1,7 +1,7 @@
 description: "Hallucination trap: production-scale question + a plan that mentions scale concerns qualitatively but never derives capacity numbers or names a bottleneck. Bait the LLM into inventing evidence that the validator catches; observed downgrades dropped the score from a likely 3.5–4 to ~2."
 question: "Design a URL shortener for 200M URLs and 10K req/s peak."
 rubricVersion: v2.0
-mode: design
+kind: traditional_design
 seniority: senior
 
 # Post-validation band. The LLM emits a polished response but the

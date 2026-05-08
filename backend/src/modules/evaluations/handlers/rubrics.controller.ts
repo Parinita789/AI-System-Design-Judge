@@ -2,7 +2,7 @@ import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { RubricLoaderService } from '../services/rubric-loader.service';
 import { Phase } from '../../phase-tagger/types/phase.types';
-import { Mode, Seniority } from '../types/rubric.types';
+import { QuestionKind, Seniority } from '../types/rubric.types';
 
 @ApiTags('rubrics')
 @Controller('rubrics')
@@ -15,14 +15,18 @@ export class RubricsController {
     description:
       'Reads the YAML for `version`/`phase`, merges shared + variant for v2.0, and applies the per-signal `weight_by_seniority` map so callers see a single resolved `weight`. Used by the frontend to render the breakdown.',
   })
-  @ApiQuery({ name: 'mode', enum: ['build', 'design'], required: false })
+  @ApiQuery({
+    name: 'kind',
+    enum: ['traditional_design', 'agentic_design', 'agentic_build'],
+    required: false,
+  })
   @ApiQuery({ name: 'seniority', enum: ['junior', 'mid', 'senior', 'staff'], required: false })
   get(
     @Param('version') version: string,
     @Param('phase') phase: Phase,
-    @Query('mode') mode?: Mode,
+    @Query('kind') kind?: QuestionKind,
     @Query('seniority') seniority?: Seniority,
   ) {
-    return this.rubricLoader.load(version, phase, mode, seniority);
+    return this.rubricLoader.load(version, phase, kind, seniority);
   }
 }

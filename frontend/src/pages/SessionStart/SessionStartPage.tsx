@@ -3,39 +3,53 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { questionsService } from '@/services/questions.service';
 import { useSessionStore } from '@/store/sessionStore';
-import { Mode, Seniority, SENIORITIES } from '@/types/question';
+import {
+  QUESTION_KIND_LABELS,
+  QUESTION_KINDS,
+  QuestionKind,
+  SENIORITIES,
+  Seniority,
+} from '@/types/question';
 
 const MIN_PROMPT_LENGTH = 10;
 
-const PRODUCTION_SCALE_PATTERNS: RegExp[] = [
-  /\b\d+\s*[kmb]\b\s*(req|request|requests|qps|rps|tps|user|users|event|events|message|messages|connection|connections|eps|operations|ops)/i,
-  /\b\d+\s*(million|billion)\b/i,
-  /\b(distributed system|multi[- ]region|globally distributed|horizontal(ly)? scal|shard(ing|ed)?|geo[- ]?replicat)/i,
-];
-function classifyMode(prompt: string): Mode {
-  return PRODUCTION_SCALE_PATTERNS.some((re) => re.test(prompt)) ? 'design' : 'build';
+const AGENTIC_VOCAB = /\b(agent|agents|agentic|llm|llms|ai\s|ai-|tool[\s-]?use|chatbot|copilot|gpt|rag|retrieval[\s-]?augmented)\b/i;
+const BUILDABLE_VOCAB = /\b(build|implement|ship|prototype|in\s+(?:1|one)\s*hour|live\s*demo)\b/i;
+
+function classifyKind(prompt: string): QuestionKind {
+  const isAgentic = AGENTIC_VOCAB.test(prompt);
+  const isBuildable = BUILDABLE_VOCAB.test(prompt);
+  if (isAgentic && isBuildable) return 'agentic_build';
+  if (isAgentic) return 'agentic_design';
+  return 'traditional_design';
 }
+
+const KIND_DESCRIPTIONS: Record<QuestionKind, string> = {
+  traditional_design: 'Production-scale system, no LLM/agent. Plan only — no build phase.',
+  agentic_design: 'AI/agent system, design-only. Plan only — no build phase.',
+  agentic_build: '1-hour buildable agent. Plan + CLI-watched build phase.',
+};
 
 export function SessionStartPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setActive = useSessionStore((s) => s.setActive);
   const [prompt, setPrompt] = useState('');
-  const [userMode, setUserMode] = useState<Mode | null>(null);
+  const [userKind, setUserKind] = useState<QuestionKind | null>(null);
   const [seniority, setSeniority] = useState<Seniority>('senior');
 
   const trimmed = prompt.trim();
-  const inferredMode = useMemo(
-    () => (trimmed ? classifyMode(trimmed) : null),
+  const inferredKind = useMemo(
+    () => (trimmed ? classifyKind(trimmed) : null),
     [trimmed],
   );
-  const effectiveMode = userMode ?? inferredMode;
+  const effectiveKind = userKind ?? inferredKind;
 
   const mutation = useMutation({
-    mutationFn: (p: { prompt: string; mode: Mode | null; seniority: Seniority }) =>
+    mutationFn: (p: { prompt: string; kind: QuestionKind | null; seniority: Seniority }) =>
       questionsService.create({
         prompt: p.prompt,
-        ...(p.mode ? { mode: p.mode } : {}),
+        ...(p.kind ? { kind: p.kind } : {}),
         seniority: p.seniority,
       }),
     onSuccess: ({ session }) => {
@@ -51,7 +65,7 @@ export function SessionStartPage() {
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!canSubmit) return;
-    mutation.mutate({ prompt: trimmed, mode: effectiveMode, seniority });
+    mutation.mutate({ prompt: trimmed, kind: effectiveKind, seniority });
   };
 
   return (
@@ -81,13 +95,13 @@ export function SessionStartPage() {
           )}
         </label>
 
-        {effectiveMode && (
-          <ModeChip
-            inferred={inferredMode}
-            effective={effectiveMode}
-            isOverride={userMode !== null}
-            onPick={(m) => setUserMode(m)}
-            onClearOverride={() => setUserMode(null)}
+        {effectiveKind && (
+          <KindPicker
+            inferred={inferredKind}
+            effective={effectiveKind}
+            isOverride={userKind !== null}
+            onPick={(k) => setUserKind(k)}
+            onClearOverride={() => setUserKind(null)}
             disabled={mutation.isPending}
           />
         )}
@@ -116,12 +130,7 @@ export function SessionStartPage() {
   );
 }
 
-const MODE_LABEL: Record<Mode, string> = {
-  build: 'Buildable in this session',
-  design: 'Design at scale (interview)',
-};
-
-function ModeChip({
+function KindPicker({
   inferred,
   effective,
   isOverride,
@@ -129,50 +138,52 @@ function ModeChip({
   onClearOverride,
   disabled,
 }: {
-  inferred: Mode | null;
-  effective: Mode;
+  inferred: QuestionKind | null;
+  effective: QuestionKind;
   isOverride: boolean;
-  onPick: (m: Mode) => void;
+  onPick: (k: QuestionKind) => void;
   onClearOverride: () => void;
   disabled: boolean;
 }) {
-  const otherMode: Mode = effective === 'build' ? 'design' : 'build';
   return (
-    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs flex items-center gap-2 flex-wrap">
-      <span className="text-gray-600">
-        {isOverride ? 'Mode (overridden):' : 'Detected mode:'}
-      </span>
-      <span
-        className={`inline-block rounded border px-1.5 py-0.5 font-semibold uppercase tracking-wide ${
-          effective === 'build'
-            ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-            : 'bg-amber-100 text-amber-800 border-amber-300'
-        }`}
-      >
-        {effective}
-      </span>
-      <span className="text-gray-700">{MODE_LABEL[effective]}</span>
-      <span className="ml-auto flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => onPick(otherMode)}
-          disabled={disabled}
-          className="text-blue-600 hover:underline disabled:text-gray-400"
-        >
-          Use “{MODE_LABEL[otherMode]}” instead
-        </button>
-        {isOverride && inferred && (
+    <div className="rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-gray-600">
+          {isOverride ? 'Kind (overridden):' : 'Detected kind:'}
+        </span>
+        <span className="inline-block rounded border border-blue-300 bg-blue-100 text-blue-900 px-1.5 py-0.5 font-semibold uppercase tracking-wide">
+          {effective.replace(/_/g, ' ')}
+        </span>
+        <span className="text-gray-700">{KIND_DESCRIPTIONS[effective]}</span>
+        {isOverride && inferred && inferred !== effective && (
           <button
             type="button"
             onClick={onClearOverride}
             disabled={disabled}
-            className="text-gray-500 hover:text-gray-800 disabled:text-gray-300"
+            className="ml-auto text-gray-500 hover:text-gray-800 disabled:text-gray-300"
             title="Drop my override; auto-detect from the prompt"
           >
             (auto)
           </button>
         )}
-      </span>
+      </div>
+      <div className="flex flex-wrap gap-1">
+        {QUESTION_KINDS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onPick(k)}
+            disabled={disabled}
+            className={`rounded px-2 py-1 text-[11px] font-medium border transition-colors ${
+              k === effective
+                ? 'bg-blue-600 text-white border-blue-700'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+          >
+            {QUESTION_KIND_LABELS[k]}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

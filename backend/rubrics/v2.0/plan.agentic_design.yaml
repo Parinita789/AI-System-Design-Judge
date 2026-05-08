@@ -1,0 +1,386 @@
+schema_version: 2
+rubric_version: v2.0
+phase: plan
+kind: agentic_design
+phase_name: "Plan & Scope (Agentic Design)"
+extends: plan.shared.yaml
+
+goal: |
+  Convert the open-ended interview prompt into a written, scoped design
+  for a production-scale system: in/out, target NFRs, architectural
+  shape with seams, data model with scale-aware reasoning, capacity
+  estimates, named bottlenecks with mitigations, and a sketched (not
+  executed) validation strategy. The candidate is *designing*, not
+  building — articulation depth and reasoning quality matter more than
+  build mechanics.
+
+time_bounds:
+  target_min_minutes: 25
+  target_max_minutes: 45
+  flag_under_minutes: 15
+  flag_over_minutes: 60
+  note: |
+    Design mode targets a longer planning phase. There is no follow-up
+    build phase against this plan in the same session — the plan IS
+    the artifact.
+
+override_signals:
+  explicit_tradeoffs:
+    weight: high
+  clarification_evidence:
+    weight: high
+
+add_signals:
+  # ---------- Design-mode GOOD signals ----------
+
+  - id: shape_and_seams
+    polarity: good
+    weight: high
+    paired_with: shape_without_seams
+    description: |
+      Plan commits to a specific architectural shape AND names 2-3
+      seams where future scale would be added without rewriting. Each
+      seam ties to a target-scale concern stated in NFRs.
+    judge_notes: |
+      A seam is a boundary designed for future swap or extension.
+      "Layered monolith with repo interface for DB swap, sync->async
+      seam at the analytics writer, code-generation seam abstracted
+      behind nextCode()" passes. "Layered monolith" alone fails.
+    evidence_hint: "Quote the shape sentence and each named seam (with the NFR it ties to)."
+
+  - id: shape_without_seams
+    polarity: bad
+    weight: medium
+    paired_with: shape_and_seams
+    description: |
+      Architectural shape is committed but seams are absent or generic.
+    judge_notes: |
+      Seams are the architectural maturity signal — their absence is a
+      real gap in design mode.
+    evidence_hint: "Quote the shape sentence and note absent or generic seams."
+
+  - id: dual_scale_nfrs
+    polarity: good
+    weight: high
+    paired_with: scale_pretense
+    description: |
+      Plan distinguishes demo-scale (what the design will be sketched
+      against) from target-scale (what the architecture must grow into
+      without rewrite), with numeric targets for both.
+    judge_notes: |
+      Examples: "Demo: 100 RPS for the load test sketch; Target: 10K
+      RPS sustained, 50K peak" passes. A single scale claim fails.
+    evidence_hint: "Quote the NFR section."
+
+  - id: scale_pretense
+    polarity: bad
+    weight: medium
+    paired_with: dual_scale_nfrs
+    description: |
+      Plan claims production-grade scale will be built (not just
+      designed for) within the design exercise.
+    judge_notes: |
+      Statements like "system will handle 100k RPS" without
+      distinguishing architected-for vs built-for fires this.
+    evidence_hint: "Quote the scale claim that conflates demo and production."
+
+  - id: capacity_estimation
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan includes back-of-envelope capacity numbers — storage,
+      bandwidth, QPS — derived from the stated target scale, not
+      pulled out of thin air.
+    judge_notes: |
+      Examples: "200M URLs × 300 B avg = ~60 GB hot storage; 10K req/s
+      × 1 KB avg payload = ~10 MB/s ingress at peak" passes. "We'll
+      need a lot of storage" fails. The numbers don't have to be
+      precisely right — they have to be derived from stated inputs and
+      defensible.
+    evidence_hint: "Quote the capacity numbers and the derivation."
+
+  - id: bottleneck_identification
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: low
+      mid:    medium
+      senior: high
+      staff:  high
+    description: |
+      Plan names the system's primary bottleneck under target load and
+      proposes a specific mitigation. Bottleneck is concrete (a
+      component / read-path / write-path), not abstract.
+    judge_notes: |
+      Examples: "Hot-row analytics counter: mitigate with async queue
+      + periodic aggregation, not direct row updates"; "Read-fanout
+      on cache miss for popular slugs: mitigate with singleflight
+      coalescing in the cache layer". "Database might be slow" fails.
+    evidence_hint: "Quote the bottleneck + the mitigation."
+
+  - id: read_write_path_differentiation
+    polarity: good
+    weight: medium
+    description: |
+      Plan distinguishes the read path from the write path with
+      different design choices (caching, replication, indexing,
+      consistency requirements).
+    judge_notes: |
+      For systems with skewed read/write ratios this is essential. A
+      URL shortener with 20:1 read:write should treat the resolve path
+      and the create path differently. Symmetric treatment is a miss
+      when the ratio is asymmetric.
+    evidence_hint: "Quote the section that differentiates read from write."
+
+  - id: caching_strategy_articulated
+    polarity: good
+    weight: medium
+    description: |
+      If caching is in scope (most production-scale designs), plan
+      names the cache layer, what's cached, the eviction strategy,
+      and what happens on cache miss.
+    judge_notes: |
+      "Redis read-through cache for short_code -> long_url; LRU
+      eviction; singleflight on miss" passes. "Add a cache" fails.
+      cannot_evaluate if caching is genuinely out of scope (small
+      scale or stateless system).
+    evidence_hint: "Quote the cache section."
+
+  - id: consistency_model_chosen
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid:    low
+      senior: medium
+      staff:  high
+    description: |
+      Plan names the consistency model (strong, eventual, read-your-
+      writes, etc.) for at least one component where it matters, and
+      ties that choice to a stated requirement or trade-off.
+    judge_notes: |
+      "Click counts are eventually consistent (trade strict accuracy
+      for write throughput)" passes. "Strong consistency everywhere"
+      without justification fails the reasoning bar even if it's a
+      consistent answer.
+    evidence_hint: "Quote the consistency choice + the justification."
+
+  # ---------- Design-mode demoted-good companions for the bads ----------
+  - id: ai_strategy_explicit
+    polarity: good
+    weight: low
+    paired_with: ai_strategy_absent
+    description: |
+      (Demoted in design mode unless the question itself invokes AI.)
+      Plan articulates what will be delegated to AI vs.
+      candidate-written.
+    judge_notes: |
+      Low weight in design mode; effectively skipped on non-AI
+      questions via the relevance gate.
+    evidence_hint: "Quote the AI usage section."
+
+  - id: ai_strategy_absent
+    polarity: bad
+    weight: low
+    paired_with: ai_strategy_explicit
+    description: |
+      (Demoted in design mode unless the question itself invokes AI.)
+      plan.md doesn't articulate AI usage. The relevance gate
+      auto-skips this for non-AI questions.
+    judge_notes: |
+      Low weight; effectively skipped on non-AI questions.
+    evidence_hint: "Quote the section or note absence."
+
+  # ---------- Agent-infrastructure GOOD signals ----------
+  - id: inference_cost_articulated
+    polarity: good
+    weight: high
+    weight_by_seniority:
+      junior: medium
+      mid: high
+      senior: high
+      staff: high
+    description: |
+      Plan articulates per-request inference cost (tokens, dollars, or
+      a rough cost class) and how it scales with usage. At minimum:
+      which model tier, why that tier, and a back-of-envelope of the
+      dominant cost-per-action.
+    judge_notes: |
+      "Each query runs Sonnet at ~$0.02/call; at 1M DAU x 5
+      queries/day that's $100K/day — we cap free tier at 50/day and
+      route over-cap to Haiku" passes. "Will use Claude" fails. "We
+      accept that LLM costs are non-trivial" without numbers fails.
+      Cost reasoning is the single most overlooked concern in junior
+      agentic-system designs and the strongest signal of senior
+      thinking.
+    evidence_hint: "Quote the cost reasoning passage."
+    requires_evidence: [plan]
+
+  - id: latency_strategy_for_agent_calls
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: high
+      staff: high
+    description: |
+      Plan addresses the latency stack-up from sequential or fanned-out
+      LLM calls (e.g., agent loops with N tool calls, multi-step
+      planning, RAG retrieval + generation). Names a UX pattern
+      appropriate to that latency budget — streaming, async with
+      callback, optimistic UI, batch boundary, etc.
+    judge_notes: |
+      "Agent loop is up to 4 tool calls @ ~3s p95 each → 12s wall;
+      we stream incremental thoughts to the UI and only block the
+      submit button on the final write" passes. Silence on latency
+      fails. "We'll use streaming" with no consideration of what's
+      actually slow fails.
+    evidence_hint: "Quote the latency reasoning and UX pattern."
+    requires_evidence: [plan]
+
+  - id: output_validation_layer
+    polarity: good
+    weight: high
+    description: |
+      Plan articulates how agent outputs are validated before being
+      trusted (schema check, safety filter, hallucination check,
+      re-prompt path on failure). Without this, the system has no way
+      to detect when the agent failed.
+    judge_notes: |
+      "Tool-call args are validated against a JSON schema; on parse
+      failure we re-prompt with the error once, then surface a manual
+      review queue" passes. "We trust the model output" fails. Mere
+      mention of "we'll validate" without saying how fails.
+    evidence_hint: "Quote the validation strategy."
+    requires_evidence: [plan]
+
+  - id: provider_abstraction_and_failover
+    polarity: good
+    weight: medium
+    description: |
+      Plan abstracts the LLM provider behind an interface and
+      considers failover or degraded-mode operation when the primary
+      provider is unavailable, rate-limited, or returns malformed
+      output.
+    judge_notes: |
+      "All calls go through LlmClient; on 429 or 5xx we fall back to
+      a cheaper model, then to a static template" passes. Hard-coded
+      "anthropic.messages.create()" everywhere fails. Naming the
+      abstraction without a degraded-mode story is partial.
+    evidence_hint: "Quote the abstraction + failover sentence."
+    requires_evidence: [plan]
+
+  - id: nondeterminism_handling
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: medium
+      staff: high
+    description: |
+      Plan acknowledges that agent outputs are non-deterministic and
+      addresses caching, retries, and idempotency in light of that.
+      Differs from a service: same input ≠ same output, so naive
+      retry-on-error can produce divergent answers.
+    judge_notes: |
+      "We cache by (prompt-hash, model, temperature=0); retries on
+      transient errors are safe because we're at temperature 0; user
+      retries explicit-only" passes. Caching strategy that assumes
+      deterministic behavior fails. Silence on idempotency fails.
+    evidence_hint: "Quote the caching/retry reasoning."
+    requires_evidence: [plan]
+
+  - id: agent_observability
+    polarity: good
+    weight: medium
+    weight_by_seniority:
+      junior: low
+      mid: medium
+      senior: medium
+      staff: high
+    description: |
+      Plan addresses logging the *content* of agent interactions
+      (prompts, completions, tool calls, intermediate reasoning),
+      not just metrics. You can't debug an agent failure with p95
+      latency alone; you need the actual prompt that produced the
+      bad output.
+    judge_notes: |
+      "Every LLM call is persisted with prompt + response + model +
+      tokens + parent-trace-id" passes. "Standard APM" without
+      content logging fails. "We'll add logging" generically is
+      partial.
+    evidence_hint: "Quote the content-logging strategy."
+    requires_evidence: [plan]
+
+  - id: agent_state_management
+    polarity: good
+    weight: medium
+    description: |
+      Plan addresses how agent state is maintained across calls — or
+      explicitly justifies stateless design. For multi-turn or
+      long-horizon agents: where does conversation history live, how
+      is it bounded, and how is it isolated per user/session?
+    judge_notes: |
+      "Each session has a Redis-backed memory; we cap at 8K tokens
+      and summarize older turns" passes. "Agent is stateless because
+      the task is single-turn" passes for an obviously-stateless
+      design. Silence on state for a multi-turn agent fails.
+    evidence_hint: "Quote the state strategy or stateless justification."
+    requires_evidence: [plan]
+
+# Add design-mode-specific required sections.
+override_pass_bar:
+  add_sections:
+    - id: architectural_shape_and_seams
+      name: "Architectural shape and seams"
+      must_contain:
+        - "One-sentence description of the system's overall structure"
+        - "2-3 named seams where future scale would be added without rewriting, each tied to a target-scale concern"
+    - id: capacity_estimation
+      name: "Capacity estimation"
+      must_contain:
+        - "Back-of-envelope numbers for storage, bandwidth, and request throughput at target scale"
+    - id: bottlenecks_and_mitigations
+      name: "Bottlenecks and mitigations"
+      must_contain:
+        - "At least one named bottleneck and a concrete mitigation"
+
+scoring:
+  anchors:
+    5: |
+      Pass bar fully met. Plan demonstrates real scale-aware reasoning:
+      named seams tied to NFRs, capacity numbers derived from target
+      scale, primary bottleneck named with concrete mitigation,
+      consistency model chosen and justified, read/write paths
+      differentiated where ratios warrant. No bad signals fire.
+    4: |
+      Pass bar met. Most good signals hit including all high-weight
+      ones. Minor gaps in medium-weight signals (caching strategy
+      slightly under-specified, one bottleneck named but mitigation
+      generic). No high-severity bad signals fire.
+    3: |
+      Pass bar met but one or more high-weight good signals are
+      partial or missed (capacity numbers absent, no bottleneck
+      named, dual-scale conflated). Some medium bad signals fire.
+      The design is workable but the candidate's reasoning is shallow
+      for a production-scale exercise.
+    2: |
+      Pass bar partially missed, OR multiple high-weight good signals
+      missed, OR critical bad signal (code_before_plan) fires.
+    1: |
+      No plan.md, OR plan exists but is functionally empty, OR plan
+      shows no scale-aware reasoning whatsoever.
+  calibration_note: |
+    Design mode's central question is: did the plan demonstrate
+    scale-aware reasoning? A plan that lists what to build but never
+    names a bottleneck or estimates capacity is not a design exercise
+    — it's a wishlist. Apply this lens when judging high-weight
+    signals: capacity_estimation, bottleneck_identification,
+    shape_and_seams, dual_scale_nfrs.

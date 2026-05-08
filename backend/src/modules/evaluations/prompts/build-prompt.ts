@@ -62,22 +62,14 @@ Good modes: ${aiUsage.goodModes.join('; ')}
 Bad modes: ${aiUsage.badModes.join('; ')}`
     : '';
 
-  const modeOpener = rubric.mode
-    ? `## How to read this rubric (the ${rubric.mode} variant has already been chosen)
-You are evaluating the **build** phase of a system-design practice session in
-the **${rubric.mode}** variant:
-  - **build mode**  = small/buildable problem; the candidate was expected
-                      to ship a working implementation. Test signals and
-                      incremental-build signals are weighted high.
-  - **design mode** = production-scale design exercise; build-phase artifacts
-                      are typically small (sketches, prototype slices, more
-                      plan elaboration). Test signals are deweighted; an
-                      empty build phase is normal.
-The signals, weights, and anchors below already reflect ${rubric.mode}-mode
-expectations. Open the \`feedback\` field with one line confirming the
-variant.`
-    : `## How to read this rubric
-This evaluator scores the build phase against the captured artifacts.`;
+  const kindOpener = `## How to read this rubric (agentic_build)
+You are evaluating the build phase of an agentic-build session — the
+candidate had ~30-45 minutes after the plan to ship a working slice
+of an LLM-powered agent. Score against execution: did the captured
+file tree mirror the plan, were tests captured, did the AI
+conversation show steering vs dictation, did the build proceed
+incrementally? Open the \`feedback\` field with one line confirming
+the variant.`;
 
   const seniorityOpener = rubric.seniority
     ? `## Calibrate to the candidate's seniority: ${rubric.seniority}
@@ -97,7 +89,7 @@ Open the \`feedback\` field by acknowledging the seniority.`
 
 Read the captured artifacts the user will provide (file events, AI conversation turns, the reconstructed final tree, and the candidate's plan.md) and return a structured evaluation matching the schema at the bottom. Be specific and cite evidence verbatim from the artifacts. Do not invent content that isn't there.
 
-${modeOpener}
+${kindOpener}
 
 ${seniorityOpener}
 

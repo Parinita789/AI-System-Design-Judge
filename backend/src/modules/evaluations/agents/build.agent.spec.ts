@@ -41,7 +41,7 @@ function makeInput(overrides: Partial<PhaseEvalInput> = {}): PhaseEvalInput {
     snapshots: [],
     hints: [],
     rubricVersion: 'v2.0',
-    mode: 'build',
+    kind: 'agentic_build',
     seniority: 'mid',
     buildContext: {
       startedAt: new Date('2026-05-07T09:20:00Z'),

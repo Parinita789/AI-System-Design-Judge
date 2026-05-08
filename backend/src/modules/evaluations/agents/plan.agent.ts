@@ -30,7 +30,7 @@ export class PlanAgent extends BasePhaseAgent {
     const rubric = await this.rubricLoader.load(
       input.rubricVersion,
       'plan',
-      input.mode ?? undefined,
+      input.kind ?? undefined,
       input.seniority ?? undefined,
     );
     const useTools = this.llm.supportsToolUse();

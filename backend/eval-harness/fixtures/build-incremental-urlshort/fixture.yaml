@@ -2,7 +2,7 @@ description: "Incremental URL-shortener build that mirrors plan.md, adds tests, 
 question: "Design a URL shortener for 100 RPS demo / 10K RPS target."
 rubricVersion: v2.0
 phase: build
-mode: build
+kind: agentic_build
 seniority: mid
 
 buildStartedAt: "2026-05-08T09:59:30Z"

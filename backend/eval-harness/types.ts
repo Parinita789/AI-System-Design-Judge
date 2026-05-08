@@ -1,5 +1,5 @@
 export type SignalMode = 'hit' | 'partial' | 'miss' | 'credited' | 'skipped';
-export type RubricMode = 'build' | 'design';
+export type RubricKind = 'traditional_design' | 'agentic_design' | 'agentic_build';
 export type FixtureSeniority = 'junior' | 'mid' | 'senior' | 'staff';
 export type FixturePhase = 'plan' | 'build';
 
@@ -43,7 +43,7 @@ export interface Fixture extends FixtureExpectation {
   // 'plan' (default) or 'build'. Selects which agent runs and which
   // rubric the loader validates against.
   phase: FixturePhase;
-  mode?: RubricMode; // required on v2.0+
+  kind?: RubricKind;
   seniority?: FixtureSeniority; // defaults to 'senior' in the runner
   planMd: string | null;
   hints?: FixtureHint[];

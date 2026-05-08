@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { Mode as PrismaMode } from '@prisma/client';
+import { QuestionKind as PrismaQuestionKind } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 
 @Injectable()
 export class QuestionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { prompt: string; rubricVersion: string; mode: PrismaMode | null }) {
+  create(data: { prompt: string; rubricVersion: string; kind: PrismaQuestionKind }) {
     return this.prisma.question.create({ data });
   }
 
