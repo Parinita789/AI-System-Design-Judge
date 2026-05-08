@@ -6,4 +6,5 @@ export interface IncomingBuildEvent {
   content?: string | null;
   contentDiff?: string | null;
   occurredAt: string;
+  idempotencyKey?: string;
 }

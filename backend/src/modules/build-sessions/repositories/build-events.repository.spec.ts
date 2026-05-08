@@ -15,7 +15,7 @@ describe('BuildEventsRepository', () => {
     { filePath: 'a.ts', action: 'modified', contentDiff: '+y', occurredAt: '2026-05-07T00:00:01.000Z' },
   ];
 
-  it('inserts rows + bumps buildEventCount by the actual inserted count in one transaction', async () => {
+  it('inserts rows with skipDuplicates + bumps buildEventCount by the actual inserted count', async () => {
     const prisma = makePrisma();
     const tx = {
       buildEvent: { createMany: jest.fn().mockResolvedValue({ count: 2 }) },
@@ -36,14 +36,17 @@ describe('BuildEventsRepository', () => {
           content: 'x',
           contentDiff: null,
           occurredAt: new Date('2026-05-07T00:00:00.000Z'),
+          idempotencyKey: null,
         }),
         expect.objectContaining({
           filePath: 'a.ts',
           action: 'modified',
           content: null,
           contentDiff: '+y',
+          idempotencyKey: null,
         }),
       ],
+      skipDuplicates: true,
     });
     expect(tx.session.update).toHaveBeenCalledWith({
       where: { id: 'sid' },
@@ -51,7 +54,34 @@ describe('BuildEventsRepository', () => {
     });
   });
 
-  it('skips the counter update when no rows were actually inserted', async () => {
+  it('forwards a caller-supplied idempotencyKey through to the row', async () => {
+    const prisma = makePrisma();
+    const tx = {
+      buildEvent: { createMany: jest.fn().mockResolvedValue({ count: 1 }) },
+      session: { update: jest.fn().mockResolvedValue({ id: 'sid' }) },
+    };
+    prisma.$transaction.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn(tx));
+    const repo = new BuildEventsRepository(prisma as never);
+
+    await repo.insertBatch('sid', [
+      {
+        filePath: 'a.ts',
+        action: 'created',
+        content: 'x',
+        occurredAt: '2026-05-07T00:00:00.000Z',
+        idempotencyKey: 'sha-abc123',
+      },
+    ]);
+
+    expect(tx.buildEvent.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({ idempotencyKey: 'sha-abc123' }),
+      ],
+      skipDuplicates: true,
+    });
+  });
+
+  it('skips the counter update when every row was a duplicate', async () => {
     const prisma = makePrisma();
     const tx = {
       buildEvent: { createMany: jest.fn().mockResolvedValue({ count: 0 }) },

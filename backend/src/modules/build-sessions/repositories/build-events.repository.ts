@@ -15,15 +15,20 @@ export class BuildEventsRepository {
       content: e.content ?? null,
       contentDiff: e.contentDiff ?? null,
       occurredAt: new Date(e.occurredAt),
+      idempotencyKey: e.idempotencyKey ?? null,
     }));
-    // Interactive transaction so we can read the actual inserted count
-    // and increment by that — not by `events.length`. Today the two
-    // match because createMany throws on conflict, but once we add an
-    // idempotency-key UNIQUE constraint (Gap 16) and switch to
-    // skipDuplicates, the input length will overcount the cached
-    // counter on retry.
+    // Interactive transaction so the cached buildEventCount
+    // increments by the actual inserted-row count. With
+    // skipDuplicates: true and the partial unique index on
+    // (sessionId, idempotencyKey), a retried batch (CLI network
+    // blip, lost ack) collapses to zero new rows for any event the
+    // server has already accepted — `result.count` reflects only
+    // the rows we truly added.
     const created = await this.prisma.$transaction(async (tx) => {
-      const result = await tx.buildEvent.createMany({ data: rows });
+      const result = await tx.buildEvent.createMany({
+        data: rows,
+        skipDuplicates: true,
+      });
       if (result.count > 0) {
         await tx.session.update({
           where: { id: sessionId },

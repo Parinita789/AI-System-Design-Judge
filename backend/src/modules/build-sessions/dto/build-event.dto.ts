@@ -33,6 +33,14 @@ export class BuildEventDto {
 
   @IsISO8601()
   occurredAt!: string;
+
+  // Stable per-event hash supplied by the CLI. Lets a retried batch
+  // dedupe at the DB layer (partial unique index) without the server
+  // having to remember which batches it has already accepted.
+  @IsOptional()
+  @IsString()
+  @MaxLength(128)
+  idempotencyKey?: string;
 }
 
 export class BuildEventBatchDto {

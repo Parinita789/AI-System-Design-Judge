@@ -98,6 +98,12 @@ model BuildEvent {
   contentDiff  String?  @map("content_diff")
   occurredAt   DateTime @map("occurred_at")
   receivedAt   DateTime @default(now()) @map("received_at")
+  // Caller-supplied dedup token. The CLI hashes (filePath, action,
+  // occurredAt, content/diff length) so a flushed-but-unacked batch
+  // re-shipped on retry collapses to the same key and the DB-level
+  // partial unique index drops the duplicate. Nullable so legacy
+  // events are unaffected; uniqueness is partial WHERE NOT NULL.
+  idempotencyKey String? @map("idempotency_key")
 
   session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 
