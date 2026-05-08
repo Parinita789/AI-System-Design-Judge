@@ -100,28 +100,29 @@ export class BuildTokenService implements OnModuleInit, OnModuleDestroy {
     const secret = rawToken.slice(idx + 1);
     if (!UUID_RE.test(sessionId)) return null;
 
-    const session = await this.prisma.session.findUnique({
-      where: { id: sessionId },
-      select: {
-        id: true,
-        buildTokenHash: true,
-        buildStartedAt: true,
-        buildEndedAt: true,
-        status: true,
+    // Push every gate (existence, status, finished, TTL, hash-present)
+    // into the WHERE clause so the DB returns at most a single column —
+    // the bcrypt hash to compare against. Narrower payload, single
+    // round-trip, and the unhappy paths all collapse to the same
+    // "no row" branch (less side-channel between "missing" / "expired" /
+    // "abandoned" / "wrong secret" for an attacker probing tokens).
+    const ttlCutoff = new Date(Date.now() - TOKEN_TTL_MS);
+    const row = await this.prisma.session.findFirst({
+      where: {
+        id: sessionId,
+        status: { not: 'abandoned' },
+        buildEndedAt: null,
+        buildTokenHash: { not: null },
+        OR: [
+          { buildStartedAt: null },
+          { buildStartedAt: { gte: ttlCutoff } },
+        ],
       },
+      select: { buildTokenHash: true },
     });
-    if (!session) return null;
-    if (!session.buildTokenHash) return null;
-    if (session.status === 'abandoned') return null;
-    if (session.buildEndedAt) return null;
-    if (
-      session.buildStartedAt &&
-      Date.now() - session.buildStartedAt.getTime() > TOKEN_TTL_MS
-    ) {
-      return null;
-    }
-    const ok = await bcrypt.compare(secret, session.buildTokenHash);
+    if (!row?.buildTokenHash) return null;
+    const ok = await bcrypt.compare(secret, row.buildTokenHash);
     if (!ok) return null;
-    return { sessionId: session.id };
+    return { sessionId };
   }
 }

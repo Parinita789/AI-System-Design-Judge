@@ -7,6 +7,7 @@ describe('BuildTokenService', () => {
       session: {
         update: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         updateMany: jest.fn(),
       },
     };
@@ -38,14 +39,16 @@ describe('BuildTokenService', () => {
   });
 
   describe('verify', () => {
-    function withSession(row: Record<string, unknown> | null) {
+    const SID = '11111111-2222-3333-4444-555555555555';
+
+    function withRow(row: { buildTokenHash: string } | null) {
       const prisma = makePrisma();
-      prisma.session.findUnique.mockResolvedValue(row);
+      prisma.session.findFirst.mockResolvedValue(row);
       return { prisma, svc: new BuildTokenService(prisma as never) };
     }
 
     it('rejects undefined / empty / bare strings', async () => {
-      const { svc } = withSession(null);
+      const { svc } = withRow(null);
       expect(await svc.verify(undefined)).toBeNull();
       expect(await svc.verify('')).toBeNull();
       expect(await svc.verify('no-dot')).toBeNull();
@@ -54,89 +57,42 @@ describe('BuildTokenService', () => {
     });
 
     it('rejects when the id half is not a UUID (no DB call)', async () => {
-      const { svc, prisma } = withSession(null);
+      const { svc, prisma } = withRow(null);
       expect(await svc.verify('junk.notreal')).toBeNull();
-      expect(prisma.session.findUnique).not.toHaveBeenCalled();
+      expect(prisma.session.findFirst).not.toHaveBeenCalled();
     });
 
-    it('rejects when the session does not exist', async () => {
-      const { svc } = withSession(null);
-      const out = await svc.verify('00000000-0000-0000-0000-000000000000.deadbeef');
-      expect(out).toBeNull();
+    it('returns null when the DB query gates the row out (covers missing, expired, finished, abandoned, no-hash)', async () => {
+      const { svc } = withRow(null);
+      expect(await svc.verify(`${SID}.deadbeef`)).toBeNull();
     });
 
-    it('rejects when buildTokenHash is null (start-build never called)', async () => {
-      const { svc } = withSession({
-        id: 'sid',
-        buildTokenHash: null,
-        buildStartedAt: new Date(),
-        buildEndedAt: null,
-        status: 'completed',
-      });
-      const out = await svc.verify('11111111-2222-3333-4444-555555555555.deadbeef');
-      expect(out).toBeNull();
-    });
-
-    it('rejects when the session is abandoned', async () => {
-      const hash = await bcrypt.hash('secret', 4);
-      const { svc } = withSession({
-        id: 'sid',
-        buildTokenHash: hash,
-        buildStartedAt: new Date(),
-        buildEndedAt: null,
-        status: 'abandoned',
-      });
-      expect(await svc.verify('11111111-2222-3333-4444-555555555555.secret')).toBeNull();
-    });
-
-    it('rejects when buildEndedAt is set (already finished)', async () => {
-      const hash = await bcrypt.hash('secret', 4);
-      const { svc } = withSession({
-        id: 'sid',
-        buildTokenHash: hash,
-        buildStartedAt: new Date(),
-        buildEndedAt: new Date(),
-        status: 'completed',
-      });
-      expect(await svc.verify('11111111-2222-3333-4444-555555555555.secret')).toBeNull();
-    });
-
-    it('rejects when the token is older than 60 minutes', async () => {
-      const hash = await bcrypt.hash('secret', 4);
-      const { svc } = withSession({
-        id: 'sid',
-        buildTokenHash: hash,
-        buildStartedAt: new Date(Date.now() - 61 * 60_000),
-        buildEndedAt: null,
-        status: 'completed',
-      });
-      expect(await svc.verify('11111111-2222-3333-4444-555555555555.secret')).toBeNull();
+    it('pushes the status / buildEndedAt / TTL / hash-present gates into the SQL WHERE clause', async () => {
+      const hash = await bcrypt.hash('right-secret', 4);
+      const { svc, prisma } = withRow({ buildTokenHash: hash });
+      await svc.verify(`${SID}.right-secret`);
+      const arg = prisma.session.findFirst.mock.calls[0][0];
+      expect(arg.where.id).toBe(SID);
+      expect(arg.where.status).toEqual({ not: 'abandoned' });
+      expect(arg.where.buildEndedAt).toBeNull();
+      expect(arg.where.buildTokenHash).toEqual({ not: null });
+      expect(arg.where.OR).toEqual([
+        { buildStartedAt: null },
+        { buildStartedAt: { gte: expect.any(Date) } },
+      ]);
+      expect(arg.select).toEqual({ buildTokenHash: true });
     });
 
     it('rejects when the secret half does not match the stored hash', async () => {
       const hash = await bcrypt.hash('right-secret', 4);
-      const { svc } = withSession({
-        id: '11111111-2222-3333-4444-555555555555',
-        buildTokenHash: hash,
-        buildStartedAt: new Date(),
-        buildEndedAt: null,
-        status: 'completed',
-      });
-      expect(await svc.verify('11111111-2222-3333-4444-555555555555.wrong')).toBeNull();
+      const { svc } = withRow({ buildTokenHash: hash });
+      expect(await svc.verify(`${SID}.wrong`)).toBeNull();
     });
 
     it('returns the sessionId on a fresh, matching token', async () => {
       const hash = await bcrypt.hash('right-secret', 4);
-      const { svc } = withSession({
-        id: '11111111-2222-3333-4444-555555555555',
-        buildTokenHash: hash,
-        buildStartedAt: new Date(),
-        buildEndedAt: null,
-        status: 'completed',
-      });
-      expect(await svc.verify('11111111-2222-3333-4444-555555555555.right-secret')).toEqual({
-        sessionId: '11111111-2222-3333-4444-555555555555',
-      });
+      const { svc } = withRow({ buildTokenHash: hash });
+      expect(await svc.verify(`${SID}.right-secret`)).toEqual({ sessionId: SID });
     });
   });
 
