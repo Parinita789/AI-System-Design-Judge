@@ -8,6 +8,7 @@ function makePrisma() {
     session: {
       findUnique: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
   };
 }
@@ -150,6 +151,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
 describe('BuildSessionsService.finishBuildPhase', () => {
   it('throws NotFoundException when the session does not exist', async () => {
     const prisma = makePrisma();
+    prisma.session.updateMany.mockResolvedValue({ count: 0 });
     prisma.session.findUnique.mockResolvedValue(null);
     const svc = new BuildSessionsService(
       prisma as never,
@@ -164,13 +166,10 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     expect(prisma.session.update).not.toHaveBeenCalled();
   });
 
-  it('sets buildEndedAt, dispatches the orchestrator, and returns the count on first call', async () => {
+  it('atomically claims buildEndedAt, dispatches the orchestrator, and returns the count on first call', async () => {
     const prisma = makePrisma();
-    prisma.session.findUnique.mockResolvedValue({
-      buildEndedAt: null,
-      buildEventCount: 7,
-    });
-    prisma.session.update.mockResolvedValue({ buildEventCount: 7 });
+    prisma.session.updateMany.mockResolvedValue({ count: 1 });
+    prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
     const orchestrator = makeOrchestrator();
     const svc = new BuildSessionsService(
       prisma as never,
@@ -183,19 +182,17 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
-    expect(prisma.session.update).toHaveBeenCalledTimes(1);
-    const call = prisma.session.update.mock.calls[0][0];
-    expect(call.where).toEqual({ id: SID });
+    expect(prisma.session.updateMany).toHaveBeenCalledTimes(1);
+    const call = prisma.session.updateMany.mock.calls[0][0];
+    expect(call.where).toEqual({ id: SID, buildEndedAt: null });
     expect(call.data.buildEndedAt).toBeInstanceOf(Date);
     expect(orchestrator.run).toHaveBeenCalledWith(SID, ['build']);
   });
 
-  it('does NOT mutate buildEndedAt on a second call when a build eval exists', async () => {
+  it('does NOT dispatch on a second call when a build eval exists', async () => {
     const prisma = makePrisma();
-    prisma.session.findUnique.mockResolvedValue({
-      buildEndedAt: new Date('2026-05-07T00:00:00Z'),
-      buildEventCount: 7,
-    });
+    prisma.session.updateMany.mockResolvedValue({ count: 0 });
+    prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
     const evalsRepo = makeEvalsRepo({
       findBySession: jest.fn().mockResolvedValue([{ phase: 'build' }]),
     });
@@ -211,16 +208,13 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
-    expect(prisma.session.update).not.toHaveBeenCalled();
     expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
   it('re-dispatches the orchestrator when buildEndedAt is set but no build eval exists (prior crash recovery)', async () => {
     const prisma = makePrisma();
-    prisma.session.findUnique.mockResolvedValue({
-      buildEndedAt: new Date('2026-05-07T00:00:00Z'),
-      buildEventCount: 7,
-    });
+    prisma.session.updateMany.mockResolvedValue({ count: 0 });
+    prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
     const evalsRepo = makeEvalsRepo({
       findBySession: jest.fn().mockResolvedValue([{ phase: 'plan' }]),
     });
@@ -236,8 +230,34 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     );
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
-    expect(prisma.session.update).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(SID, ['build']);
+  });
+
+  it('only one of two concurrent finish calls dispatches the orchestrator', async () => {
+    // Simulates the race: first call claims (count=1), second call loses
+    // (count=0) and finds a freshly-written build eval, so it does nothing.
+    const prisma = makePrisma();
+    prisma.session.updateMany.mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({
+      count: 0,
+    });
+    prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
+    const evalsRepo = makeEvalsRepo({
+      findBySession: jest.fn().mockResolvedValue([{ phase: 'build' }]),
+    });
+    const orchestrator = makeOrchestrator();
+    const svc = new BuildSessionsService(
+      prisma as never,
+      {} as never,
+      makeEvents() as never,
+      makeAi() as never,
+      orchestrator as never,
+      evalsRepo as never,
+      makeTasks() as never,
+    );
+    const [a, b] = await Promise.all([svc.finishBuildPhase(SID), svc.finishBuildPhase(SID)]);
+    expect(a).toEqual({ ok: true, eventCount: 7 });
+    expect(b).toEqual({ ok: true, eventCount: 7 });
+    expect(orchestrator.run).toHaveBeenCalledTimes(1);
   });
 });
 

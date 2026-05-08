@@ -94,35 +94,45 @@ export class BuildSessionsService {
   }
 
   async finishBuildPhase(sessionId: string): Promise<{ ok: true; eventCount: number }> {
+    // Atomic claim: only the row whose buildEndedAt is still null gets
+    // stamped. Two concurrent finish calls used to both pass the
+    // findUnique-then-update gate and dispatch the orchestrator twice;
+    // a single conditional UPDATE in the WHERE clause closes that race.
+    const claimed = await this.prisma.session.updateMany({
+      where: { id: sessionId, buildEndedAt: null },
+      data: { buildEndedAt: new Date() },
+    });
+    if (claimed.count === 1) {
+      const fresh = await this.prisma.session.findUnique({
+        where: { id: sessionId },
+        select: { buildEventCount: true },
+      });
+      const eventCount = fresh?.buildEventCount ?? 0;
+      this.logger.log(
+        `Build phase finished for session ${sessionId} ` +
+          `(${eventCount} events captured). ` +
+          'Dispatching BuildAgent in the background.',
+      );
+      this.dispatchBuildEval(sessionId);
+      return { ok: true, eventCount };
+    }
+    // count === 0: either the session does not exist or buildEndedAt was
+    // already set (by a prior call or a concurrent winner).
     const existing = await this.prisma.session.findUnique({
       where: { id: sessionId },
-      select: { buildEndedAt: true, buildEventCount: true },
-    });
-    if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
-    if (existing.buildEndedAt) {
-      const evals = await this.evalsRepo.findBySession(sessionId);
-      const hasBuildEval = evals.some((e) => e.phase === 'build');
-      if (!hasBuildEval) {
-        this.logger.warn(
-          `Session ${sessionId} buildEndedAt is set but no build eval exists — ` +
-            'redispatching orchestrator (likely a prior crash).',
-        );
-        this.dispatchBuildEval(sessionId);
-      }
-      return { ok: true, eventCount: existing.buildEventCount };
-    }
-    const updated = await this.prisma.session.update({
-      where: { id: sessionId },
-      data: { buildEndedAt: new Date() },
       select: { buildEventCount: true },
     });
-    this.logger.log(
-      `Build phase finished for session ${sessionId} ` +
-        `(${updated.buildEventCount} events captured). ` +
-        'Dispatching BuildAgent in the background.',
-    );
-    this.dispatchBuildEval(sessionId);
-    return { ok: true, eventCount: updated.buildEventCount };
+    if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
+    const evals = await this.evalsRepo.findBySession(sessionId);
+    const hasBuildEval = evals.some((e) => e.phase === 'build');
+    if (!hasBuildEval) {
+      this.logger.warn(
+        `Session ${sessionId} buildEndedAt is set but no build eval exists — ` +
+          'redispatching orchestrator (likely a prior crash).',
+      );
+      this.dispatchBuildEval(sessionId);
+    }
+    return { ok: true, eventCount: existing.buildEventCount };
   }
 
   private dispatchBuildEval(sessionId: string): void {
