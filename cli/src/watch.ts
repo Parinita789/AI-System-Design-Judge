@@ -22,8 +22,6 @@ export interface WatchOptions {
   server: string;
   durationMinutes: number;
   captureAiLogs: boolean;
-  // ISO8601 from the start-build response when available. Used to filter
-  // out Claude Code sessions that predate the build phase.
   buildStartedAtIso?: string;
 }
 
@@ -96,9 +94,6 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
     }
     const outcome = computeChange(rel, prev.get(rel) ?? null, content);
     if (isNoopOutcome(outcome)) {
-      // File was touched (mtime bump, save with no edits) but content
-      // is unchanged. Update prev's capturedAt so re-baselining still
-      // tracks freshness, but don't append a phantom event.
       const p = prev.get(rel);
       if (p) p.capturedAt = Date.now();
       return;
@@ -134,8 +129,6 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
 
   let shutdown = false;
 
-  // Scan Claude Code's project log dir, append any new turns to the AI
-  // buffer. Returns turn count newly buffered (not flushed).
   const scanAi = async (): Promise<number> => {
     if (!aiReader) return 0;
     try {
@@ -209,12 +202,8 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
     console.log(chalk.cyan(`mentor: shutting down (${reason})`));
     await watcher.close();
 
-    // One last AI scan so any turns that landed between the last
-    // periodic scan and shutdown also get drained.
     await scanAi();
 
-    // Final flush — chunked so a long build's tail doesn't ship as
-    // one huge body (would hit timeouts / size caps).
     const drain = await drainBuffer(api, buffer, FLUSH_BATCH_SIZE);
     if (drain.error) {
       console.warn(
@@ -266,7 +255,6 @@ export async function runWatch(opts: WatchOptions): Promise<void> {
   process.once('SIGTERM', () => void finalize('SIGTERM'));
   setTimeout(() => void finalize('duration timer'), opts.durationMinutes * 60_000);
 
-  // Block forever — chokidar + timers keep the loop alive.
   await new Promise(() => {});
 }
 

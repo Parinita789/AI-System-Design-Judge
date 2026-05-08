@@ -45,11 +45,9 @@ describe('sendWithBackoff', () => {
     const client = {
       sendEvents: jest.fn().mockRejectedValue(err),
     } as unknown as MentorApiClient;
-    // Zero-delay backoff so the test runs fast.
     const out = await sendWithBackoff(client, [], [0, 0, 0]);
     expect(out.ok).toBe(false);
     expect(out.error).toBe('ECONNREFUSED');
-    // Initial attempt + 3 retries = 4 calls.
     expect(client.sendEvents).toHaveBeenCalledTimes(4);
   });
 });
@@ -82,7 +80,6 @@ describe('drainBuffer', () => {
 
     const out = await drainBuffer(client, buffer, 2);
     expect(out).toEqual({ flushed: 5, remaining: 0 });
-    // 5 events at chunk-size 2: 2 + 2 + 1 = 3 batches.
     expect(client.sendEvents).toHaveBeenCalledTimes(3);
   });
 
@@ -95,8 +92,6 @@ describe('drainBuffer', () => {
       ),
       markSent: jest.fn((ids: number[]) => ids.forEach((i) => sent.add(i))),
     };
-    // Batch 2 (events 3 and 4) always fails — every retry of that
-    // batch throws, so sendWithBackoff exhausts and bubbles the error.
     const client = {
       sendEvents: jest.fn(async (events: BufferedEvent[]) => {
         if (events.some((e) => e.id === 3 || e.id === 4)) {

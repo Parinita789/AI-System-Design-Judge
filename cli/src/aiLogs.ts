@@ -16,16 +16,11 @@ export interface NormalizedAITurn {
   toolResultSummary: string | null;
 }
 
-// Truncation thresholds — kept as module constants so tests + UI docs
-// can reference the same numbers. Aggressive on tool input/result so a
-// `Read` of a 50KB file doesn't dominate the wire payload.
 export const TEXT_CAP = 4096;
 export const TOOL_INPUT_CAP = 200;
 export const TOOL_RESULT_CAP = 1024;
 
 export function encodedCwd(cwd: string): string {
-  // Claude Code's convention: take the absolute path, replace each `/`
-  // with `-`. The leading slash becomes a leading `-`.
   return cwd.replace(/\//g, '-');
 }
 
@@ -35,7 +30,6 @@ export function claudeProjectDir(cwd: string): string {
 
 interface CursorEntry {
   byteOffset: number;
-  // 'skip' marks files we've already decided are pre-build sessions.
   skip?: true;
 }
 
@@ -50,14 +44,9 @@ export interface ClaudeCodeLogReaderOptions {
   cwd: string;
   buildStartedAt: Date;
   cursorDir?: string;
-  // Allow tests to override the project-dir computation rather than
-  // mocking os.homedir() — simpler.
   projectDirOverride?: string;
 }
 
-// Reads new turns from Claude Code's per-project JSONL session files.
-// Stateful via ~/.mentor/ai-cursor.json so re-invocation only ships
-// genuinely new lines.
 export class ClaudeCodeLogReader {
   private projectDir: string;
   private cursorPath: string;
@@ -71,9 +60,6 @@ export class ClaudeCodeLogReader {
     this.buildStartedAtMs = opts.buildStartedAt.getTime();
   }
 
-  // Returns ALL new turns across every session JSONL file in the
-  // project's encoded-cwd dir since the last scan. Empty array if
-  // the project has never used Claude Code.
   async scan(): Promise<NormalizedAITurn[]> {
     if (!fs.existsSync(this.projectDir)) return [];
     const cursors = this.readCursors();
@@ -100,8 +86,6 @@ export class ClaudeCodeLogReader {
         continue;
       }
 
-      // First time we see this file — decide if it's a pre-build session
-      // and, if so, mark it skip so we never re-evaluate.
       if (!cursor) {
         const firstTurnAt = peekFirstTurnTimestamp(file);
         if (firstTurnAt !== null && firstTurnAt < this.buildStartedAtMs) {
@@ -121,9 +105,6 @@ export class ClaudeCodeLogReader {
         fs.readSync(fd, buf, 0, length, startOffset);
         const text = buf.toString('utf-8');
         const lines = text.split('\n');
-        // The trailing element is either '' (clean newline-terminated)
-        // or a partial line. Either way, don't try to parse it; advance
-        // the cursor only past the last newline we saw.
         const completeLines = lines.slice(0, -1);
         const lastNewlineEnd = startOffset + Buffer.byteLength(
           completeLines.join('\n') + (completeLines.length > 0 ? '\n' : ''),
@@ -169,8 +150,6 @@ export class ClaudeCodeLogReader {
   }
 }
 
-// Reads the first `\n`-delimited line of the file and pulls a timestamp
-// off it. Returns null when the file is empty or malformed.
 function peekFirstTurnTimestamp(file: string): number | null {
   try {
     const fd = fs.openSync(file, 'r');
@@ -193,9 +172,6 @@ function peekFirstTurnTimestamp(file: string): number | null {
   }
 }
 
-// We need turnIndex to be stable across CLI restarts. Counting newlines
-// in the bytes BEFORE the cursor gives us "how many turns came before
-// this batch" — which is exactly the right index for the new turns.
 function countLinesBefore(file: string, byteOffset: number): number {
   if (byteOffset === 0) return 0;
   const fd = fs.openSync(file, 'r');
@@ -221,9 +197,6 @@ interface RawClaudeCodeLine {
   };
 }
 
-// Maps a single JSONL line into the normalized event shape, applying
-// truncation. Returns null for lines we can't make sense of (parser
-// version mismatch, malformed content). Caller logs / drops.
 export function parseClaudeCodeLine(
   raw: string,
   externalSessionId: string,
@@ -260,9 +233,6 @@ export function parseClaudeCodeLine(
   }
   if (!Array.isArray(content)) return base;
 
-  // Claude Code stores each turn as one or more content blocks. Walk
-  // them; if we see tool_use or tool_result we promote the role
-  // accordingly so the row's role reflects the dominant action.
   for (const block of content) {
     if (!block || typeof block !== 'object') continue;
     const b = block as { type?: string; text?: string; name?: string; input?: unknown; content?: unknown };
@@ -285,17 +255,12 @@ function chooseRole(
   inner: string | undefined,
   content: unknown,
 ): AITurnRole | null {
-  // Claude Code's transcripts use `type: 'user' | 'assistant'` at the
-  // top level and the message.role mirrors that. Tool turns are
-  // detected by content-block inspection in the caller.
   const fromInner = (inner === 'user' || inner === 'assistant') ? inner : null;
   const fromTop = (top === 'user' || top === 'assistant') ? top : null;
   const role = fromInner ?? fromTop;
   if (!role) {
-    // Some lines (summaries, env metadata) don't have role — skip.
     return null;
   }
-  // If the content is purely a tool_result block, present as tool_result.
   if (Array.isArray(content)) {
     const hasOnlyToolResults = content.every(
       (b) => b && typeof b === 'object' && (b as { type?: string }).type === 'tool_result',

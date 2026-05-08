@@ -12,9 +12,6 @@ export interface MintedToken {
   token: string;
   sessionId: string;
   expiresInMinutes: number;
-  // CLI uses this to filter Claude Code log files whose first turn
-  // predates the build phase — those are unrelated sessions on the
-  // same project from before the candidate clicked Start-build.
   buildStartedAt: Date;
 }
 
@@ -22,10 +19,6 @@ export interface VerifiedToken {
   sessionId: string;
 }
 
-// Token format: `<sessionId>.<secret>`. The sessionId half lets the
-// guard look up the row in O(1); the secret half is what authenticates.
-// We store only bcrypt(secret) on the row, so a leaked DB dump can't be
-// replayed against the API.
 @Injectable()
 export class BuildTokenService {
   private readonly logger = new Logger(BuildTokenService.name);
@@ -59,8 +52,6 @@ export class BuildTokenService {
     if (idx <= 0 || idx === rawToken.length - 1) return null;
     const sessionId = rawToken.slice(0, idx);
     const secret = rawToken.slice(idx + 1);
-    // Pre-validate the id half is a UUID so a malformed token doesn't
-    // make Prisma throw on the lookup (column type is uuid).
     if (!UUID_RE.test(sessionId)) return null;
 
     const session = await this.prisma.session.findUnique({

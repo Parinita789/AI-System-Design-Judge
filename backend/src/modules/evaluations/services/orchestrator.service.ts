@@ -93,15 +93,9 @@ export class OrchestratorService {
       this.logger.log(`Running ${phase} agent for session ${sessionId}`);
       const result = await agent.evaluate(phaseInput);
       const persisted = await this.evalsRepo.createPhaseEvaluation(sessionId, phase, result);
-      // Audit FK requires persisted.id, so insert order is fixed.
       await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
 
-      // Fire-and-forget mentor generation. Doesn't block the eval HTTP
-      // response — the orchestrator returns once the eval row + audit
-      // are persisted. Tracked so SIGTERM during a long mentor LLM
-      // call gets a chance to drain (BackgroundTaskTracker awaits up
-      // to 30s on shutdown).
       this.tasks.track(
         this.mentorService.generate(persisted.id, options?.model),
         `mentor.generate(${persisted.id})`,

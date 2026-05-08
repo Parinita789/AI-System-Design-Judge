@@ -35,8 +35,6 @@ export class BuildSessionGuard implements CanActivate {
   }
 }
 
-// Helper for controllers to read the guard's resolution off the
-// request without touching `any`.
 export function resolvedBuildSessionId(req: AuthedRequest): string {
   if (!req.buildSessionId) {
     throw new Error('BuildSessionGuard did not run before this controller');

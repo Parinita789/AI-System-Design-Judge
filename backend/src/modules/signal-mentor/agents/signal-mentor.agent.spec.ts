@@ -99,7 +99,6 @@ describe('SignalMentorAgent', () => {
         scope_realism: 'You should narrow scope to redirect-only.',
         no_validation_plan: 'Sketch a curl loop at demo scale.',
       });
-      // The agent forwarded the tool definition + tool_choice forcing the call.
       const opts = call.mock.calls[0][1];
       expect(opts.tools[0].name).toBe(SUBMIT_ANNOTATIONS_TOOL_NAME);
       expect(opts.toolChoice).toEqual({

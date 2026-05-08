@@ -1,15 +1,3 @@
-// Hard-cap on plan.md size in the LLM user payload.
-//
-// Without this, a verbose candidate (50K+ chars of code dumps, notes,
-// scratch work in plan.md) silently fills the context window. On 1M
-// context that's tolerable; on 200K-context models it overflows. Cap +
-// middle-omission marker keeps the head and tail visible while
-// signaling that something was dropped.
-//
-// Default cap chosen so that plan.md alone takes ~12K tokens (cap /
-// ~3.5 chars per token), well under any reasonable model budget when
-// combined with the rubric (~10K chars), question, signals, hints,
-// and the user message scaffolding.
 
 export const DEFAULT_PLAN_MD_CAP = 50_000;
 
@@ -30,9 +18,6 @@ export function truncatePlanMd(
     return { text: input, originalLength: input.length, droppedChars: 0 };
   }
 
-  // 60% head / 40% tail favors the framing of the plan (intro, scope,
-  // NFRs typically come first) while keeping the conclusion (validation,
-  // tradeoffs, build sequence) visible.
   const dropped = input.length - cap;
   const marker = `\n\n[… ${dropped.toLocaleString()} chars omitted …]\n\n`;
   const room = cap - marker.length;

@@ -1,6 +1,3 @@
-// Anthropic per-million-token rates, USD. Cache write is 1.25x the input
-// rate; cache read is 0.1x the input rate (Anthropic's ephemeral cache
-// pricing). Update here when rates change.
 const RATES_PER_M_USD: Record<string, { input: number; output: number }> = {
   'claude-opus-4-7':   { input: 5,  output: 25 },
   'claude-opus-4-6':   { input: 5,  output: 25 },
@@ -19,9 +16,6 @@ export interface CostInputs {
 export function computeCostUsd(audit: CostInputs): number | null {
   const r = RATES_PER_M_USD[audit.modelUsed];
   if (!r) return null;
-  // Claude CLI doesn't expose token counts (everything reads as 0). If
-  // the provider couldn't track tokens we don't know what was billed —
-  // return null so the UI shows "—" instead of a misleading "$0".
   const totalTokens =
     audit.tokensIn + audit.tokensOut + audit.cacheCreationTokens + audit.cacheReadTokens;
   if (totalTokens === 0) return null;

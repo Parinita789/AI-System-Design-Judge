@@ -58,8 +58,6 @@ export class SignalMentorService {
 
     const ids = gapSignalIds(rubric, signalResults);
 
-    // No gaps → persist an empty annotations row so the frontend stops
-    // polling and renders nothing extra. No LLM call.
     if (ids.length === 0) {
       this.logger.log(
         `Signal-mentor for eval ${evaluationId}: no gap signals — persisting empty row.`,

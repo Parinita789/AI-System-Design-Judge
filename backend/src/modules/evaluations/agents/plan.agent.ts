@@ -15,10 +15,6 @@ import { computeScore } from '../services/score-computer';
 import { truncatePlanMd } from '../helpers/truncate-plan-md';
 
 const PLAN_AGENT_MAX_TOKENS = 4096;
-// Warn when total input tokens (regular + cache writes + cache reads)
-// exceed this. Catches overflow risk on smaller-context models. 150K
-// is comfortably below Sonnet/Haiku 4.5's 200K window with headroom
-// for the response.
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
@@ -40,10 +36,6 @@ export class PlanAgent extends BasePhaseAgent {
     const useTools = this.llm.supportsToolUse();
     const tool = useTools ? buildPlanEvalTool(rubric) : null;
 
-    // Hard-cap plan.md size before it enters the LLM payload. Verbose
-    // plans (50K+ chars of code dumps, scratch notes) silently fill the
-    // context window on smaller-context models. Truncation keeps head +
-    // tail with an explicit omission marker.
     const truncated = truncatePlanMd(input.planMd);
     if (truncated.droppedChars > 0) {
       this.logger.warn(
@@ -75,7 +67,6 @@ export class PlanAgent extends BasePhaseAgent {
       {
         system: systemBlocks,
         maxTokens: PLAN_AGENT_MAX_TOKENS,
-        // Deterministic verdicts: same plan + same rubric → same signals.
         temperature: 0,
         ...(tool
           ? {

@@ -9,7 +9,6 @@ describe('classifyMode', () => {
     ['Design a distributed system for global counters.', 'design'],
     ['Design a sharded key-value store.', 'design'],
     ['Design a multi-region replicated cache.', 'design'],
-    // Adjectives between the K/M/B number and the scale noun:
     ['Design a URL Shortener to handle 100M daily requests.', 'design'],
     ['Design a chat application that handles 50M concurrent users.', 'design'],
     ['Design a feed for 100M monthly active users.', 'design'],
@@ -29,10 +28,6 @@ describe('classifyMode', () => {
   });
 
   it('does not match "ai" inside other words (false-positive guard)', () => {
-    // A question about maintaining a leaderboard contains the substring
-    // "ai" but should NOT be treated as production-scale on that basis.
-    // (This guard lives in the AI relevance gate, not here, but it's
-    // worth pinning behavior since the patterns share heritage.)
     expect(classifyMode('Build a system to maintain a leaderboard for video games.')).toBe(
       'build',
     );

@@ -7,9 +7,6 @@ export type BufferedAITurn = NormalizedAITurn & { id: number; sent: boolean };
 
 const DEFAULT_DIR = path.join(os.homedir(), '.mentor');
 
-// Sibling to EventBuffer (file-event buffer). Same JSONL + cursor
-// pattern; different payload shape and a different cursor sidecar so
-// the two buffers can't accidentally cross-mark each other's ids.
 export class AIBuffer {
   private file: string;
   private cursorFile: string;

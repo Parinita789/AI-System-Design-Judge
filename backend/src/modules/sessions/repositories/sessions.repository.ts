@@ -2,9 +2,6 @@ import { Injectable } from '@nestjs/common';
 import { Seniority as PrismaSeniority, SessionStatus } from '@prisma/client';
 import { PrismaService } from '../../../database/prisma.service';
 
-// Excludes buildTokenHash so it never reaches API responses. The
-// hash is consumed only inside BuildTokenService.verify, which uses
-// Prisma directly rather than going through this repository.
 function stripHash<T extends { buildTokenHash?: string | null } | null>(
   row: T,
 ): T extends null ? null : Omit<NonNullable<T>, 'buildTokenHash'> {
@@ -56,11 +53,6 @@ export class SessionsRepository {
     throw new Error('Not implemented');
   }
 
-  // Hard delete. Every child table FK has onDelete: Cascade
-  // (snapshots, hints, build_events, build_ai_interactions,
-  // phase_evaluations -> evaluation_audits + mentor_artifacts +
-  // signal_mentor_artifacts), so a single row deletion cascades
-  // through the whole dependency tree atomically.
   deleteById(id: string) {
     return this.prisma.session.delete({ where: { id } });
   }

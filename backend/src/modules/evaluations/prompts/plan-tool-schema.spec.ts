@@ -131,11 +131,6 @@ describe('buildPlanEvalTool', () => {
   });
 
   it('schema size scales with signal count (refs, not inlined copies)', () => {
-    // 25 signals with $ref should be much smaller than the same with inlined sub-schemas.
-    // The sub-schema serializes to ~400 chars, so 25 inlined copies add ~10KB.
-    // Each $ref is ~28 chars; 25 refs add ~700 chars. Plus the canonical
-    // topics enum lives in $defs.gap_topic — that's a fixed ~1.5KB cost
-    // independent of signal count.
     const ids = Array.from({ length: 25 }, (_, i) => `s${i}`);
     const tool = buildPlanEvalTool(rubric(ids.map((id) => signal(id))));
     const serialized = JSON.stringify(tool.inputSchema);

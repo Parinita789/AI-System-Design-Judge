@@ -82,12 +82,6 @@ export class BuildSessionsService {
     };
   }
 
-  // Idempotent: a second call after finish returns the same eventCount
-  // without shifting buildEndedAt forward. If a previous finish set the
-  // timestamp but the background orchestrator dispatch crashed (or the
-  // process restarted before it ran), no build eval row exists. Treat
-  // a no-eval idempotent call as "retry the dispatch" so the eval still
-  // eventually lands.
   async finishBuildPhase(sessionId: string): Promise<{ ok: true; eventCount: number }> {
     const existing = await this.prisma.session.findUnique({
       where: { id: sessionId },
@@ -120,9 +114,6 @@ export class BuildSessionsService {
     return { ok: true, eventCount: updated.buildEventCount };
   }
 
-  // Fire-and-forget. The CLI shouldn't wait on the LLM call; failure
-  // surfaces only in logs. Tracked so a SIGTERM mid-LLM-call gets a
-  // chance to drain instead of cutting the eval mid-write.
   private dispatchBuildEval(sessionId: string): void {
     this.tasks.track(
       this.orchestrator.run(sessionId, ['build']),

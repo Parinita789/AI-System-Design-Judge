@@ -22,7 +22,6 @@ describe('BuildTokenService', () => {
       expect(out.sessionId).toBe('sid-1');
       expect(out.expiresInMinutes).toBe(60);
       expect(out.buildStartedAt).toBeInstanceOf(Date);
-      // Token shape: <sessionId>.<hex>
       const [sid, secret] = out.token.split('.');
       expect(sid).toBe('sid-1');
       expect(secret).toMatch(/^[0-9a-f]{64}$/);
@@ -32,7 +31,6 @@ describe('BuildTokenService', () => {
       expect(call.data.buildEndedAt).toBeNull();
       expect(call.data.buildStartedAt).toBeInstanceOf(Date);
       expect(call.data.buildTokenHash).toMatch(/^\$2[ab]\$/);
-      // Persisted hash matches the secret half (not the full token).
       expect(await bcrypt.compare(secret, call.data.buildTokenHash)).toBe(true);
       expect(await bcrypt.compare(out.token, call.data.buildTokenHash)).toBe(false);
     });

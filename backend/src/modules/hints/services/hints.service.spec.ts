@@ -53,7 +53,6 @@ describe('HintsService', () => {
       await service.send('sid-1', 'What about caching?');
 
       const messages = llmService.call.mock.calls[0][0];
-      // Two prior turns → 4 messages, then the new user message → 5 total.
       expect(messages).toHaveLength(5);
       expect(messages[0]).toEqual({ role: ChatRole.User, content: 'Q1' });
       expect(messages[1]).toEqual({ role: ChatRole.Assistant, content: 'R1' });
@@ -113,8 +112,7 @@ describe('HintsService', () => {
       expect(persisted.tokensIn).toBe(200);
       expect(persisted.tokensOut).toBe(30);
       expect(persisted.artifactStateAtPrompt).toEqual({ planMd: '# Plan' });
-      expect(persisted.elapsedMinutes).toBeGreaterThanOrEqual(6); // ~7 min ago session
-      expect(persisted.elapsedMinutes).toBeLessThanOrEqual(8);
+      expect(persisted.elapsedMinutes).toBeGreaterThanOrEqual(6);      expect(persisted.elapsedMinutes).toBeLessThanOrEqual(8);
       expect(persisted.inferredPhase).toBeNull();
       expect(result).toEqual({ id: 'ai-new' });
     });

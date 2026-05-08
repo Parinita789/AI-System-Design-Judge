@@ -22,8 +22,7 @@ describe('validateEvalToolArgs', () => {
     expect(out.signals.shape_and_seams.result).toBe('partial');
     expect(out.feedback).toBe('fb');
     expect(out.topActions).toEqual(['a1', 'a2']);
-    expect(out.score).toBe(0); // placeholder; computed downstream
-  });
+    expect(out.score).toBe(0);  });
 
   it('accepts topActions camelCase as fallback', () => {
     const args = ok();

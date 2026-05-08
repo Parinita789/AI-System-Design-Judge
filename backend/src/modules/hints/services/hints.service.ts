@@ -20,11 +20,9 @@ export class HintsService {
   ) {}
 
   async send(sessionId: string, message: string) {
-    const session = await this.sessionsService.getWithQuestion(sessionId); // throws 404 if missing
-    const latestSnapshot = await this.snapshotsService.latest(sessionId);
+    const session = await this.sessionsService.getWithQuestion(sessionId);    const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const planMd = (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
-    // Build messages array from prior turns + new message.
     const history = await this.aiInteractionsRepo.findBySession(sessionId);
     const messages: ChatMessage[] = [];
     for (const turn of history) {
@@ -32,9 +30,6 @@ export class HintsService {
       messages.push({ role: ChatRole.Assistant, content: turn.response });
     }
 
-    // Inject current plan.md into the latest user message so the bot grounds
-    // hints in what's actually written. Past turns reference past plan state;
-    // that's expected — the rubric cares about iteration.
     const latestUserContent = planMd
       ? `[Current plan.md]\n${planMd}\n\n[Question]\n${message}`
       : `[plan.md is empty]\n\n[Question]\n${message}`;

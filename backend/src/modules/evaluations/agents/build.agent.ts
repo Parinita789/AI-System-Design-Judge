@@ -42,9 +42,6 @@ export class BuildAgent extends BasePhaseAgent {
         `aiTurns=${ctx?.aiTurns.length ?? 0}, useTools=${useTools})`,
     );
 
-    // Same hard-cap PlanAgent uses; the build prompt also stuffs the plan as
-    // cross-reference, so a 50K-char plan would blow past the input-token
-    // budget on smaller-context models.
     const truncated = truncatePlanMd(input.planMd);
     if (truncated.droppedChars > 0) {
       this.logger.warn(
@@ -113,10 +110,6 @@ export class BuildAgent extends BasePhaseAgent {
       );
     }
 
-    // The rendered user message includes the per-file timeline, build
-    // summary, tree paths, and key snippets exactly as the LLM saw them.
-    // Passing it whole means quotes from any rendered section ground
-    // cleanly without us reconstructing each block here.
     const validated = validateEvidence(
       parsed.signals,
       input.planMd,
@@ -174,16 +167,11 @@ function buildEvidenceCorpusItems(
     prompt: h.prompt,
     response: h.response,
   }));
-  // The whole rendered user message covers the build summary, timeline,
-  // tree paths, key snippets, and AI turn list exactly as the LLM read
-  // them. Single bulk entry; the validator does substring grounding.
   items.push({ prompt: 'rendered-user-message', response: renderedUserMessage });
 
   const ctx = input.buildContext;
   if (!ctx) return items;
 
-  // Plus the full file contents (the prompt only renders top-N snippets
-  // capped at 4KB each) so quotes from a non-snippet file still ground.
   for (const f of ctx.allFileContents) {
     items.push({ prompt: f.path, response: f.content });
   }

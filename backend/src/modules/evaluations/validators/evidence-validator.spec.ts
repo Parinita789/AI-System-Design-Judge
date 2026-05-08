@@ -81,7 +81,6 @@ Url(id, slug, target, click_count). Single table.
         {
           capacity_estimation: result(
             'hit',
-            // Plan has no capacity numbers anywhere — invented evidence.
             'The plan estimates 200M URLs at 300 bytes each = 60 GB hot storage.',
           ),
         },
@@ -158,8 +157,6 @@ Url(id, slug, target, click_count). Single table.
 
     it('skips when the evidence has fewer than 5 long words after normalization', () => {
       const out = validateEvidence(
-        // Long but mostly punctuation / very short tokens — letting it
-        // through is safer than a confident downgrade on weak signal.
         { x: result('hit', 'A B C D E F G H I J K L M N O.') },
         PLAN,
         [],

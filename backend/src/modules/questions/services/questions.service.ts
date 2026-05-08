@@ -25,7 +25,6 @@ export class QuestionsService {
 
   async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
     const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v1.0';
-    // v1.0 takes the legacy single-rubric path (no mode/seniority).
     const mode = rubricVersion === 'v1.0'
       ? null
       : (dto.mode ?? classifyMode(dto.prompt));
@@ -96,17 +95,6 @@ export class QuestionsService {
     return session;
   }
 
-  // Hard delete with cascade through every attempt.
-  //
-  // The question row's FK to sessions is onDelete: Restrict — a single
-  // prisma.question.delete would throw if any session existed. The repo
-  // method does a transactional deleteMany on sessions (cascades through
-  // snapshots, hints, build_events, build_ai_interactions, phase_evals
-  // and their downstream artifacts) followed by deleting the question.
-  //
-  // Per-session disk artifacts are scheduled for async cleanup so the
-  // API response stays snappy regardless of how many attempts the
-  // question accumulated.
   async deleteQuestion(
     questionId: string,
   ): Promise<{ ok: true; deletedSessions: number }> {

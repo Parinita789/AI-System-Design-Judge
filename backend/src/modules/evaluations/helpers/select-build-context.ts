@@ -23,9 +23,6 @@ interface RawAiTurn {
   occurredAt: Date;
 }
 
-// Pick which file snippets get rendered verbatim into the eval prompt and
-// which AI turns get included. Sized so a heavy build session stays
-// comfortably under the 100K-token prompt budget.
 export function selectBuildContext(args: {
   events: RawEvent[];
   aiTurns: RawAiTurn[];

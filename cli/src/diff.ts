@@ -14,15 +14,11 @@ export interface DiffOutcome {
   contentDiff: string | null;
 }
 
-// True when the file was touched but content is unchanged. Such an
-// event has no information for the backend; the watcher should drop it
-// rather than ship a phantom "modified" with no payload.
 export function isNoopOutcome(o: DiffOutcome): boolean {
   return o.action === 'modified' && o.contentDiff === '' && o.content === null;
 }
 
 export function isLikelyBinary(content: string): boolean {
-  // Heuristic: real binary files often contain NULs in the first 4KB.
   const slice = content.slice(0, 4096);
   return slice.indexOf('\0') !== -1;
 }

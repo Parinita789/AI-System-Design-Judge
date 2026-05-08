@@ -62,9 +62,6 @@ describe('parseEvalOutput', () => {
     });
 
     it('does not validate dropped signals\' inner shape', () => {
-      // A hallucinated signal with a malformed body would normally throw
-      // (missing/invalid result/evidence). When it's outside the expected
-      // set, it should be silently dropped instead.
       const raw = {
         signals: {
           known: { result: 'hit', evidence: 'q' },

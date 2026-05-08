@@ -18,9 +18,6 @@ export function buildPlanPrompt(
   input: PhaseEvalInput,
   opts: BuildPlanPromptOptions = {},
 ): BuiltPrompt {
-  // Both blocks are cacheable: the rubric is frozen across evaluations
-  // and the session question is constant within a session, so prompt
-  // caching catches them.
   const deduped = dedupePlanMd(input.planMd);
   const inputForRender: PhaseEvalInput =
     deduped.removedParagraphs > 0 ? { ...input, planMd: deduped.text } : input;
@@ -78,7 +75,6 @@ Good modes: ${aiUsage.goodModes.join('; ')}
 Bad modes: ${aiUsage.badModes.join('; ')}`
     : '';
 
-  // v2.0+ has its variant pre-selected; v1.0 needs the LLM to classify.
   const modeOpener = rubric.mode
     ? `## How to read this rubric (the ${rubric.mode} variant has already been chosen)
 You are evaluating a system-design plan in the **${rubric.mode}** variant
@@ -352,7 +348,6 @@ function renderUserPayload(input: PhaseEvalInput): string {
     sections.push(`## Snapshot timeline\n${lines.join('\n')}`);
   }
 
-  // Full chat history is needed to judge ai_authored_plan reliably; no sampling.
   if (input.hints.length === 0) {
     sections.push(`## AI hint usage\nNo hint chat used during this session.`);
   } else {

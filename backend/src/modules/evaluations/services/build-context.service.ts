@@ -5,10 +5,6 @@ import { reconstructBuildTree } from '../helpers/reconstruct-build-tree';
 import { selectBuildContext } from '../helpers/select-build-context';
 import { BuildContext } from '../types/evaluation.types';
 
-// Pulls captured build artifacts from the dedicated tables, reconstructs
-// the final-state tree, and trims to a prompt-shaped slice. Lives outside
-// the orchestrator so MentorService and SignalMentorService can produce
-// build-aware artifacts without re-implementing the helpers.
 @Injectable()
 export class BuildContextService {
   private readonly logger = new Logger(BuildContextService.name);

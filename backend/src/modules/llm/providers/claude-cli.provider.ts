@@ -5,9 +5,6 @@ import { ChatRole } from '../constants';
 import { LlmProvider } from './llm-provider.interface';
 import { flattenSystem } from './ollama.provider';
 
-// Uses the user's logged-in Claude Code account; no API key required.
-// The CLI is single-prompt-in / text-out, so system + messages are
-// flattened into one prompt string and role separation is lost.
 @Injectable()
 export class ClaudeCliProvider implements LlmProvider {
   readonly name = 'claude_cli';

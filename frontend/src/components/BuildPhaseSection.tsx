@@ -31,8 +31,6 @@ export function BuildPhaseSection({ session }: { session: Session }) {
     },
   });
 
-  // When the poll detects the build finished, refetch the parent
-  // session so buildEndedAt propagates without waiting for navigation.
   useEffect(() => {
     if (summaryQuery.data?.buildEndedAt) {
       queryClient.invalidateQueries({ queryKey: ['session', session.id] });
@@ -203,8 +201,6 @@ function InstallCommand({
   buildStartedAtIso: string | null;
 }) {
   const [copied, setCopied] = useState(false);
-  // Pass --build-started-at so the watcher filters Claude Code log
-  // sessions whose first turn predates this build phase.
   const watchFlags = buildStartedAtIso
     ? `--build-started-at ${buildStartedAtIso}`
     : '';

@@ -80,7 +80,6 @@ describe('ClaudeCliProvider', () => {
       model: 'claude-haiku-4-5',
     });
 
-    // Second arg of the client.run call carries the model override.
     expect(client.run.mock.calls[0][1]).toBe('claude-haiku-4-5');
   });
 

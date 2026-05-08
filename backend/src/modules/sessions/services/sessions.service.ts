@@ -8,8 +8,6 @@ import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
 
-// buildTokenHash is intentionally stripped at the repository — it
-// must never reach the API. The service surfaces the redacted shape.
 export type RedactedSession = Omit<Session, 'buildTokenHash'>;
 
 export interface EndSessionResult {
@@ -52,8 +50,6 @@ export class SessionsService {
     const status = dto.status ?? SessionStatus.completed;
     const ended = await this.sessionsRepository.markEnded(sessionId, status);
 
-    // Only auto-evaluate when the session completes naturally. Cancelled
-    // (abandoned) sessions skip evaluation entirely.
     if (status !== SessionStatus.completed) {
       return { session: ended, evaluations: [], evalError: null };
     }
@@ -64,18 +60,10 @@ export class SessionsService {
     } catch (err) {
       const message = (err as Error).message ?? String(err);
       this.logger.error(`Evaluation failed for ${sessionId}: ${message}`);
-      // Session stays `completed` — losing the evaluation shouldn't hold the
-      // session hostage. Frontend will surface the error and offer a retry.
       return { session: ended, evaluations: [], evalError: message };
     }
   }
 
-  // Hard delete. The DB row goes immediately; on-disk artifacts
-  // (mentor + signal-mentor prompt/response files under MENTOR_ARTIFACT_DIR
-  // and SIGNAL_MENTOR_ARTIFACT_DIR) are cleaned up fire-and-forget so
-  // the API response stays snappy. A failed disk cleanup is logged but
-  // not surfaced — the orphaned files are harmless and a periodic GC
-  // pass would catch them.
   async deleteSession(sessionId: string): Promise<{ ok: true }> {
     const existing = await this.sessionsRepository.findById(sessionId);
     if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
@@ -85,9 +73,6 @@ export class SessionsService {
     return { ok: true };
   }
 
-  // Public so callers that delete sessions in bulk (e.g.,
-  // QuestionsService.deleteQuestion) can fire the same async cleanup
-  // for each child session without re-implementing the disk paths.
   async cleanupArtifacts(sessionId: string): Promise<void> {
     const dirs = [
       path.resolve(

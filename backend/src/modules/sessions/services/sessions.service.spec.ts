@@ -89,9 +89,6 @@ describe('SessionsService', () => {
     it('returns immediately even if disk cleanup is slow (fire-and-forget)', async () => {
       repo.findById.mockResolvedValue({ id: 'sid-1' });
       repo.deleteById.mockResolvedValue({ id: 'sid-1' });
-      // The service returns synchronously after the DB delete; the
-      // disk cleanup is voided. This test guards against a future
-      // refactor that awaits the cleanup and re-introduces blocking.
       const start = Date.now();
       await service.deleteSession('sid-1');
       expect(Date.now() - start).toBeLessThan(50);

@@ -6,10 +6,6 @@ import { AnthropicProvider } from './anthropic.provider';
 import { OllamaProvider } from './ollama.provider';
 import { ClaudeCliProvider } from './claude-cli.provider';
 
-// Selection priority:
-//   1. LLM_PROVIDER=claude_cli  → ClaudeCliProvider
-//.  2. ANTHROPIC_API_KEY is set   → AnthropicProvider
-//   3. otherwise  → OllamaProvider
 @Injectable()
 export class LlmProviderFactory {
   constructor(

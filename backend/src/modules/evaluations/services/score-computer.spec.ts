@@ -2,7 +2,6 @@ import { computeScore } from './score-computer';
 import { Rubric, RubricSignal } from '../types/rubric.types';
 import { SignalResult } from '../types/evaluation.types';
 
-// Build a minimal rubric for deterministic, weight-controlled tests.
 function makeRubric(signals: RubricSignal[]): Rubric {
   return {
     schemaVersion: 1,
@@ -63,7 +62,6 @@ describe('computeScore', () => {
       sig('g_med', 'good', 'medium'),
       sig('g_low', 'good', 'low'),
     ]);
-    // weights: 3 + 2 + 1 = 6. high=3, medium=2, low=1.
 
     it('all hits → 5', () => {
       const out = computeScore(rubric, {
@@ -76,8 +74,6 @@ describe('computeScore', () => {
     });
 
     it('high-weight miss caps at 3 even when ratio is high', () => {
-      // Miss high weight (3 of 6) but hit the rest = 3/6 = 0.5
-      // but high-weight-missed → cannot get 4 or 5.
       const out = computeScore(rubric, {
         g_high: result('miss'),
         g_med: result('hit'),
@@ -89,10 +85,6 @@ describe('computeScore', () => {
     });
 
     it('ratio just under 0.7 with no high-weight miss → 3, not 4', () => {
-      // hit medium (2), partial low (0.5), miss high impossible if we want no high-miss…
-      // Construct: high partial (1.5), med hit (2), low hit (1) = 4.5 / 6 = 0.75 → 4
-      // To get just under 0.70: partial high (1.5) + miss med (0) + hit low (1) = 2.5/6 = 0.417 → 2
-      // Use weight: 0.85 - 0.86. Make: high hit (3), med partial (1), low miss (0) = 4 / 6 = 0.667 → 3
       const out = computeScore(rubric, {
         g_high: result('hit'),
         g_med: result('partial'),
@@ -131,7 +123,6 @@ describe('computeScore', () => {
     ]);
 
     it('skipped good is removed from max_score', () => {
-      // Skip high (3). Remaining = med + low = 3. Hit both → 3/3 = 1 → 5.
       const out = computeScore(rubric, {
         g_high: result('cannot_evaluate'),
         g_med: result('hit'),
@@ -143,7 +134,6 @@ describe('computeScore', () => {
     });
 
     it('skipped good never counts as high-weight missed', () => {
-      // Skipping high should not block 5.
       const out = computeScore(rubric, {
         g_high: result('cannot_evaluate'),
         g_med: result('hit'),
@@ -161,8 +151,6 @@ describe('computeScore', () => {
     ]);
 
     it('bad HIT subtracts full weight', () => {
-      // good_score = 3 (hit high), bad_deductions = 2 (med bad hit)
-      // ratio = (3 - 2) / 3 = 0.333 → 2
       const out = computeScore(rubric, {
         g_high: result('hit'),
         b_med: result('hit'),
@@ -177,7 +165,6 @@ describe('computeScore', () => {
         b_med: result('partial'),
       });
       expect(out.badDeductions).toBe(1);
-      // (3 - 1) / 3 = 0.667 → 3
       expect(out.score).toBe(3);
     });
 
@@ -201,7 +188,6 @@ describe('computeScore', () => {
         b_high1: result('hit'),
         b_high2: result('hit'),
       });
-      // good_score = 1, bad_deductions = 6 → ratio = max(0, -5)/1 = 0 → 1
       expect(out.ratio).toBe(0);
       expect(out.score).toBe(1);
     });
@@ -218,7 +204,6 @@ describe('computeScore', () => {
         g_seams: result('miss'),
         b_no_seams: result('hit'),
       });
-      // good_score = 0, bad_deductions = 2, max = 3 → ratio = max(0, -2)/3 = 0 → 1
       expect(out.goodScore).toBe(0);
       expect(out.badDeductions).toBe(2);
       expect(out.score).toBe(1);
@@ -243,9 +228,6 @@ describe('computeScore', () => {
     ]);
 
     it('caps the score at cap_at_score regardless of ratio', () => {
-      // hit both goods + critical fires → ratio would be (5-3)/5 = 0.4 → 2
-      // cap_at_score is also 2, so effective cap is no-op here.
-      // Adjust for clarity: skip g_med, only hit g_high
       const all = makeRubric([
         sig('g_high', 'good', 'high'),
         sig('b_critical', 'bad', 'high', { critical: true, capAtScore: 1 }),
@@ -285,7 +267,6 @@ describe('computeScore', () => {
         g_high: result('hit'),
         // g_med absent
       });
-      // Treated as skipped → max_score = 3, good_score = 3 → ratio 1 → 5
       expect(out.maxScore).toBe(3);
       expect(out.score).toBe(5);
     });

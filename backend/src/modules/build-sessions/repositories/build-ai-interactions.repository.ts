@@ -6,9 +6,6 @@ import { BuildAIInteractionDto } from '../dto/build-ai-interaction.dto';
 export class BuildAIInteractionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // skipDuplicates relies on the (sessionId, externalSessionId, turnIndex)
-  // unique index — a re-shipped batch from a wiped CLI cursor file
-  // silently coalesces instead of double-writing.
   async insertBatch(sessionId: string, interactions: BuildAIInteractionDto[]): Promise<number> {
     if (interactions.length === 0) return 0;
     const rows = interactions.map((i) => ({
@@ -30,7 +27,6 @@ export class BuildAIInteractionsRepository {
     return result.count;
   }
 
-  // All turns in chronological order for the build evaluator's prompt.
   findAllForSession(sessionId: string) {
     return this.prisma.buildAIInteraction.findMany({
       where: { sessionId },

@@ -60,8 +60,6 @@ export class OllamaProvider implements LlmProvider {
   }
 }
 
-// Shared with ClaudeCliProvider — both providers flatten structured system
-// blocks into a single string since neither supports prompt caching.
 export function flattenSystem(system: LlmCallOptions['system']): string | undefined {
   if (!system) return undefined;
   if (typeof system === 'string') return system;

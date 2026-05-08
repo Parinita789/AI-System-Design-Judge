@@ -1,11 +1,6 @@
 import { Rubric, RubricSignal } from '../types/rubric.types';
 import { SignalResult } from '../types/evaluation.types';
 
-// Replaces the LLM-emitted `score` field, which empirically drifts from
-// the model's own signal judgments — it pattern-matches against the
-// anchor scenarios instead of computing the threshold-table ratio.
-// Algorithm is mirrored in prose at rubrics/v*/plan*.yaml > scoring.computation.
-
 export interface ScoreComputationResult {
   score: number;
   ratio: number;
@@ -45,7 +40,6 @@ export function computeScore(
     }
   }
 
-  // All good signals skipped — score is undefined, return scaleMin.
   if (maxScore === 0) {
     return {
       score: rubric.scoring.scaleMin,
@@ -61,7 +55,6 @@ export function computeScore(
   const ratio = Math.max(0, goodScore - badDeductions) / maxScore;
   let score = thresholdScore(ratio, highWeightGoodMissed.length === 0);
 
-  // Critical bad-signal override caps the score regardless of ratio.
   let appliedCap: number | null = null;
   for (const sig of rubric.signals) {
     if (sig.polarity !== 'bad' || !sig.critical) continue;

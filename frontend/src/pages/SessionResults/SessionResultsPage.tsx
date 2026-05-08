@@ -46,8 +46,6 @@ function formatScore(score: number | string): string {
   return Number.isFinite(n) ? n.toFixed(2) : String(score);
 }
 
-// Closes a popover when the user mousedowns outside the wrapper element.
-// Listens only while `active` so we don't leak handlers across renders.
 function useOutsideClickToClose(
   ref: RefObject<HTMLElement>,
   active: boolean,
@@ -64,7 +62,6 @@ function useOutsideClickToClose(
   }, [ref, active, onClose]);
 }
 
-// "claude-opus-4-7" → "Opus 4.7"; "llama3.1" stays as-is.
 function formatModelName(model: string | null | undefined): string {
   if (!model) return '—';
   const m = model.match(/^claude-(opus|sonnet|haiku)-(\d+)-(\d+)/i);
@@ -73,7 +70,6 @@ function formatModelName(model: string | null | undefined): string {
   return `${tier} ${m[2]}.${m[3]}`;
 }
 
-// < 3 = Failed, [3, 4) = Average, [4, 5) = Good, >= 5 = Great.
 function scoreVerdict(score: number | string): { label: string; className: string } {
   const n = typeof score === 'string' ? parseFloat(score) : score;
   if (!Number.isFinite(n)) {
@@ -93,7 +89,6 @@ export function SessionResultsPage() {
   const forgetSession = useSessionStore((s) => s.forget);
   const [planMdExpanded, setPlanMdExpanded] = useState(false);
   const [attemptsOpen, setAttemptsOpen] = useState(false);
-  // null = follow the latest plan eval; non-null = pinned historical eval.
   const [selectedEvalId, setSelectedEvalId] = useState<string | null>(null);
 
   const sessionQuery = useQuery({
@@ -141,8 +136,7 @@ export function SessionResultsPage() {
   const reEvalMutation = useMutation({
     mutationFn: (model?: string) => evaluationsService.runForSession(id!, model),
     onSuccess: () => {
-      setSelectedEvalId(null); // drop any pinned historical eval
-      queryClient.invalidateQueries({ queryKey: ['evals', id] });
+      setSelectedEvalId(null);      queryClient.invalidateQueries({ queryKey: ['evals', id] });
       queryClient.invalidateQueries({ queryKey: ['question', questionId] });
       queryClient.invalidateQueries({ queryKey: ['questions'] });
     },
@@ -166,12 +160,6 @@ export function SessionResultsPage() {
       setDeleteOpen(false);
       if (id) forgetSession(id);
 
-      // Pick the next-most-recent surviving sibling so the user lands on
-      // a real attempt rather than bouncing through the redirect page
-      // (which can race the cache and briefly route to the deleted id).
-      // Prefer completed attempts (they have evaluations); fall back to
-      // any non-self attempt; if none remain, the redirect page renders
-      // an empty state with a Retry button.
       const siblings = (questionQuery.data?.sessions ?? []).filter((s) => s.id !== id);
       const byStartedDesc = (a: { startedAt: string }, b: { startedAt: string }) =>
         new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
@@ -186,9 +174,6 @@ export function SessionResultsPage() {
         navigate(questionId ? `/questions/${questionId}` : '/');
       }
 
-      // Order matters: navigate first so this page unmounts before the
-      // cache cleanup triggers a refetch on the now-gone id (which would
-      // 404 and flash the error UI on the still-mounted page).
       queryClient.removeQueries({ queryKey: ['session', id] });
       queryClient.removeQueries({ queryKey: ['evals', id] });
       queryClient.removeQueries({ queryKey: ['snapshot', id] });
@@ -198,8 +183,6 @@ export function SessionResultsPage() {
     },
   });
 
-
-  // API orders desc by evaluatedAt — planEvals[0] is the latest.
   const planEvals = useMemo<PhaseEvaluation[]>(
     () => (evalsQuery.data ?? []).filter((e) => e.phase === 'plan'),
     [evalsQuery.data],
@@ -218,11 +201,6 @@ export function SessionResultsPage() {
   const isLatestDisplayed = displayedEval?.id === planEvals[0]?.id;
 
   if (!id) return <div>Missing session id.</div>;
-  // Once the delete mutation has succeeded the row is gone and any
-  // refetch of sessionQuery will 404. We're already navigating away —
-  // render nothing for the brief window before the route transition
-  // commits, so the user doesn't see a "Failed to load session: 404"
-  // flash from this page's own error UI.
   if (deleteMutation.isPending || deleteMutation.isSuccess) {
     return <div className="text-gray-500">Deleting session…</div>;
   }
@@ -480,8 +458,6 @@ function PlanEvaluationView({
   isLatest: boolean;
   onShowLatest: () => void;
   phaseLabel?: string;
-  // Build evals don't get signal-mentor coverage yet (Phase 5). Disable
-  // the query so the page doesn't 404-poll forever.
   signalMentorEnabled?: boolean;
 }) {
   const goodSignals = rubric?.signals.filter((s) => s.polarity === 'good') ?? [];
@@ -647,14 +623,7 @@ function PlanEvaluationView({
   );
 }
 
-// Topics directly relevant to the question that the candidate either
-// missed or only lightly touched. Backend persists these per phase
-// evaluation; the future study feature aggregates them across sessions
-// to drive a "you've missed caching in 3 sessions" view.
 function GapTopicsSection({ topics }: { topics: GapTopic[] }) {
-  // Render canonical snake_case names as title case so they read as
-  // human topics ("cache_aside" -> "Cache aside") without baking a
-  // separate display label into the type.
   const humanize = (name: string) =>
     name
       .split('_')
@@ -922,7 +891,6 @@ function AttemptsSection({
   selectedEvalId: string | null;
   onSelectEval: (id: string | null) => void;
 }) {
-  // API returns oldest-first (so attempt 1 is index 0); reverse for display.
   const ordered = useMemo(
     () =>
       [...attempts].sort(
@@ -1085,8 +1053,6 @@ function EvaluationHistoryForAttempt({
   onSelectEval: (id: string | null) => void;
   attemptNumber?: number;
 }) {
-  // View column is current-attempt-only — pinning a historical eval
-  // from another session would require navigating to it first.
   return (
     <div>
       <div className="flex items-baseline gap-2 mb-2 pb-1 border-b border-slate-200">
@@ -1153,7 +1119,6 @@ function EvaluationHistoryForAttempt({
                       <button
                         type="button"
                         onClick={() =>
-                          // Selecting the latest = clearing the pin.
                           onSelectEval(i === 0 ? null : e.id)
                         }
                         className="text-blue-600 hover:underline text-[11px]"
@@ -1262,7 +1227,6 @@ function CollapsibleSection({
   );
 }
 
-// Lazy-loaded — the audit row can be 10–80 KB, so wait for the click.
 function AuditTrailButton({ evaluationId }: { evaluationId: string }) {
   const [open, setOpen] = useState(false);
   const auditQuery = useQuery({
@@ -1460,7 +1424,6 @@ function TabButton({
   );
 }
 
-// "v1.0" or "v2.0 (build / senior)".
 function formatRubricTag(
   version: string,
   mode: 'build' | 'design' | null | undefined,
@@ -1575,9 +1538,6 @@ function ReEvaluateButton({
   const [showPicker, setShowPicker] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   useOutsideClickToClose(wrapperRef, showPicker, () => setShowPicker(false));
-  // Close as soon as a re-eval is in flight — picking a model fires onRun
-  // immediately, but the user might also have clicked the plain
-  // Re-evaluate button while the picker was open.
   useEffect(() => {
     if (isPending) setShowPicker(false);
   }, [isPending]);
@@ -1633,18 +1593,6 @@ function ReEvaluateButton({
   );
 }
 
-// Mentor's notes — separate LLM call, user-triggered, lazy-loaded.
-// The eval pipeline doesn't fire this; only opens here on user request.
-// Owns the whole Feedback section. Header has the "Feedback" label on
-// the left and a quiet disclosure link on the right that toggles the
-// deep-dive (mentor) feedback. The eval orchestrator fires the mentor
-// call in the background after the eval persists; this component polls
-// every 5s until the artifact lands.
-//
-// Disclosure states:
-//   1. Generating — quiet text + spinner, no click target.
-//   2. Ready, collapsed — "▶ Read the deep-dive feedback" link.
-//   3. Ready, expanded — "▼ Hide deep-dive feedback" + Regenerate link.
 function DeepDiveDisclosure({
   evaluationId,
   feedbackText,
@@ -1708,10 +1656,6 @@ function DeepDiveDisclosure({
     query.error && typeof query.error === 'object' && 'response' in query.error
       ? (query.error as { response?: { status?: number } }).response?.status === 404
       : false;
-  // For fresh evals we usually see a 404 followed by polling-detected
-  // success because the orchestrator fires mentor in the background.
-  // For older evals or after a failed background fire, has404 sits
-  // until the user explicitly clicks to generate.
   const backgroundLikelyRunning = has404 && !artifact && !generateMutation.isPending;
 
   const deepDiveRef = useRef<HTMLDivElement>(null);
@@ -1720,8 +1664,6 @@ function DeepDiveDisclosure({
       const willExpand = !expanded;
       setExpanded(willExpand);
       if (willExpand) {
-        // Defer to next frame so the panel exists in the DOM before
-        // we scroll it into view.
         requestAnimationFrame(() => {
           deepDiveRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
         });

@@ -140,9 +140,6 @@ function renderUserPayload(input: SignalMentorInput): string {
     parts.push(`## Evaluator's overall feedback\n${input.feedbackText}`);
   }
 
-  // The set of gap signals — exactly what the LLM must produce
-  // annotations for. Each entry includes the signal description, judge
-  // notes, the verdict, and the evidence the evaluator quoted.
   const gapBlocks = input.gaps.map((g) => {
     const polarityLabel = g.signal.polarity === 'good' ? 'GOOD signal' : 'BAD signal';
     const verdictLabel = g.result.result.toUpperCase();

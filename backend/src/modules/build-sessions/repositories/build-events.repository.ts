@@ -6,9 +6,6 @@ import { IncomingBuildEvent } from '../types/build-event.types';
 export class BuildEventsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Atomic batch insert + counter increment on the parent session.
-  // Returns the number of rows actually written so the caller can
-  // ack precisely back to the CLI.
   async insertBatch(sessionId: string, events: IncomingBuildEvent[]): Promise<number> {
     if (events.length === 0) return 0;
     const rows = events.map((e) => ({
@@ -33,8 +30,6 @@ export class BuildEventsRepository {
     return this.prisma.buildEvent.count({ where: { sessionId } });
   }
 
-  // Returns the full event log for orchestrator-side tree reconstruction.
-  // Ordered by occurredAt so apply-in-order is correct without a re-sort.
   findAllForSession(sessionId: string) {
     return this.prisma.buildEvent.findMany({
       where: { sessionId },
@@ -49,9 +44,6 @@ export class BuildEventsRepository {
     });
   }
 
-  // One row per file path with aggregate counts for the build-timeline
-  // widget on the results page. Drops content/diff payload — the
-  // widget shows counts only, not text.
   async summaryForSession(sessionId: string) {
     const grouped = await this.prisma.buildEvent.groupBy({
       by: ['filePath'],

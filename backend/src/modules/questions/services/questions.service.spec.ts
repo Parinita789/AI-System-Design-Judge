@@ -48,8 +48,6 @@ describe('QuestionsService', () => {
 
       const result = await service.create({ prompt: 'X' });
 
-      // v1.0 questions don't carry a mode (mode = null routes through
-      // the legacy single-file rubric path).
       expect(questionsRepo.create).toHaveBeenCalledWith({
         prompt: 'X',
         rubricVersion: 'v1.0',
@@ -91,7 +89,6 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      // Question text would auto-detect as design; user picks build.
       await service.create({
         prompt: 'Design a chat for 100M users.',
         mode: 'build',
@@ -150,7 +147,6 @@ describe('QuestionsService', () => {
 
     it('creates a new Session and inherits the most-recent plan.md across all prior sessions', async () => {
       questionsRepo.findById.mockResolvedValue(question);
-      // sid-old-a has older snapshot, sid-old-b has newer — newer wins
       snapshots.latest
         .mockResolvedValueOnce({
           takenAt: new Date('2026-04-01T00:00:00Z'),
@@ -207,7 +203,6 @@ describe('QuestionsService', () => {
 
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
-        // most recent (sid-old-2 by startedAt) was 'staff' — inherit it.
         seniority: 'staff',
       });
     });

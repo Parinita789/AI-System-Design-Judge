@@ -75,9 +75,6 @@ function makeOrchestrator(deps: {
   };
   const buildContextSvc = {
     load: jest.fn().mockImplementation(async (_sid, session) => {
-      // Mirror the real service shape: walk the events ourselves so the
-      // spec exercises the dispatch wiring rather than re-mocking each
-      // BuildContext field.
       const events = (deps.events ?? []) as Array<{
         filePath: string;
         action: 'created' | 'modified' | 'deleted';

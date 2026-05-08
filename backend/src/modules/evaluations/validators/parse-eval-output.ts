@@ -25,7 +25,6 @@ const VALID_GAP_COVERAGES = new Set<GapTopic['coverage']>([
 
 const VALID_RESULTS = new Set(['hit', 'miss', 'partial', 'cannot_evaluate']);
 
-// Strip optional ```json ... ``` or ``` ... ``` fences if present.
 function stripFences(text: string): string {
   const trimmed = text.trim();
   const fenceMatch = trimmed.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?```$/);
@@ -33,8 +32,6 @@ function stripFences(text: string): string {
   return trimmed;
 }
 
-// Smaller LLMs (llama3, gemma, etc.) often preface JSON with prose like
-// "Here is the JSON: { ... }". Extract the first balanced {…} object.
 function extractJsonObject(text: string): string | null {
   const start = text.indexOf('{');
   if (start === -1) return null;
@@ -74,7 +71,6 @@ export function parseEvalOutput(
   try {
     candidate = JSON.parse(cleaned);
   } catch {
-    // Fallback: extract a balanced JSON object out of surrounding prose.
     const extracted = extractJsonObject(cleaned);
     if (extracted) {
       try {
@@ -98,16 +94,12 @@ export function parseEvalOutput(
   }
   const obj = candidate as Record<string, unknown>;
 
-  // score is optional — computeScore overrides it deterministically downstream.
-  // Accept any number; default to 0 when absent or non-numeric so the rest of
-  // the pipeline still runs.
   const scoreCandidate = obj.score;
   const score =
     typeof scoreCandidate === 'number' && !Number.isNaN(scoreCandidate)
       ? scoreCandidate
       : 0;
 
-  // signals
   if (!obj.signals || typeof obj.signals !== 'object') {
     throw new EvaluationParseError('Missing or invalid "signals" object', rawText);
   }
@@ -137,13 +129,11 @@ export function parseEvalOutput(
     };
   }
 
-  // feedback
   const feedback = obj.feedback;
   if (typeof feedback !== 'string') {
     throw new EvaluationParseError('Missing or non-string "feedback"', rawText);
   }
 
-  // top_actions (camelCase or snake_case — accept either)
   const topActionsRaw = (obj.top_actions ?? obj.topActions) as unknown;
   if (!Array.isArray(topActionsRaw)) {
     throw new EvaluationParseError('Missing or non-array "top_actions"', rawText);
@@ -169,10 +159,6 @@ export function parseEvalOutput(
   };
 }
 
-// gap_topics is optional on the wire (some old prompts won't return it)
-// and on the no-tools text path we tolerate missing/empty arrays.
-// Out-of-canonical names are dropped with a warn rather than throwing —
-// mirrors the signal-id drop behavior.
 function extractGapTopics(
   obj: Record<string, unknown>,
   rawText: string,

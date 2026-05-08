@@ -158,9 +158,6 @@ export function ActiveSessionPage() {
   const endMutation = useMutation({
     mutationFn: async (status: 'completed' | 'abandoned') => {
       if (!id) throw new Error('No active session');
-      // Flush unsaved content on both End and Cancel — even an abandoned
-      // session's plan.md is the source-of-truth for retry-inheritance,
-      // so a cancelled attempt must still land its diagrams on disk.
       if (seededRef.current && content !== lastSavedContentRef.current) {
         await saveMutation.mutateAsync(content);
       }
@@ -195,8 +192,6 @@ export function ActiveSessionPage() {
 
   const dirtyNow = seededRef.current && content !== lastSavedContentRef.current;
 
-  // Freeze the timer the moment End/Cancel is pressed so it doesn't keep
-  // advancing during the backend round-trip and final eval.
   const timerStopped = isPaused || endMutation.isPending || endMutation.isSuccess;
   useEffect(() => {
     if (timerStopped) return;
@@ -219,8 +214,6 @@ export function ActiveSessionPage() {
     return () => clearTimeout(t);
   }, [content]);
 
-  // Mirror live values into refs so the unload listener (registered once)
-  // reads the latest content without rebinding.
   const contentRef = useRef(content);
   useEffect(() => {
     contentRef.current = content;
@@ -230,7 +223,6 @@ export function ActiveSessionPage() {
     sessionRef.current = sessionQuery.data;
   }, [sessionQuery.data]);
 
-  // sendBeacon is used because fetch/axios don't reliably complete on unload.
   useEffect(() => {
     if (!id) return;
     const flushOnExit = () => {
@@ -250,7 +242,6 @@ export function ActiveSessionPage() {
         elapsedMinutes,
         artifacts: { planMd: contentRef.current },
       });
-      // application/json so NestJS body-parses; sendBeacon defaults to form-urlencoded.
       const blob = new Blob([body], { type: 'application/json' });
       navigator.sendBeacon(url, blob);
     };
@@ -268,7 +259,6 @@ export function ActiveSessionPage() {
   if (sessionQuery.isPending) return <div>Loading session…</div>;
 
   const session = sessionQuery.data;
-  // Re-render each tick so the elapsed timer updates; pauseState handles the math.
   void now;
   const elapsed = computeElapsedMs(pauseState, session.startedAt);
   const dirty = seededRef.current && content !== lastSavedContentRef.current;

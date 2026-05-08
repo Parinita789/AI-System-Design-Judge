@@ -1,6 +1,3 @@
-// Mentor artifact: a Markdown document. The backend doesn't validate
-// its structure; the prompt asks for six `##` sections but the LLM has
-// freedom over wording. The frontend renders content as Markdown.
 
 export interface MentorArtifact {
   content: string;

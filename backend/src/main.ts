@@ -7,12 +7,6 @@ import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 
 const bootstrapLogger = new Logger('Bootstrap');
 
-// Surface unhandled async errors instead of letting Node print
-// "UnhandledPromiseRejection" with no context. We don't crash the
-// process — long-running services often see one-off LLM rate limits
-// or network blips that aren't worth losing all in-flight work over.
-// If the same error keeps firing, it'll show up clearly in the log
-// and the operator can intervene.
 process.on('unhandledRejection', (reason) => {
   const err = reason as Error;
   bootstrapLogger.error(
@@ -35,11 +29,6 @@ async function bootstrap() {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableCors({ origin: config.get<string>('CORS_ORIGIN') ?? 'http://localhost:5173' });
 
-  // Enables Nest's onModuleDestroy / beforeApplicationShutdown /
-  // onApplicationShutdown lifecycle hooks. Without this, SIGTERM/SIGINT
-  // terminates the process without giving Prisma a chance to close its
-  // connection pool or letting BackgroundTaskTracker drain in-flight
-  // LLM calls.
   app.enableShutdownHooks(['SIGINT', 'SIGTERM']);
 
   const swaggerConfig = new DocumentBuilder()
@@ -71,9 +60,6 @@ async function bootstrap() {
 }
 
 bootstrap().catch((err) => {
-  // Without this, a thrown bootstrap error prints the stack with no
-  // context and exits 1 silently. Log via the same Logger plumbing so
-  // it's consistent with the rest of the app.
   bootstrapLogger.error(
     `Bootstrap failed: ${(err as Error).message}`,
     (err as Error).stack,

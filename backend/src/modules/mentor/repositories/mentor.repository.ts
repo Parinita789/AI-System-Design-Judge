@@ -6,9 +6,6 @@ import { MentorArtifact, MentorResult } from '../types/mentor.types';
 export class MentorRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Upsert by phaseEvaluationId — re-running mentor generation on the
-  // same evaluation overwrites rather than appending. The unique
-  // constraint on phase_evaluation_id keeps the 1:1 invariant.
   upsertByEvaluationId(phaseEvaluationId: string, result: MentorResult) {
     const data = {
       content: result.artifact.content,

@@ -13,9 +13,6 @@ export class EvaluationsService {
     private readonly sessionsService: SessionsService,
   ) {}
 
-  // Dispatches every phase the session has artifacts for: plan always,
-  // build only when the build phase has been finalised. validate/wrap
-  // are still stubs and not dispatched here.
   async runForSession(sessionId: string, model?: string) {
     const session = await this.sessionsService.getWithQuestion(sessionId);
     const phases: Phase[] = ['plan'];

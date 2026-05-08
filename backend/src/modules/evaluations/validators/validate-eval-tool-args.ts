@@ -91,10 +91,6 @@ export function validateEvalToolArgs(
       if (typeof t.name !== 'string') {
         throw new EvaluationParseError('gap_topic.name must be a string', rawText);
       }
-      // Out-of-canonical names get dropped with a warn rather than
-      // throwing — even with the tool schema's enum the LLM occasionally
-      // returns a near-paraphrase the validator rejects, and we'd
-      // rather lose one topic than the whole eval.
       if (!isCanonicalTopic(t.name)) {
         droppedTopicNames.push(t.name);
         continue;

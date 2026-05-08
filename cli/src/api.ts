@@ -67,12 +67,8 @@ export class MentorApiClient {
   }
 }
 
-// Exponential backoff for transient flush failures. 1s, 4s, 16s, then give up.
 export const DEFAULT_BACKOFF_MS: readonly number[] = [1000, 4000, 16000];
 
-// Some axios failures (ECONNREFUSED on Node 25, request aborts) leave
-// `err.message` empty but populate `err.code` and/or `err.response.status`.
-// Pick the first non-empty descriptor so the user sees something useful.
 export function describeError(err: unknown): string {
   if (!err) return 'unknown error';
   const e = err as {
@@ -112,10 +108,6 @@ export async function sendWithBackoff(
   return { ok: false, accepted: 0, error: describeError(lastErr) };
 }
 
-// Drains all unsent events from the buffer in chunks. A single huge POST
-// would hit body-size limits + timeout; a chunked drain still rolls back
-// gracefully when the backend is unreachable (we stop on the first
-// failed batch and leave the rest unsent for next time).
 export async function drainBuffer(
   client: MentorApiClient,
   buffer: { unsent: (limit?: number) => BufferedEvent[]; markSent: (ids: number[]) => void },
@@ -136,9 +128,6 @@ export async function drainBuffer(
   return { flushed, remaining: 0 };
 }
 
-// Same shape as drainBuffer but for the AI-turn buffer; lives here so
-// the watch + finish + status modules don't have to know which client
-// method to call.
 export async function sendAiWithBackoff(
   client: MentorApiClient,
   turns: BufferedAITurn[],

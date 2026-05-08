@@ -9,9 +9,6 @@ describe('RubricLoaderService — v1.0 plan rubric (real file)', () => {
     const config = {
       get: jest.fn((key: string) => {
         if (key === 'rubric.dir') {
-          // Resolve relative to the repo root so the spec works under
-          // any cwd Jest happens to run in.
-          // backend/src/modules/evaluations/services → backend/rubrics
           return path.join(__dirname, '..', '..', '..', '..', 'rubrics');
         }
         return undefined;
@@ -50,7 +47,6 @@ describe('RubricLoaderService — v1.0 plan rubric (real file)', () => {
     const rubric = await loader.load('v1.0', 'plan');
     const sig = rubric.signals.find((s) => s.id === 'ai_authored_plan');
     expect(sig?.requiresEvidence).toEqual(['hints', 'snapshots']);
-    // Critical was dropped — signal still exists but no longer caps score.
     expect(sig?.critical).toBeFalsy();
     expect(sig?.capAtScore).toBeUndefined();
   });
@@ -153,8 +149,6 @@ describe('RubricLoaderService — v2.0 build/design merge (real files)', () => {
     it('design variant omits build/validation companion signals (build-only)', async () => {
       const rubric = await loader.load('v2.0', 'plan', 'design');
       const ids = new Set(rubric.signals.map((s) => s.id));
-      // Design exercises don't ship code, so these signals are dropped
-      // from the design variant entirely (they live only in plan.build.yaml).
       expect(ids.has('build_sequence_planned')).toBe(false);
       expect(ids.has('no_build_sequence')).toBe(false);
       expect(ids.has('validation_plan_concrete')).toBe(false);
@@ -216,15 +210,12 @@ describe('RubricLoaderService — v2.0 build/design merge (real files)', () => {
     it('keeps the default `weight` when no seniority is provided', async () => {
       const noSeniority = await loader.load('v2.0', 'plan', 'design');
       const cap = noSeniority.signals.find((s) => s.id === 'capacity_estimation');
-      // capacity_estimation has weight: high in design.yaml — that's the
-      // default that applies when nothing resolves the per-seniority map.
       expect(cap?.weight).toBe('high');
     });
 
     it('strips weightBySeniority from the returned signals', async () => {
       const rubric = await loader.load('v2.0', 'plan', 'design', 'senior');
       for (const s of rubric.signals) {
-        // Resolver should drop the field after picking a single weight.
         expect(s.weightBySeniority).toBeUndefined();
       }
     });
@@ -235,8 +226,6 @@ describe('RubricLoaderService — v2.0 build/design merge (real files)', () => {
     });
 
     it('signals without weight_by_seniority are unaffected', async () => {
-      // scope_specificity has only `weight: high` in shared.yaml — the
-      // resolver must leave it alone regardless of seniority.
       const junior = await loader.load('v2.0', 'plan', 'design', 'junior');
       const staff = await loader.load('v2.0', 'plan', 'design', 'staff');
       expect(junior.signals.find((s) => s.id === 'scope_specificity')?.weight).toBe('high');
@@ -247,8 +236,6 @@ describe('RubricLoaderService — v2.0 build/design merge (real files)', () => {
       const j1 = await loader.load('v2.0', 'plan', 'design', 'junior');
       const j2 = await loader.load('v2.0', 'plan', 'design', 'junior');
       const s1 = await loader.load('v2.0', 'plan', 'design', 'staff');
-      expect(j1).toBe(j2); // same cache hit
-      expect(j1).not.toBe(s1); // different seniority → different cache entry
-    });
+      expect(j1).toBe(j2);      expect(j1).not.toBe(s1);    });
   });
 });

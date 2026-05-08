@@ -6,14 +6,6 @@ import { useSessionStore } from '@/store/sessionStore';
 import { extractApiError } from '@/lib/error';
 import type { Seniority } from '@/types/question';
 
-// Clicking a question in the sidebar (or landing here after deleting the
-// last attempt) routes the user to the most useful state for that question:
-//   1. in-progress (active) session → its editor
-//   2. most recently completed session → its results page
-//   3. fall back to the most recent session of any status
-//   4. if the question has no sessions at all → render an inline empty
-//      state with a Retry button so the user can start fresh without
-//      losing the question itself.
 export function QuestionRedirectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -47,8 +39,7 @@ export function QuestionRedirectPage() {
     }
     if (!questionQuery.data) return;
     const sessions = questionQuery.data.sessions;
-    if (sessions.length === 0) return; // empty state rendered below
-
+    if (sessions.length === 0) return;
     const active = sessions.find((s) => s.status === 'active');
     if (active) {
       navigate(`/sessions/${active.id}/active`, { replace: true });
@@ -58,7 +49,6 @@ export function QuestionRedirectPage() {
     const byStartedDesc = (a: { startedAt: string }, b: { startedAt: string }) =>
       new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime();
 
-    // Prefer the most recently completed attempt — it has an evaluation.
     const newestCompleted = [...sessions]
       .filter((s) => s.status === 'completed')
       .sort(byStartedDesc)[0];
@@ -67,7 +57,6 @@ export function QuestionRedirectPage() {
       return;
     }
 
-    // Last resort: a question whose only attempts are abandoned.
     const newest = [...sessions].sort(byStartedDesc)[0];
     navigate(`/sessions/${newest.id}`, { replace: true });
   }, [id, questionQuery.isError, questionQuery.data, navigate]);
@@ -78,8 +67,6 @@ export function QuestionRedirectPage() {
 
   const sessions = questionQuery.data.sessions;
   if (sessions.length > 0) {
-    // useEffect above is redirecting; keep the page minimal during the
-    // transition so we don't flash a stale view.
     return <div className="text-sm text-gray-500">Loading…</div>;
   }
 

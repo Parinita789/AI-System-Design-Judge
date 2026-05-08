@@ -16,9 +16,6 @@ export interface ClaudeCliResult {
   cacheCreationTokens: number;
 }
 
-// Shape of `claude -p --output-format json` stdout. Only the fields we
-// actually consume are typed; the CLI emits more (modelUsage,
-// inference_geo, iterations, etc.) which we ignore.
 interface ClaudeCliJsonEnvelope {
   type: string;
   is_error: boolean;
@@ -136,12 +133,6 @@ export class ClaudeCliClientService {
   }
 }
 
-// Pick the canonical model id. Prefer the caller's explicit choice;
-// otherwise read modelUsage and use the entry that actually produced
-// output tokens (Claude Code may briefly invoke Haiku for routing
-// before delegating the real work to the requested model). Strip
-// suffixes like "[1m]" or "-20251001" so the id matches frontend
-// rate-table keys (claude-opus-4-7, claude-haiku-4-5, ...).
 function pickActualModel(
   modelUsage: ClaudeCliJsonEnvelope['modelUsage'],
   explicit?: string,

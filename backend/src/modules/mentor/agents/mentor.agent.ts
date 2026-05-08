@@ -6,9 +6,6 @@ import { buildMentorPrompt, flattenForAudit } from '../prompts/mentor-prompt';
 import { MentorInput, MentorResult } from '../types/mentor.types';
 
 const MENTOR_AGENT_MAX_TOKENS = 4096;
-// Warn when total input tokens (regular + cache writes + cache reads)
-// exceed this. Same threshold as PlanAgent — keeps overflow risk
-// visible on smaller-context models.
 const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
 
 @Injectable()
@@ -18,8 +15,6 @@ export class MentorAgent {
   constructor(private readonly llm: LlmService) {}
 
   async generate(input: MentorInput): Promise<MentorResult> {
-    // Hard-cap plan.md before it enters the LLM payload. Same risk as
-    // the plan agent — verbose plans inflate the user message.
     const truncated = truncatePlanMd(input.planMd);
     if (truncated.droppedChars > 0) {
       this.logger.warn(
@@ -44,17 +39,12 @@ export class MentorAgent {
       {
         system: built.systemBlocks,
         maxTokens: MENTOR_AGENT_MAX_TOKENS,
-        // Deterministic mentor voice: same plan + same eval should reflect
-        // the same way. Lets us A/B prompt edits without sampling variance.
         temperature: 0,
         ...(input.model ? { model: input.model } : {}),
       },
     );
     const latencyMs = Date.now() - llmStart;
 
-    // Token counts go on the audit for both the in-process logger and
-    // the persisted DB row. Logged loudly so failures or surprising
-    // sizes are visible without tailing audit rows.
     this.logger.log(
       `Mentor artifact ready in ${latencyMs}ms ` +
         `(model=${response.modelUsed}, in=${response.tokensIn}, ` +

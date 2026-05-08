@@ -35,10 +35,6 @@ type RawSignal = {
 
 type RawSection = { id: string; name: string; must_contain: string[] };
 
-// Permissive shape that fits both v1.0 single-file rubrics and v2.0
-// shared files. Variant-only fields (rubric_version, phase_name, goal,
-// time_bounds, scoring.anchors) are optional here and required by the
-// path that consumes them.
 type RawSharedRubric = {
   schema_version: number;
   rubric_version?: string;
@@ -319,7 +315,6 @@ export class RubricLoaderService {
 function toSignal(s: RawSignal): RubricSignal {
   let weightBySeniority: Record<Seniority, WeightTier> | undefined;
   if (s.weight_by_seniority) {
-    // Reject partial maps so a future YAML edit can't silently drop a level.
     const provided = Object.keys(s.weight_by_seniority);
     const missing = SENIORITIES.filter((lvl) => !(lvl in s.weight_by_seniority!));
     if (missing.length > 0) {

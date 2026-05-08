@@ -2,29 +2,20 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 interface PauseState {
-  accumulatedMs: number; // total elapsed prior to the current run
-  runStartedAt: number | null; // ms epoch when current run began; null while paused
-}
+  accumulatedMs: number;  runStartedAt: number | null;}
 
 interface ActiveSessionState {
   sessionId: string | null;
   startedAt: string | null;
-  // Pause state keyed by sessionId so switching between sessions in the
-  // sidebar doesn't lose each one's timer.
   pauseStates: Record<string, PauseState>;
   setActive: (sessionId: string, startedAt: string) => void;
   initPauseState: (sessionId: string, sessionStartedAt: string) => void;
   pause: (sessionId: string) => void;
   resume: (sessionId: string) => void;
   clear: () => void;
-  // Drops everything we kept locally for a session id — clears the
-  // active pointer if it matches and removes the per-session pause
-  // state. Called after a successful DELETE /sessions/:id so a
-  // subsequent app reload doesn't try to fetch the gone row.
   forget: (sessionId: string) => void;
 }
 
-// Persists to localStorage so the session + pause state survive tab close.
 export const useSessionStore = create<ActiveSessionState>()(
   persist(
     (set, get) => ({
@@ -86,8 +77,6 @@ export const useSessionStore = create<ActiveSessionState>()(
   ),
 );
 
-// Compute pause-aware elapsed ms. Falls back to wall-clock when no pause
-// state has been initialized yet (i.e. very first render before initPauseState fires).
 export function computeElapsedMs(
   pauseState: PauseState | undefined,
   sessionStartedAt: string,

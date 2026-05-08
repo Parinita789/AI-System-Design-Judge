@@ -5,7 +5,6 @@ import { PrismaService } from '../../../database/prisma.service';
 export class DashboardRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Aggregation queries (window functions, GIN-indexed JSONB scans). See decisions.md §5.
   selectScoreTrend(_rubricVersion?: string) {
     throw new Error('Not implemented');
   }

@@ -21,14 +21,6 @@ export interface ReconstructedTree {
   brokenPatchPaths: string[];
 }
 
-// Walks the events in chronological order, applying created / modified /
-// deleted to a path -> content map. Returns the surviving entries.
-//
-// Diffs that fail to apply (context mismatch from a missed earlier event,
-// or a CLI-side rebaseline boundary issue) leave the prior content in
-// place and the path is added to brokenPatchPaths so callers can report
-// the gap. Reconstruction does NOT abort — the rest of the tree is still
-// useful.
 export function reconstructBuildTree(events: BuildEventForTree[]): ReconstructedTree {
   const ordered = [...events].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime());
   const contents = new Map<string, string>();
@@ -49,10 +41,6 @@ export function reconstructBuildTree(events: BuildEventForTree[]): Reconstructed
         brokenPatchPaths.add(e.filePath);
         continue;
       }
-      // applyPatch may throw on malformed hunk headers (the diff
-      // package's parser is strict). Treat exceptions the same as
-      // a `false` return — record the gap, keep the prior content,
-      // and continue with the rest of the timeline.
       let patched: string | false;
       try {
         patched = applyPatch(prior, e.contentDiff);

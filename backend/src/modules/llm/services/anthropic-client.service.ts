@@ -9,8 +9,6 @@ export class AnthropicClientService {
 
   constructor(private readonly config: ConfigService) {}
 
-  // Lazy-init: only fail when actually used, so booting under an alternative
-  // provider (e.g. OLLAMA_BASE_URL set) doesn't require an Anthropic key.
   private getClient(): Anthropic {
     if (!this.client) {
       const apiKey = this.config.get<string>(LLM_ENV.ANTHROPIC_API_KEY);

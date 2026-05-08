@@ -24,10 +24,6 @@ export interface NewEvent {
 
 const DEFAULT_DIR = path.join(os.homedir(), '.mentor');
 
-// Append-only JSONL log + in-memory unsent queue. The file is the
-// durable record; the queue tracks which rows still need shipping.
-// Re-opening the buffer after a crash reads every line back and
-// re-marks anything not in the persisted "sent cursor" as unsent.
 export class EventBuffer {
   private file: string;
   private cursorFile: string;

@@ -28,13 +28,6 @@ export class QuestionsRepository {
     return rows.map(flattenQuestion);
   }
 
-  // Single transaction: wipe every session for the question (each
-  // session cascades through snapshots, hints, build_events,
-  // build_ai_interactions, phase_evaluations and their downstream
-  // artifacts), then drop the question row itself. Done together so
-  // a partial failure doesn't leave an orphan question with no
-  // sessions or vice versa. Returns the session ids that were
-  // deleted so the caller can fire async disk cleanup for each.
   async deleteByIdCascading(id: string): Promise<string[]> {
     const sessions = await this.prisma.session.findMany({
       where: { questionId: id },

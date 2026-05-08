@@ -59,7 +59,6 @@ describe('MentorRepository', () => {
     const out = MentorRepository.toApiShape(row as never);
     expect(out!.artifact.content).toContain('## Section 1');
     expect(out!.audit.modelUsed).toBe('claude-haiku-4-5');
-    // renderedPrompt is intentionally not on the API shape; it lives on disk.
     expect((out as Record<string, unknown>).renderedPrompt).toBeUndefined();
   });
 

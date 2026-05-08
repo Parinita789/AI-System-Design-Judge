@@ -9,8 +9,6 @@ const STATE_FILE = path.join(DEFAULT_DIR, 'state.json');
 export interface SessionConfig {
   token: string;
   server: string;
-  // ISO8601. Captured from the start-build response so the AI-log
-  // reader can filter pre-build Claude Code sessions on this project.
   buildStartedAt?: string;
 }
 

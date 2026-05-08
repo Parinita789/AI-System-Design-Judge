@@ -1,6 +1,3 @@
-// Friendly error message extraction for axios + generic error shapes.
-// Prefers the backend's NestJS-formatted body (response.data.message),
-// then the standard Error.message, then network-level fields.
 export function extractApiError(err: unknown): string {
   if (!err) return 'Unknown error';
   const e = err as {

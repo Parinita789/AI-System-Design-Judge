@@ -27,10 +27,6 @@ export class MentorService {
     private readonly config: ConfigService,
   ) {}
 
-  // Public entry: generate or regenerate, persist to DB + disk. Wraps
-  // the LLM call in try/catch — network failures, rate limits, and
-  // occasional API errors are normal and should not propagate.
-  // Returns the persisted row's API shape on success, null on failure.
   async generate(evaluationId: string, model?: string) {
     const evalRow = await this.evalRepo.findById(evaluationId);
     if (!evalRow) {
@@ -67,11 +63,6 @@ export class MentorService {
     try {
       result = await this.mentorAgent.generate(input);
     } catch (err) {
-      // Network errors, rate limits, malformed JSON-prose, anything
-      // the LLM stack throws — log and bail. The caller (orchestrator
-      // for inline generation, controller for explicit re-run) decides
-      // how to surface this; for inline use, the eval row stays valid
-      // and the missing mentor artifact is the only signal of failure.
       const message = (err as Error).message ?? String(err);
       this.logger.warn(
         `Mentor generation failed for evaluation ${evaluationId}: ${message}`,
@@ -79,12 +70,8 @@ export class MentorService {
       return null;
     }
 
-    // Persist to DB.
     const row = await this.mentorRepo.upsertByEvaluationId(evaluationId, result);
 
-    // Persist prompt + response to disk so we can review what the LLM
-    // saw and what it said offline. Best-effort — disk failures
-    // shouldn't roll back the DB row.
     await this.writeToDisk(evalRow.sessionId, evaluationId, result).catch((err) => {
       this.logger.warn(
         `Mentor disk write failed for evaluation ${evaluationId}: ${(err as Error).message}`,
@@ -104,10 +91,6 @@ export class MentorService {
     return MentorRepository.toApiShape(row);
   }
 
-  // Per-session directory under MENTOR_ARTIFACT_DIR (default
-  // ./data/mentor-artifacts). Writes two files per call: the rendered
-  // prompt and the raw response, both stamped with the evaluation id
-  // and a timestamp so re-runs don't overwrite.
   private async writeToDisk(
     sessionId: string,
     evaluationId: string,
@@ -132,9 +115,6 @@ export class MentorService {
     );
   }
 
-  // Pulls the most-recent eval for the OTHER phase, if any, so the mentor
-  // prompt can connect plan strengths to build execution and vice versa.
-  // Returns undefined when no cross-phase eval exists.
   private async loadCrossPhaseSummary(
     sessionId: string,
     selfEvaluationId: string,
@@ -146,8 +126,6 @@ export class MentorService {
     if (!other) return undefined;
 
     const signals = (other.signalResults ?? {}) as unknown as Record<string, SignalResult>;
-    // The mentor prompt only needs a few fired signals as anchors —
-    // pick at most 5 hits + 2 fired bad signals for context.
     const fired: CrossPhaseSummary['topSignalsFired'] = [];
     for (const [id, sig] of Object.entries(signals)) {
       if (sig.result === 'hit' || sig.result === 'partial') {

@@ -11,14 +11,11 @@ import { LlmProviderFactory } from './providers/llm-provider.factory';
 @Global()
 @Module({
   providers: [
-    // Public facade
     LlmService,
-    // Factory + concrete strategies
     LlmProviderFactory,
     AnthropicProvider,
     OllamaProvider,
     ClaudeCliProvider,
-    // Underlying transport clients (HTTP / SDK / child_process)
     AnthropicClientService,
     OllamaClientService,
     ClaudeCliClientService,

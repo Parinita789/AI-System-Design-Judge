@@ -18,11 +18,7 @@ export interface SignalMentorInput {
   feedbackText: string;
   score: number;
   seniority: string | null;
-  // 'plan' or 'build'. The prompt's "concrete-version" instructions
-  // anchor differently per phase: plan-side cites plan.md prose,
-  // build-side cites file paths and snippets from buildContext.
   phase: Phase;
-  // Build-phase only: same buildContext the BuildAgent had.
   buildContext?: BuildContext;
   model?: string;
   sessionId: string;

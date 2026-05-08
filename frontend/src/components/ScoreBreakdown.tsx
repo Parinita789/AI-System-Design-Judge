@@ -40,7 +40,6 @@ function pointsFor(kind: ResultKind, weight: number): number {
   return 0;
 }
 
-// Bad-MISS uses gray (not red) because not firing a bad signal is a positive outcome.
 function buildPolarityPie(
   signals: RubricSignal[],
   results: Record<string, SignalResult>,
@@ -103,7 +102,6 @@ function tierStats(
       const kind = classifyResult(sig, results);
       stats[kind]++;
       stats.earned += pointsFor(kind, weightValues[tier]);
-      // Skipped signals don't contribute to max so they don't drag the % down.
       if (kind !== 'cannot_evaluate') {
         stats.max += weightValues[tier];
       }
@@ -148,8 +146,6 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
   const goodHitCount = goodTiers.reduce((acc, t) => acc + t.hit, 0);
   const goodPartial = goodTiers.reduce((acc, t) => acc + t.partial, 0);
   const goodCreditedCount = goodHitCount + goodPartial;
-  // Exclude cannot_evaluate / not_evaluated from totals — they're not
-  // part of "what could have been earned" for this specific question.
   const goodTotalCount = goodTiers.reduce(
     (acc, t) => acc + t.hit + t.partial + t.miss,
     0,
@@ -178,8 +174,7 @@ export function ScoreBreakdown({ rubric, evaluation }: ScoreBreakdownProps) {
 
   const perSignalData = useMemo(() => {
     const colorFor = (polarity: 'good' | 'bad', kind: ResultKind): string => {
-      if (kind !== 'hit' && kind !== 'partial') return '#d1d5db'; // gray-300
-      return polarity === 'good' ? '#16a34a' : '#dc2626';
+      if (kind !== 'hit' && kind !== 'partial') return '#d1d5db';      return polarity === 'good' ? '#16a34a' : '#dc2626';
     };
 
     const all = rubric.signals

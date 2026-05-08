@@ -252,7 +252,6 @@ describe('ClaudeCodeLogReader.scan', () => {
   it('does not parse the trailing partial line; advances on next scan after newline arrives', async () => {
     const { reader, projectDir } = makeReader();
     const file = path.join(projectDir, 'cc-1.jsonl');
-    // Write a complete first line + a partial second line (no trailing newline).
     fs.writeFileSync(
       file,
       JSON.stringify({
@@ -263,7 +262,6 @@ describe('ClaudeCodeLogReader.scan', () => {
       'utf-8',
     );
     expect(await reader.scan()).toHaveLength(1);
-    // Now finish the second line.
     fs.appendFileSync(
       file,
       'mp":"2026-05-07T00:00:01Z","message":{"role":"user","content":"second"}}\n',

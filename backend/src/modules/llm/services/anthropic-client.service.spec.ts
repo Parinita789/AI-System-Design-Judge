@@ -1,6 +1,5 @@
 import { AnthropicClientService } from './anthropic-client.service';
 
-// Stub out the SDK so the test doesn't try a real API call.
 const sdkCreate = jest.fn();
 jest.mock('@anthropic-ai/sdk', () => {
   return {
@@ -21,14 +20,12 @@ describe('AnthropicClientService', () => {
   it('lazily initializes the SDK on first call (does not crash boot when key missing)', () => {
     config.get.mockReturnValue(undefined);
     const service = new AnthropicClientService(config as never);
-    // Construction must not throw — we may be running under Ollama instead.
     expect(service).toBeInstanceOf(AnthropicClientService);
   });
 
   it('throws a clear error if the env key is missing when actually called', () => {
     config.get.mockReturnValue(undefined);
     const service = new AnthropicClientService(config as never);
-    // createMessage is synchronous — getClient() throws before the SDK call returns a Promise.
     expect(() => service.createMessage({} as never)).toThrow(/ANTHROPIC_API_KEY is not set/);
   });
 
@@ -52,7 +49,6 @@ describe('AnthropicClientService', () => {
     await service.createMessage({} as never);
     await service.createMessage({} as never);
 
-    // get() runs once for the first call's lazy init; subsequent calls reuse the cached client.
     expect(config.get).toHaveBeenCalledTimes(1);
   });
 });

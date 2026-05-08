@@ -7,9 +7,6 @@ import { Mode, Seniority, SENIORITIES } from '@/types/question';
 
 const MIN_PROMPT_LENGTH = 10;
 
-// Mirror of backend mode-classifier.ts so the chip updates live. Backend
-// re-infers when the field is absent at create time, so client/server
-// drift only affects the chip, not the rubric routing.
 const PRODUCTION_SCALE_PATTERNS: RegExp[] = [
   /\b\d+\s*[kmb]\b\s*(req|request|requests|qps|rps|tps|user|users|event|events|message|messages|connection|connections|eps|operations|ops)/i,
   /\b\d+\s*(million|billion)\b/i,

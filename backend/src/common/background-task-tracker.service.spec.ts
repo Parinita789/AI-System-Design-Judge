@@ -15,8 +15,7 @@ describe('BackgroundTaskTracker', () => {
     tracker.track(p, 'test-task');
     expect(tracker.size()).toBe(1);
     resolve();
-    await Promise.resolve(); // flush microtasks
-    await Promise.resolve();
+    await Promise.resolve();    await Promise.resolve();
     expect(tracker.size()).toBe(0);
   });
 
@@ -39,7 +38,6 @@ describe('BackgroundTaskTracker', () => {
     drainPromise.then(() => {
       drained = true;
     });
-    // Give the drain a tick to start.
     await Promise.resolve();
     expect(drained).toBe(false);
 
@@ -53,7 +51,6 @@ describe('BackgroundTaskTracker', () => {
     await tracker.beforeApplicationShutdown('SIGINT');
     const p = Promise.resolve('value');
     const tracked = tracker.track(p, 'late-task');
-    // size stays 0 — the new task isn't registered, just observed.
     expect(tracker.size()).toBe(0);
     await tracked;
   });

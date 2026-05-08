@@ -1,11 +1,3 @@
-// Strips paragraphs that exactly repeat an earlier paragraph (after
-// trim + whitespace-collapse + lowercase normalization). Horizontal-rule
-// markdown ("---", "***", "___") is preserved verbatim — repeating them
-// is structural, not a duplication mistake.
-//
-// Used to pre-process the candidate's plan.md before it enters the LLM
-// user payload. Saves input tokens when the candidate accidentally
-// pasted a section twice or duplicated a heading + body block.
 
 export interface DedupeResult {
   text: string;

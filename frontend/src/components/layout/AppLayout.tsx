@@ -50,9 +50,6 @@ export function AppLayout() {
     queryFn: () => questionsService.list(),
   });
 
-  // The question slated for deletion. Single-flight: one modal at a time;
-  // clicking another row's trash before this completes is a no-op until
-  // the in-flight call settles.
   const [deletingQuestion, setDeletingQuestion] = useState<QuestionWithSessions | null>(null);
   const deleteMutation = useMutation({
     mutationFn: (questionId: string) => questionsService.delete(questionId),
@@ -60,10 +57,6 @@ export function AppLayout() {
       const question = questionsQuery.data?.find((q) => q.id === questionId);
       const sessionIds = question?.sessions.map((s) => s.id) ?? [];
 
-      // If the user is currently viewing the question being deleted (or
-      // any of its sessions), navigate to /home so the now-stale page
-      // can unmount before its queries refetch and 404. Same pattern
-      // we used for delete-session in SessionResultsPage.
       const onDeletedQuestion = activeQuestionId === questionId;
       const onDeletedSession =
         !!activeSessionId && sessionIds.includes(activeSessionId);

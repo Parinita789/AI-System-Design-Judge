@@ -1,10 +1,5 @@
 import { SignalResult } from '../types/evaluation.types';
 
-// Catches the "LLM cited a quote that isn't in plan.md" hallucination
-// mode by ground-checking each HIT/PARTIAL signal's evidence against
-// plan.md + hint history. Ungrounded signals are downgraded one notch
-// and annotated, so the failure is visible numerically and textually.
-
 export interface EvidenceValidationResult {
   signals: Record<string, SignalResult>;
   downgraded: string[];
@@ -73,7 +68,6 @@ function isGrounded(evidence: string, corpus: string): boolean {
   }
 
   const words = evidenceNorm.split(' ').filter((w) => w.length > 2);
-  // Too few content words to validate without false positives.
   if (words.length < 5) return true;
   for (let i = 0; i + 5 <= words.length; i++) {
     const gram = words.slice(i, i + 5).join(' ');
