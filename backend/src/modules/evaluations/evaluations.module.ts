@@ -42,6 +42,11 @@ import { BuildSessionsModule } from '../build-sessions/build-sessions.module';
     WrapAgent,
     SynthesizerAgent,
   ],
-  exports: [EvaluationsService, EvaluationsRepository, RubricLoaderService],
+  exports: [
+    EvaluationsService,
+    EvaluationsRepository,
+    RubricLoaderService,
+    OrchestratorService,
+  ],
 })
 export class EvaluationsModule {}

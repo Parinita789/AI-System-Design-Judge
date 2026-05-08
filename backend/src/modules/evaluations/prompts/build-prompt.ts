@@ -149,7 +149,7 @@ ${calibrationBlock}
 ${aiUsageBlock}
 
 ${renderRelevanceGatingBlock(rubric)}
-${renderOutputBlock(useTools)}`;
+${renderOutputBlock(rubric, useTools)}`;
 }
 
 function renderRelevanceGatingBlock(rubric: Rubric): string {
@@ -164,7 +164,7 @@ score.
 `;
 }
 
-function renderOutputBlock(useTools: boolean): string {
+function renderOutputBlock(rubric: Rubric, useTools: boolean): string {
   if (useTools) {
     return `## Output
 Submit your evaluation by calling the \`submit_build_evaluation\` tool. Every signal listed above (good and bad) must appear in the \`signals\` object — the tool schema enforces this and unknown signal ids are rejected.
@@ -177,12 +177,17 @@ For each signal, write \`reasoning\` first (a brief justification grounded in th
   }
   return `## OUTPUT FORMAT (strict)
 Return ONLY a single valid JSON object. No prose. No markdown fences. No explanations outside the JSON.
-Every signal listed above (good and bad) must appear as a key in the "signals" object with one of: "hit", "miss", "partial", "cannot_evaluate".
-"evidence" should quote verbatim from a captured artifact (<=500 chars).
+
+Every signal listed above (good and bad) must appear as a key in the \`signals\` object. Each signal value MUST be an object with two fields:
+  - \`result\`: one of "hit", "partial", "miss", "cannot_evaluate"
+  - \`evidence\`: a verbatim quote from a captured artifact (<=500 chars). For "cannot_evaluate", explain why the signal is not applicable.
 
 \`feedback\` (<=3000 chars) is a SYNTHESIS, not a per-signal enumeration.
 
-\`top_actions\` (<=5 items, each <=200 chars) must be achievable in a similar future session.`;
+\`top_actions\` (<=5 items, each <=200 chars) must be achievable in a similar future session.
+
+The JSON MUST match this schema:
+${JSON.stringify(rubric.outputSchema, null, 2)}`;
 }
 
 function formatSignal(s: {
