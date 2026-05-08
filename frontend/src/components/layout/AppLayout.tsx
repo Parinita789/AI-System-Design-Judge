@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useMatch } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, Outlet, useMatch, useNavigate } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { questionsService } from '@/services/questions.service';
 import { sessionsService } from '@/services/sessions.service';
+import { useSessionStore } from '@/store/sessionStore';
+import { extractApiError } from '@/lib/error';
+import type { QuestionWithSessions } from '@/types/question';
 
 const SIDEBAR_COLLAPSED_KEY = 'app-sidebar-collapsed';
 
@@ -23,6 +26,10 @@ export function AppLayout() {
   const questionMatch = useMatch('/questions/:id');
   const activeQuestionId = questionMatch?.params.id;
 
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const forgetSession = useSessionStore((s) => s.forget);
+
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
@@ -41,6 +48,40 @@ export function AppLayout() {
   const questionsQuery = useQuery({
     queryKey: ['questions'],
     queryFn: () => questionsService.list(),
+  });
+
+  // The question slated for deletion. Single-flight: one modal at a time;
+  // clicking another row's trash before this completes is a no-op until
+  // the in-flight call settles.
+  const [deletingQuestion, setDeletingQuestion] = useState<QuestionWithSessions | null>(null);
+  const deleteMutation = useMutation({
+    mutationFn: (questionId: string) => questionsService.delete(questionId),
+    onSuccess: (_out, questionId) => {
+      const question = questionsQuery.data?.find((q) => q.id === questionId);
+      const sessionIds = question?.sessions.map((s) => s.id) ?? [];
+
+      // If the user is currently viewing the question being deleted (or
+      // any of its sessions), navigate to /home so the now-stale page
+      // can unmount before its queries refetch and 404. Same pattern
+      // we used for delete-session in SessionResultsPage.
+      const onDeletedQuestion = activeQuestionId === questionId;
+      const onDeletedSession =
+        !!activeSessionId && sessionIds.includes(activeSessionId);
+      if (onDeletedQuestion || onDeletedSession) {
+        navigate('/home');
+      }
+
+      for (const sid of sessionIds) forgetSession(sid);
+      queryClient.removeQueries({ queryKey: ['question', questionId] });
+      for (const sid of sessionIds) {
+        queryClient.removeQueries({ queryKey: ['session', sid] });
+        queryClient.removeQueries({ queryKey: ['evals', sid] });
+        queryClient.removeQueries({ queryKey: ['snapshot', sid] });
+        queryClient.removeQueries({ queryKey: ['build-events', sid] });
+      }
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+      setDeletingQuestion(null);
+    },
   });
 
   return (
@@ -115,32 +156,51 @@ export function AppLayout() {
                   );
 
                 return (
-                  <Link
+                  <div
                     key={q.id}
-                    to={`/questions/${q.id}`}
-                    className={`block rounded px-2 py-1.5 text-sm transition-colors ${
-                      isHighlighted
-                        ? 'bg-blue-100 text-blue-900'
-                        : 'hover:bg-gray-200 text-gray-900'
+                    className={`group relative rounded transition-colors ${
+                      isHighlighted ? 'bg-blue-100' : 'hover:bg-gray-200'
                     }`}
                   >
-                    <div className="line-clamp-2 leading-snug">{q.prompt}</div>
-                    <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2">
-                      <span>{relativeTime(q.createdAt)}</span>
-                      <span>·</span>
-                      <span>
-                        {attempts} attempt{attempts === 1 ? '' : 's'}
-                      </span>
-                      {bestPlanScore !== null && (
-                        <>
-                          <span>·</span>
-                          <span className="text-emerald-700">
-                            best {bestPlanScore.toFixed(2)}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </Link>
+                    <Link
+                      to={`/questions/${q.id}`}
+                      className={`block px-2 py-1.5 pr-8 text-sm ${
+                        isHighlighted ? 'text-blue-900' : 'text-gray-900'
+                      }`}
+                    >
+                      <div className="line-clamp-2 leading-snug">{q.prompt}</div>
+                      <div className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-2">
+                        <span>{relativeTime(q.createdAt)}</span>
+                        <span>·</span>
+                        <span>
+                          {attempts} attempt{attempts === 1 ? '' : 's'}
+                        </span>
+                        {bestPlanScore !== null && (
+                          <>
+                            <span>·</span>
+                            <span className="text-emerald-700">
+                              best {bestPlanScore.toFixed(2)}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (deleteMutation.isPending) return;
+                        setDeletingQuestion(q);
+                      }}
+                      title="Delete this question and every attempt of it"
+                      aria-label={`Delete question: ${q.prompt.slice(0, 40)}`}
+                      className="absolute right-1 top-1.5 rounded p-1 text-gray-400 opacity-0 transition-opacity hover:bg-rose-100 hover:text-rose-700 focus:opacity-100 group-hover:opacity-100 disabled:opacity-30"
+                      disabled={deleteMutation.isPending}
+                    >
+                      <TrashIcon />
+                    </button>
+                  </div>
                 );
               })}
               {questionsQuery.isError && (
@@ -155,6 +215,127 @@ export function AppLayout() {
       <main className="flex-1 overflow-y-auto px-4 pt-2 pb-4">
         <Outlet />
       </main>
+      {deletingQuestion && (
+        <ConfirmDeleteQuestionDialog
+          question={deletingQuestion}
+          isPending={deleteMutation.isPending}
+          error={deleteMutation.isError ? extractApiError(deleteMutation.error) : null}
+          onConfirm={() => deleteMutation.mutate(deletingQuestion.id)}
+          onDismiss={() => {
+            if (deleteMutation.isPending) return;
+            deleteMutation.reset();
+            setDeletingQuestion(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
+      <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function ConfirmDeleteQuestionDialog({
+  question,
+  isPending,
+  error,
+  onConfirm,
+  onDismiss,
+}: {
+  question: QuestionWithSessions;
+  isPending: boolean;
+  error: string | null;
+  onConfirm: () => void;
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isPending) return;
+      if (e.key === 'Escape') onDismiss();
+      if (e.key === 'Enter') onConfirm();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onConfirm, onDismiss, isPending]);
+
+  const attemptCount = question.sessions.length;
+  const attemptLabel = attemptCount === 1 ? 'attempt' : 'attempts';
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      onClick={isPending ? undefined : onDismiss}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-white shadow-xl border border-rose-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-2">
+          <h2 className="text-base font-semibold text-rose-900">
+            Delete this question?
+          </h2>
+          <p className="mt-1 text-xs text-gray-500 line-clamp-2 italic">
+            "{question.prompt}"
+          </p>
+          <p className="mt-2 text-sm text-gray-700">
+            This removes the question and{' '}
+            <strong>
+              all {attemptCount} {attemptLabel}
+            </strong>{' '}
+            of it — every plan.md snapshot, build event log, captured Claude
+            Code turns, plan + build evaluations, and mentor +
+            signal-mentor artifacts across every attempt. Not reversible.
+          </p>
+          <p className="mt-2 text-[11px] text-gray-500">
+            On-disk prompt + response files are cleaned up in the background.
+          </p>
+        </div>
+        {error && (
+          <div className="mx-5 mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Couldn't delete: {error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 px-5 py-3 bg-gray-50 rounded-b-lg">
+          <button
+            type="button"
+            onClick={onDismiss}
+            disabled={isPending}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            autoFocus
+            disabled={isPending}
+            className="rounded bg-rose-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? 'Deleting…' : `Delete question + ${attemptCount} ${attemptLabel}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

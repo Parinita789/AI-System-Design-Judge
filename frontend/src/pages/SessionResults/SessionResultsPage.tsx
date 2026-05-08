@@ -181,29 +181,6 @@ export function SessionResultsPage() {
     },
   });
 
-  const [deleteQuestionOpen, setDeleteQuestionOpen] = useState(false);
-  const deleteQuestionMutation = useMutation({
-    mutationFn: () => questionsService.delete(questionId!),
-    onSuccess: (out) => {
-      setDeleteQuestionOpen(false);
-      // Forget every attempt of this question that we kept locally —
-      // the active-session pointer + all per-session pause states.
-      const sessionIds = (questionQuery.data?.sessions ?? []).map((s) => s.id);
-      for (const sid of sessionIds) forgetSession(sid);
-      // Same ordering principle as session-delete: navigate first so this
-      // page unmounts before we touch the now-stale caches.
-      navigate('/');
-      queryClient.removeQueries({ queryKey: ['question', questionId] });
-      for (const sid of sessionIds) {
-        queryClient.removeQueries({ queryKey: ['session', sid] });
-        queryClient.removeQueries({ queryKey: ['evals', sid] });
-        queryClient.removeQueries({ queryKey: ['snapshot', sid] });
-        queryClient.removeQueries({ queryKey: ['build-events', sid] });
-      }
-      queryClient.invalidateQueries({ queryKey: ['questions'] });
-      console.log(`Deleted question + ${out.deletedSessions} attempt(s)`);
-    },
-  });
 
   // API orders desc by evaluatedAt — planEvals[0] is the latest.
   const planEvals = useMemo<PhaseEvaluation[]>(
@@ -231,9 +208,6 @@ export function SessionResultsPage() {
   // flash from this page's own error UI.
   if (deleteMutation.isPending || deleteMutation.isSuccess) {
     return <div className="text-gray-500">Deleting session…</div>;
-  }
-  if (deleteQuestionMutation.isPending || deleteQuestionMutation.isSuccess) {
-    return <div className="text-gray-500">Deleting question…</div>;
   }
   if (sessionQuery.isPending || evalsQuery.isPending) return <div>Loading…</div>;
   if (sessionQuery.isError) {
@@ -268,20 +242,11 @@ export function SessionResultsPage() {
           <button
             type="button"
             onClick={() => setDeleteOpen(true)}
-            disabled={deleteMutation.isPending || deleteQuestionMutation.isPending}
+            disabled={deleteMutation.isPending}
             className="rounded border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Delete this attempt only (the question and other attempts stay)"
+            title="Delete this attempt only (the question and other attempts stay). To delete the whole question, use the trash icon in the sidebar."
           >
             {deleteMutation.isPending ? 'Deleting…' : 'Delete attempt'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setDeleteQuestionOpen(true)}
-            disabled={deleteMutation.isPending || deleteQuestionMutation.isPending || !questionId}
-            className="rounded border border-rose-500 bg-rose-50 px-3 py-1.5 text-sm font-medium text-rose-800 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed"
-            title="Delete the entire question and every attempt of it"
-          >
-            {deleteQuestionMutation.isPending ? 'Deleting…' : 'Delete question'}
           </button>
         </div>
       </header>
@@ -405,19 +370,6 @@ export function SessionResultsPage() {
         />
       )}
 
-      {deleteQuestionOpen && (
-        <ConfirmDeleteQuestionDialog
-          attemptCount={questionQuery.data?.sessions.length ?? 0}
-          onConfirm={() => deleteQuestionMutation.mutate()}
-          onDismiss={() => setDeleteQuestionOpen(false)}
-          isPending={deleteQuestionMutation.isPending}
-          error={
-            deleteQuestionMutation.isError
-              ? extractApiError(deleteQuestionMutation.error)
-              : null
-          }
-        />
-      )}
     </div>
   );
 }
@@ -491,89 +443,6 @@ function ConfirmDeleteSessionDialog({
             className="rounded bg-rose-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isPending ? 'Deleting…' : 'Delete session'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmDeleteQuestionDialog({
-  attemptCount,
-  onConfirm,
-  onDismiss,
-  isPending,
-  error,
-}: {
-  attemptCount: number;
-  onConfirm: () => void;
-  onDismiss: () => void;
-  isPending: boolean;
-  error: string | null;
-}) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (isPending) return;
-      if (e.key === 'Escape') onDismiss();
-      if (e.key === 'Enter') onConfirm();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onConfirm, onDismiss, isPending]);
-
-  const attemptLabel = attemptCount === 1 ? 'attempt' : 'attempts';
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-      role="dialog"
-      aria-modal="true"
-      onClick={isPending ? undefined : onDismiss}
-    >
-      <div
-        className="w-full max-w-md rounded-lg bg-white shadow-xl border border-rose-200"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 pt-4 pb-2">
-          <h2 className="text-base font-semibold text-rose-900">
-            Delete this question?
-          </h2>
-          <p className="mt-1 text-sm text-gray-700">
-            This removes the question and{' '}
-            <strong>
-              all {attemptCount} {attemptLabel}
-            </strong>{' '}
-            of it — every plan.md snapshot, build event log, captured Claude
-            Code turns, plan + build evaluations, and mentor +
-            signal-mentor artifacts across every attempt. This is not
-            reversible.
-          </p>
-          <p className="mt-2 text-[11px] text-gray-500">
-            On-disk prompt + response files are cleaned up in the background;
-            you'll be redirected as soon as the database rows are gone.
-          </p>
-        </div>
-        {error && (
-          <div className="mx-5 mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-            Couldn't delete: {error}
-          </div>
-        )}
-        <div className="flex justify-end gap-2 px-5 py-3 bg-gray-50 rounded-b-lg">
-          <button
-            type="button"
-            onClick={onDismiss}
-            disabled={isPending}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={onConfirm}
-            autoFocus
-            disabled={isPending}
-            className="rounded bg-rose-700 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-800 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isPending ? 'Deleting…' : `Delete question + ${attemptCount} ${attemptLabel}`}
           </button>
         </div>
       </div>
