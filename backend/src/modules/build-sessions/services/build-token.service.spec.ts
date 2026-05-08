@@ -7,6 +7,7 @@ describe('BuildTokenService', () => {
       session: {
         update: jest.fn(),
         findUnique: jest.fn(),
+        updateMany: jest.fn(),
       },
     };
   }
@@ -136,6 +137,34 @@ describe('BuildTokenService', () => {
       expect(await svc.verify('11111111-2222-3333-4444-555555555555.right-secret')).toEqual({
         sessionId: '11111111-2222-3333-4444-555555555555',
       });
+    });
+  });
+
+  describe('cleanupExpired', () => {
+    it('clears buildTokenHash on finished or TTL-elapsed sessions and returns the count', async () => {
+      const prisma = makePrisma();
+      prisma.session.updateMany.mockResolvedValue({ count: 3 });
+      const svc = new BuildTokenService(prisma as never);
+
+      const cleared = await svc.cleanupExpired();
+
+      expect(cleared).toBe(3);
+      const arg = prisma.session.updateMany.mock.calls[0][0];
+      expect(arg.data).toEqual({ buildTokenHash: null });
+      expect(arg.where.buildTokenHash).toEqual({ not: null });
+      expect(arg.where.OR).toEqual([
+        { buildEndedAt: { not: null } },
+        { buildStartedAt: { lt: expect.any(Date) } },
+      ]);
+      const cutoff: Date = arg.where.OR[1].buildStartedAt.lt;
+      expect(Date.now() - cutoff.getTime()).toBeGreaterThanOrEqual(60 * 60_000 - 100);
+    });
+
+    it('returns 0 when there are no candidates', async () => {
+      const prisma = makePrisma();
+      prisma.session.updateMany.mockResolvedValue({ count: 0 });
+      const svc = new BuildTokenService(prisma as never);
+      expect(await svc.cleanupExpired()).toBe(0);
     });
   });
 });

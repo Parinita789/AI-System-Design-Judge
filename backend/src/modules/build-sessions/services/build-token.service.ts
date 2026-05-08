@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../../../database/prisma.service';
@@ -6,6 +6,7 @@ import { PrismaService } from '../../../database/prisma.service';
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const SECRET_BYTES = 32;
 const BCRYPT_ROUNDS = 10;
+const CLEANUP_INTERVAL_MS = 15 * 60 * 1000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface MintedToken {
@@ -20,10 +21,55 @@ export interface VerifiedToken {
 }
 
 @Injectable()
-export class BuildTokenService {
+export class BuildTokenService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BuildTokenService.name);
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly prisma: PrismaService) {}
+
+  onModuleInit() {
+    // Best-effort periodic cleanup. The verify path already short-circuits
+    // expired/finished tokens before bcrypt.compare, so this isn't a
+    // correctness fix — it's hygiene. Leftover hashes on long-finished
+    // sessions are sensitive material that no longer needs to live in
+    // the row, and clearing them lets future "active build sessions"
+    // queries trust `buildTokenHash IS NOT NULL`.
+    this.cleanupTimer = setInterval(() => {
+      void this.cleanupExpired().catch((err) =>
+        this.logger.warn(`Token cleanup failed: ${(err as Error).message}`),
+      );
+    }, CLEANUP_INTERVAL_MS);
+    // Don't keep the event loop alive solely for the cleanup timer.
+    this.cleanupTimer.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
+  }
+
+  // NULL out buildTokenHash on sessions where the token is no longer
+  // useful — either the build phase has ended, or the TTL has elapsed
+  // since buildStartedAt. Returns the count for logging/metrics.
+  async cleanupExpired(): Promise<number> {
+    const ttlCutoff = new Date(Date.now() - TOKEN_TTL_MS);
+    const { count } = await this.prisma.session.updateMany({
+      where: {
+        buildTokenHash: { not: null },
+        OR: [
+          { buildEndedAt: { not: null } },
+          { buildStartedAt: { lt: ttlCutoff } },
+        ],
+      },
+      data: { buildTokenHash: null },
+    });
+    if (count > 0) {
+      this.logger.log(`Cleared ${count} expired/finished build token hash(es).`);
+    }
+    return count;
+  }
 
   async mintForSession(sessionId: string): Promise<MintedToken> {
     const secret = randomBytes(SECRET_BYTES).toString('hex');
