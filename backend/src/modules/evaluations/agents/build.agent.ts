@@ -107,7 +107,15 @@ export class BuildAgent extends BasePhaseAgent {
       );
     }
 
-    const validated = validateEvidence(parsed.signals, input.planMd, buildEvidenceCorpusItems(input));
+    // The rendered user message includes the per-file timeline, build
+    // summary, tree paths, and key snippets exactly as the LLM saw them.
+    // Passing it whole means quotes from any rendered section ground
+    // cleanly without us reconstructing each block here.
+    const validated = validateEvidence(
+      parsed.signals,
+      input.planMd,
+      buildEvidenceCorpusItems(input, userMessage),
+    );
     if (validated.downgraded.length > 0) {
       this.logger.warn(
         `Evidence validator downgraded ${validated.downgraded.length} signal(s) ` +
@@ -153,31 +161,24 @@ export class BuildAgent extends BasePhaseAgent {
 
 function buildEvidenceCorpusItems(
   input: PhaseEvalInput,
+  renderedUserMessage: string,
 ): Array<{ prompt: string; response: string }> {
   const items: Array<{ prompt: string; response: string }> = input.hints.map((h) => ({
     prompt: h.prompt,
     response: h.response,
   }));
+  // The whole rendered user message covers the build summary, timeline,
+  // tree paths, key snippets, and AI turn list exactly as the LLM read
+  // them. Single bulk entry; the validator does substring grounding.
+  items.push({ prompt: 'rendered-user-message', response: renderedUserMessage });
+
   const ctx = input.buildContext;
   if (!ctx) return items;
 
-  // All file contents, not just the top-N snippets the prompt sees. The
-  // LLM may cite a file we didn't include in keyFileSnippets — without
-  // the full corpus those legitimate quotes would auto-downgrade.
+  // Plus the full file contents (the prompt only renders top-N snippets
+  // capped at 4KB each) so quotes from a non-snippet file still ground.
   for (const f of ctx.allFileContents) {
     items.push({ prompt: f.path, response: f.content });
-  }
-  for (const t of ctx.aiTurns) {
-    const parts = [t.text ?? '', t.toolInputSummary ?? '', t.toolResultSummary ?? ''].filter(Boolean);
-    items.push({ prompt: t.role, response: parts.join('\n') });
-  }
-  // One aggregate entry instead of per-path: short paths (a.ts) can't
-  // ground a 5-gram window, but the full path list as one block can.
-  if (ctx.finalTree.length > 0) {
-    items.push({
-      prompt: 'tree',
-      response: ctx.finalTree.map((e) => e.path).join('\n'),
-    });
   }
   return items;
 }

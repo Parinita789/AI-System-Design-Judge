@@ -120,8 +120,19 @@ summaries (event counts per file, tree paths). For every signal:
 - Look across ALL artifacts before deciding. A signal that's missing from
   one source may be present in another. For example, design_evolution_coherence
   may be visible in an AI turn even if no plan.md edit was captured.
-- Quote VERBATIM in evidence: a path from the tree, a snippet from a file,
-  a turn from the AI conversation, or a span from plan.md.
+- Quote VERBATIM in evidence: a literal substring from the artifacts the
+  user message renders to you. Examples of acceptable evidence:
+  - one line from the per-file timeline, copied exactly
+    ("auth.ts | 3 event(s) | 2026-05-08T01:35:25Z -> 2026-05-08T01:35:41Z")
+  - a path from the file tree
+  - a substring from a key file snippet
+  - a span from plan.md or an AI turn text
+  Do NOT synthesize new phrasings ("5 events in ~16 seconds"), do NOT
+  combine multiple lines into a sentence, and do NOT compute deltas the
+  rendered artifacts don't already state. An evidence-validator
+  downstream substring-checks each quote against the artifacts; quotes
+  that aren't literal substrings of the rendered context auto-downgrade
+  the verdict.
 - Empty-build-phase handling: if no events were captured, prefer
   cannot_evaluate over miss for signals that need code (test_appropriateness,
   structure_soundness). silent_drift cannot be judged from absence of code
