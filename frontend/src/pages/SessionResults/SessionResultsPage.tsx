@@ -90,6 +90,7 @@ export function SessionResultsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const setActive = useSessionStore((s) => s.setActive);
+  const forgetSession = useSessionStore((s) => s.forget);
   const [planMdExpanded, setPlanMdExpanded] = useState(false);
   const [attemptsOpen, setAttemptsOpen] = useState(false);
   // null = follow the latest plan eval; non-null = pinned historical eval.
@@ -169,6 +170,9 @@ export function SessionResultsPage() {
       queryClient.removeQueries({ queryKey: ['build-events', id] });
       queryClient.invalidateQueries({ queryKey: ['questions'] });
       queryClient.invalidateQueries({ queryKey: ['question', questionId] });
+      // Drop the active-session pointer + persisted pause state for this id
+      // so a localStorage rehydrate doesn't try to fetch the gone row.
+      if (id) forgetSession(id);
       setDeleteOpen(false);
       navigate(questionId ? `/questions/${questionId}` : '/');
     },

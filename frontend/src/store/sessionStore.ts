@@ -17,6 +17,11 @@ interface ActiveSessionState {
   pause: (sessionId: string) => void;
   resume: (sessionId: string) => void;
   clear: () => void;
+  // Drops everything we kept locally for a session id — clears the
+  // active pointer if it matches and removes the per-session pause
+  // state. Called after a successful DELETE /sessions/:id so a
+  // subsequent app reload doesn't try to fetch the gone row.
+  forget: (sessionId: string) => void;
 }
 
 // Persists to localStorage so the session + pause state survive tab close.
@@ -63,6 +68,19 @@ export const useSessionStore = create<ActiveSessionState>()(
         });
       },
       clear: () => set({ sessionId: null, startedAt: null }),
+      forget: (sessionId) => {
+        const state = get();
+        const next: Partial<ActiveSessionState> = {};
+        if (state.sessionId === sessionId) {
+          next.sessionId = null;
+          next.startedAt = null;
+        }
+        if (state.pauseStates[sessionId]) {
+          const { [sessionId]: _drop, ...rest } = state.pauseStates;
+          next.pauseStates = rest;
+        }
+        if (Object.keys(next).length > 0) set(next);
+      },
     }),
     { name: 'active-session' },
   ),
