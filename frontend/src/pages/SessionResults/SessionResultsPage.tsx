@@ -17,6 +17,7 @@ import { signalMentorService } from '@/services/signalMentor.service';
 import { MentorArtifactView } from '@/components/MentorArtifactView';
 import { MarkdownView } from '@/components/MarkdownView';
 import { BuildPhaseSection } from '@/components/BuildPhaseSection';
+import { extractApiError } from '@/lib/error';
 
 type ResultKind = SignalResult['result'] | 'not_evaluated';
 
@@ -157,6 +158,22 @@ export function SessionResultsPage() {
     },
   });
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const deleteMutation = useMutation({
+    mutationFn: () => sessionsService.delete(id!),
+    onSuccess: () => {
+      // Detach this session id from anything React Query has cached.
+      queryClient.removeQueries({ queryKey: ['session', id] });
+      queryClient.removeQueries({ queryKey: ['evals', id] });
+      queryClient.removeQueries({ queryKey: ['snapshot', id] });
+      queryClient.removeQueries({ queryKey: ['build-events', id] });
+      queryClient.invalidateQueries({ queryKey: ['questions'] });
+      queryClient.invalidateQueries({ queryKey: ['question', questionId] });
+      setDeleteOpen(false);
+      navigate(questionId ? `/questions/${questionId}` : '/');
+    },
+  });
+
   // API orders desc by evaluatedAt — planEvals[0] is the latest.
   const planEvals = useMemo<PhaseEvaluation[]>(
     () => (evalsQuery.data ?? []).filter((e) => e.phase === 'plan'),
@@ -206,6 +223,15 @@ export function SessionResultsPage() {
             isPending={reEvalMutation.isPending}
             onRun={(model) => reEvalMutation.mutate(model)}
           />
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={deleteMutation.isPending}
+            className="rounded border border-rose-300 bg-white px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Delete this session and all related artifacts"
+          >
+            {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
+          </button>
         </div>
       </header>
 
@@ -316,6 +342,93 @@ export function SessionResultsPage() {
           </div>
         )}
       </section>
+
+      {deleteOpen && (
+        <ConfirmDeleteSessionDialog
+          onConfirm={() => deleteMutation.mutate()}
+          onDismiss={() => setDeleteOpen(false)}
+          isPending={deleteMutation.isPending}
+          error={
+            deleteMutation.isError ? extractApiError(deleteMutation.error) : null
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function ConfirmDeleteSessionDialog({
+  onConfirm,
+  onDismiss,
+  isPending,
+  error,
+}: {
+  onConfirm: () => void;
+  onDismiss: () => void;
+  isPending: boolean;
+  error: string | null;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (isPending) return;
+      if (e.key === 'Escape') onDismiss();
+      if (e.key === 'Enter') onConfirm();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onConfirm, onDismiss, isPending]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      role="dialog"
+      aria-modal="true"
+      onClick={isPending ? undefined : onDismiss}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-white shadow-xl border border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-2">
+          <h2 className="text-base font-semibold text-gray-900">
+            Delete this session?
+          </h2>
+          <p className="mt-1 text-sm text-gray-600">
+            The session row, every plan.md snapshot, the build event log,
+            captured Claude Code turns, plan + build evaluations, and the
+            mentor + signal-mentor artifacts tied to this session will be
+            removed. This is not reversible.
+          </p>
+          <p className="mt-2 text-[11px] text-gray-500">
+            On-disk prompt + response files are cleaned up in the background;
+            the page will navigate away as soon as the database row is gone.
+          </p>
+        </div>
+        {error && (
+          <div className="mx-5 mb-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
+            Couldn't delete: {error}
+          </div>
+        )}
+        <div className="flex justify-end gap-2 px-5 py-3 bg-gray-50 rounded-b-lg">
+          <button
+            type="button"
+            onClick={onDismiss}
+            disabled={isPending}
+            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            autoFocus
+            disabled={isPending}
+            className="rounded bg-rose-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isPending ? 'Deleting…' : 'Delete session'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

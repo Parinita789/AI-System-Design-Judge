@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
 import { SessionsRepository } from '../repositories/sessions.repository';
 import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
@@ -22,6 +25,7 @@ export class SessionsService {
     private readonly sessionsRepository: SessionsRepository,
     @Inject(forwardRef(() => EvaluationsService))
     private readonly evaluationsService: EvaluationsService,
+    private readonly config: ConfigService,
   ) {}
 
   async get(sessionId: string) {
@@ -61,6 +65,44 @@ export class SessionsService {
       // Session stays `completed` — losing the evaluation shouldn't hold the
       // session hostage. Frontend will surface the error and offer a retry.
       return { session: ended, evaluations: [], evalError: message };
+    }
+  }
+
+  // Hard delete. The DB row goes immediately; on-disk artifacts
+  // (mentor + signal-mentor prompt/response files under MENTOR_ARTIFACT_DIR
+  // and SIGNAL_MENTOR_ARTIFACT_DIR) are cleaned up fire-and-forget so
+  // the API response stays snappy. A failed disk cleanup is logged but
+  // not surfaced — the orphaned files are harmless and a periodic GC
+  // pass would catch them.
+  async deleteSession(sessionId: string): Promise<{ ok: true }> {
+    const existing = await this.sessionsRepository.findById(sessionId);
+    if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
+    await this.sessionsRepository.deleteById(sessionId);
+    this.logger.log(`Session ${sessionId} deleted (DB row + cascades). Scheduling disk cleanup.`);
+    void this.cleanupArtifacts(sessionId);
+    return { ok: true };
+  }
+
+  private async cleanupArtifacts(sessionId: string): Promise<void> {
+    const dirs = [
+      path.resolve(
+        this.config.get<string>('MENTOR_ARTIFACT_DIR') ?? './data/mentor-artifacts',
+        sessionId,
+      ),
+      path.resolve(
+        this.config.get<string>('SIGNAL_MENTOR_ARTIFACT_DIR') ?? './data/signal-mentor-artifacts',
+        sessionId,
+      ),
+    ];
+    for (const dir of dirs) {
+      try {
+        await fs.rm(dir, { recursive: true, force: true });
+        this.logger.log(`Removed artifact dir ${dir}`);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to remove artifact dir ${dir}: ${(err as Error).message}`,
+        );
+      }
     }
   }
 }

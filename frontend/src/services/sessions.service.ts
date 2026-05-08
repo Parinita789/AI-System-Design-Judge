@@ -20,4 +20,7 @@ export const sessionsService = {
   list() {
     return api.get<SessionSummary[]>('/sessions').then((r) => r.data);
   },
+  delete(id: string) {
+    return api.delete<{ ok: true }>(`/sessions/${id}`).then((r) => r.data);
+  },
 };

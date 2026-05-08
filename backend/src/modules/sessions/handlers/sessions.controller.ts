@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { SessionsService } from '../services/sessions.service';
 import { EndSessionDto } from '../dto/end-session.dto';
@@ -28,5 +28,16 @@ export class SessionsController {
   @ApiOperation({ summary: 'List every session, newest first' })
   list() {
     return this.sessionsService.list();
+  }
+
+  @Delete(':id')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Hard-delete a session and everything tied to it',
+    description:
+      'Removes the session row synchronously; FK CASCADE wipes related rows in the same transaction (snapshots, hints, build_events, build_ai_interactions, phase_evaluations and their downstream artifacts). On-disk mentor + signal-mentor prompt/response files are cleaned up fire-and-forget after the response.',
+  })
+  delete(@Param('id') id: string) {
+    return this.sessionsService.deleteSession(id);
   }
 }

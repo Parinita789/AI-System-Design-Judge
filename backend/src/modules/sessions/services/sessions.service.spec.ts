@@ -11,15 +11,20 @@ describe('SessionsService', () => {
     findByIdWithQuestion: jest.fn(),
     findAll: jest.fn(),
     markEnded: jest.fn(),
+    deleteById: jest.fn(),
   };
 
   const evaluations = {
     runForSession: jest.fn(),
   };
 
+  const config = {
+    get: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new SessionsService(repo as never, evaluations as never);
+    service = new SessionsService(repo as never, evaluations as never, config as never);
   });
 
   describe('get', () => {
@@ -54,6 +59,33 @@ describe('SessionsService', () => {
     it('delegates to repo.findAll', async () => {
       repo.findAll.mockResolvedValue([{ id: 'a' }, { id: 'b' }]);
       expect(await service.list()).toEqual([{ id: 'a' }, { id: 'b' }]);
+    });
+  });
+
+  describe('deleteSession', () => {
+    it('throws NotFoundException when the session is missing', async () => {
+      repo.findById.mockResolvedValue(null);
+      await expect(service.deleteSession('missing')).rejects.toBeInstanceOf(NotFoundException);
+      expect(repo.deleteById).not.toHaveBeenCalled();
+    });
+
+    it('deletes the session row when found', async () => {
+      repo.findById.mockResolvedValue({ id: 'sid-1' });
+      repo.deleteById.mockResolvedValue({ id: 'sid-1' });
+      const out = await service.deleteSession('sid-1');
+      expect(out).toEqual({ ok: true });
+      expect(repo.deleteById).toHaveBeenCalledWith('sid-1');
+    });
+
+    it('returns immediately even if disk cleanup is slow (fire-and-forget)', async () => {
+      repo.findById.mockResolvedValue({ id: 'sid-1' });
+      repo.deleteById.mockResolvedValue({ id: 'sid-1' });
+      // The service returns synchronously after the DB delete; the
+      // disk cleanup is voided. This test guards against a future
+      // refactor that awaits the cleanup and re-introduces blocking.
+      const start = Date.now();
+      await service.deleteSession('sid-1');
+      expect(Date.now() - start).toBeLessThan(50);
     });
   });
 

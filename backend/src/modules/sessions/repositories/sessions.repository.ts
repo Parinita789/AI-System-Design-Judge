@@ -55,4 +55,13 @@ export class SessionsRepository {
   updateOverall(_id: string, _score: number, _feedback: string) {
     throw new Error('Not implemented');
   }
+
+  // Hard delete. Every child table FK has onDelete: Cascade
+  // (snapshots, hints, build_events, build_ai_interactions,
+  // phase_evaluations -> evaluation_audits + mentor_artifacts +
+  // signal_mentor_artifacts), so a single row deletion cascades
+  // through the whole dependency tree atomically.
+  deleteById(id: string) {
+    return this.prisma.session.delete({ where: { id } });
+  }
 }
