@@ -37,8 +37,9 @@ codebase-mapper [--package=backend|frontend|cli|all]
 ### Defaults
 
 - `--package=all` — map all three packages.
-- `--output=./codebase-map` — writes per-package markdown plus an
-  `index.md` to `<repo>/codebase-map/`.
+- `--output=./agents/codebase-map` — writes per-package markdown
+  plus an `index.md` to `<repo>/agents/codebase-map/` (peer of
+  this package).
 - `--with-llm=true` — opt out via `--no-with-llm` for a fast
   structural-only run during dev.
 - `--json=false` — emit the per-package JSON sidecar only on
@@ -53,10 +54,10 @@ module list to stdout — cheap dev sanity check.
 ## Output shape
 
 ```
-codebase-map/
+agents/codebase-map/
   index.md          — cross-links + overall stats
-  backend.md        — ~17 module sections
-  frontend.md       — ~27 module sections
+  backend.md        — ~18 module sections
+  frontend.md       — ~22 module sections
   cli.md            — ~10 module sections
   *.json            — optional sidecar (only with --json)
 ```

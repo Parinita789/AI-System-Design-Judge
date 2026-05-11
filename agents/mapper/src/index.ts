@@ -20,8 +20,8 @@ async function main(): Promise<void> {
     )
     .option(
       '--output <dir>',
-      'output directory (relative to cwd)',
-      './codebase-map',
+      'output directory (relative to repo root)',
+      './agents/codebase-map',
     )
     .option('--with-llm', 'run the LLM responsibility-synthesis phase (default)', true)
     .option('--no-with-llm', 'skip the LLM phase; emit structural-only map')
