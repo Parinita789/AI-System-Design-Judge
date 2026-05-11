@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
 import { synthesizeOne } from './synthesize';
-import { MapperAnthropicClient, MapperLlmResponse } from './anthropic-client';
+import { MapperLlmClient, MapperLlmResponse } from './llm-client';
 import { DiscoveredModule } from '../types';
 
 function mkModule(): DiscoveredModule {
@@ -54,7 +54,7 @@ describe('synthesizeOne', () => {
   it('returns the LLM text on first attempt when citations are valid', async () => {
     const client = new StubClient([
       'Coordinates plan and build evaluation runs, defined in `orchestrator.service.ts`.',
-    ]) as unknown as MapperAnthropicClient;
+    ]) as unknown as MapperLlmClient;
     const result = await synthesizeOne(client, 'm', { module: mkModule(), summary: SUMMARY });
     expect(result.responsibility).toContain('orchestrator.service.ts');
     expect(result.unverifiedCitation).toBeUndefined();
@@ -66,7 +66,7 @@ describe('synthesizeOne', () => {
       'Coordinates evaluation through `bogus.service.ts`.',
       'Coordinates evaluation through `orchestrator.service.ts`.',
     ]);
-    const result = await synthesizeOne(stub as unknown as MapperAnthropicClient, 'm', {
+    const result = await synthesizeOne(stub as unknown as MapperLlmClient, 'm', {
       module: mkModule(),
       summary: SUMMARY,
     });
@@ -82,7 +82,7 @@ describe('synthesizeOne', () => {
       'See `bogus.service.ts`.',
       'Still talking about `also-bogus.ts`.',
     ]);
-    const result = await synthesizeOne(stub as unknown as MapperAnthropicClient, 'm', {
+    const result = await synthesizeOne(stub as unknown as MapperLlmClient, 'm', {
       module: mkModule(),
       summary: SUMMARY,
     });
@@ -92,7 +92,7 @@ describe('synthesizeOne', () => {
 
   it('treats "Insufficient signal." as a non-error, no responsibility', async () => {
     const stub = new StubClient(['Insufficient signal.']);
-    const result = await synthesizeOne(stub as unknown as MapperAnthropicClient, 'm', {
+    const result = await synthesizeOne(stub as unknown as MapperLlmClient, 'm', {
       module: mkModule(),
       summary: SUMMARY,
     });
@@ -103,7 +103,7 @@ describe('synthesizeOne', () => {
   it('records synthesisError when the LLM call throws', async () => {
     const failing = {
       call: jest.fn().mockRejectedValue(new Error('rate limited')),
-    } as unknown as MapperAnthropicClient;
+    } as unknown as MapperLlmClient;
     const result = await synthesizeOne(failing, 'm', { module: mkModule(), summary: SUMMARY });
     expect(result.responsibility).toBeUndefined();
     expect(result.synthesisError).toBe('rate limited');

@@ -1,56 +1,23 @@
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  MapperLlmCallParams,
+  MapperLlmClient,
+  MapperLlmResponse,
+  Semaphore,
+} from './llm-client';
 
 const DEFAULT_MAX_TOKENS = 200;
 const DEFAULT_CONCURRENCY = 3;
 
-export interface MapperLlmCallParams {
-  systemPrompt: string;
-  userPrompt: string;
-  model: string;
-  maxTokens?: number;
-}
-
-export interface MapperLlmResponse {
-  text: string;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheCreationTokens: number;
-}
-
-// Tiny semaphore. Caps concurrent in-flight requests so we don't
-// stress Anthropic's per-key rate limits during a full run
-// (~54 modules). FIFO; resolved waiters get released in order.
-export class Semaphore {
-  private inFlight = 0;
-  private readonly waiters: (() => void)[] = [];
-  constructor(private readonly limit: number) {}
-
-  async acquire(): Promise<void> {
-    if (this.inFlight < this.limit) {
-      this.inFlight += 1;
-      return;
-    }
-    await new Promise<void>((resolve) => this.waiters.push(resolve));
-    this.inFlight += 1;
-  }
-
-  release(): void {
-    this.inFlight -= 1;
-    const next = this.waiters.shift();
-    if (next) next();
-  }
-}
-
 export interface AnthropicClientOptions {
   apiKey?: string;
   concurrency?: number;
-  // Test seam: lets the synthesize spec inject a mock without
-  // needing to mock the SDK module itself.
+  // Test seam: lets specs inject a mock without needing to mock
+  // the SDK module itself.
   client?: Anthropic;
 }
 
-export class MapperAnthropicClient {
+export class MapperAnthropicClient implements MapperLlmClient {
   private readonly anthropic: Anthropic;
   private readonly sem: Semaphore;
 
@@ -61,7 +28,7 @@ export class MapperAnthropicClient {
       const apiKey = opts.apiKey ?? process.env.ANTHROPIC_API_KEY;
       if (!apiKey) {
         throw new Error(
-          'ANTHROPIC_API_KEY is not set. Provide it via env or pass --no-with-llm.',
+          'ANTHROPIC_API_KEY is not set. Provide it via env or use --provider=claude-cli.',
         );
       }
       this.anthropic = new Anthropic({ apiKey });
@@ -111,3 +78,8 @@ export class MapperAnthropicClient {
     }
   }
 }
+
+// Re-export the types/interface for callers that imported them
+// from here historically.
+export type { MapperLlmCallParams, MapperLlmResponse, MapperLlmClient };
+export { Semaphore };

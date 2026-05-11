@@ -26,7 +26,12 @@ async function main(): Promise<void> {
     .option('--with-llm', 'run the LLM responsibility-synthesis phase (default)', true)
     .option('--no-with-llm', 'skip the LLM phase; emit structural-only map')
     .option('--json', 'also emit a per-package JSON sidecar', false)
-    .option('--model <name>', 'Anthropic model id', undefined)
+    .option('--model <name>', 'model id (anthropic id or claude-cli model name)', undefined)
+    .option(
+      '--provider <name>',
+      'LLM provider: auto | anthropic | claude-cli (default: auto)',
+      'auto',
+    )
     .option('--list-modules', 'print discovered module list to stdout and exit', false)
     .option('--repo-root <dir>', 'override repo root (default: cwd)', undefined)
     .parse(process.argv);
@@ -37,6 +42,7 @@ async function main(): Promise<void> {
     withLlm: boolean;
     json: boolean;
     model?: string;
+    provider: string;
     listModules: boolean;
     repoRoot?: string;
   }>();
@@ -46,6 +52,15 @@ async function main(): Promise<void> {
   if (!validPackages.includes(opts.package as ValidPackage)) {
     console.error(
       `--package must be one of: ${validPackages.join(', ')} (got "${opts.package}")`,
+    );
+    process.exit(2);
+  }
+
+  const validProviders = ['auto', 'anthropic', 'claude-cli'] as const;
+  type ValidProvider = (typeof validProviders)[number];
+  if (!validProviders.includes(opts.provider as ValidProvider)) {
+    console.error(
+      `--provider must be one of: ${validProviders.join(', ')} (got "${opts.provider}")`,
     );
     process.exit(2);
   }
@@ -62,6 +77,7 @@ async function main(): Promise<void> {
       withLlm: opts.withLlm,
       withJson: opts.json,
       model,
+      provider: opts.provider as ValidProvider,
       listModulesOnly: opts.listModules,
     });
     if (!opts.listModules) {

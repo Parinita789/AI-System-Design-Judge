@@ -1,7 +1,7 @@
 import { ModuleSummary } from '../types';
-import { KeyFileSnippet, selectKeyFiles } from '../scan/select-key-files';
+import { selectKeyFiles } from '../scan/select-key-files';
 import { DiscoveredModule } from '../types';
-import { MapperAnthropicClient, MapperLlmResponse } from './anthropic-client';
+import { MapperLlmClient, MapperLlmResponse } from './llm-client';
 import {
   buildSystemPrompt,
   buildUserPrompt,
@@ -29,7 +29,7 @@ export interface SynthesizeResult {
 // retry once on hallucination, mark un-verifiable as unverified
 // rather than discarding (preserves debuggability).
 export async function synthesizeOne(
-  client: MapperAnthropicClient,
+  client: MapperLlmClient,
   model: string,
   request: SynthesizeRequest,
 ): Promise<SynthesizeResult> {

@@ -5,7 +5,8 @@ import { discoverModules } from './scan/discover-modules';
 import { walkImports } from './scan/walk-imports';
 import { buildGraph, FileWithImports, invertEdges } from './scan/build-graph';
 import { selectKeyFiles } from './scan/select-key-files';
-import { MapperAnthropicClient } from './llm/anthropic-client';
+import { MapperLlmClient } from './llm/llm-client';
+import { createLlmClient, ProviderChoice } from './llm/create-client';
 import { synthesizeOne } from './llm/synthesize';
 import { renderPackageMarkdown } from './render/markdown';
 import { renderPackageJson } from './render/json';
@@ -19,10 +20,11 @@ export interface RunOptions {
   withLlm: boolean;
   withJson: boolean;
   model: string;
+  provider: ProviderChoice;
   listModulesOnly: boolean;
   // Test seam: lets specs inject a stub LLM client without env or
   // real API.
-  llmClient?: MapperAnthropicClient;
+  llmClient?: MapperLlmClient;
 }
 
 export interface RunResult {
@@ -68,7 +70,9 @@ export async function runMapper(opts: RunOptions): Promise<RunResult> {
 
   const finalMaps: PackageMap[] = [];
   if (opts.withLlm) {
-    const client = opts.llmClient ?? new MapperAnthropicClient();
+    const client =
+      opts.llmClient ??
+      createLlmClient({ provider: opts.provider }).client;
     for (const pre of structuralMaps) {
       const enriched = await enrichWithLlm(pre.map, pre.modules, client, opts.model);
       finalMaps.push(enriched);
@@ -176,7 +180,7 @@ function buildPackageMap(
 async function enrichWithLlm(
   map: PackageMap,
   moduleIndex: Map<string, import('./types').DiscoveredModule>,
-  client: MapperAnthropicClient,
+  client: MapperLlmClient,
   model: string,
 ): Promise<PackageMap> {
   // Fan out all modules in parallel. The MapperAnthropicClient's

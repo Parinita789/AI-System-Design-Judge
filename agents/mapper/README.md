@@ -30,6 +30,7 @@ codebase-mapper [--package=backend|frontend|cli|all]
                 [--with-llm | --no-with-llm]
                 [--json]
                 [--model=<name>]
+                [--provider=auto|anthropic|claude-cli]
                 [--list-modules]
 ```
 
@@ -83,11 +84,33 @@ hits.
   freestanding; it only reads files from disk + calls the
   Anthropic API.
 
+## Providers
+
+`--provider=auto` (default) picks based on what's available:
+
+- `ANTHROPIC_API_KEY` is set → Anthropic SDK
+- otherwise, `claude` is on PATH → Claude CLI mode (spawns
+  `claude -p --output-format json` for each module)
+- neither → error
+
+Force a specific provider with `--provider=anthropic` or
+`--provider=claude-cli`. The cost/performance characteristics:
+
+| | Anthropic SDK | Claude CLI |
+|---|---|---|
+| Auth | `ANTHROPIC_API_KEY` env | Whatever the `claude` binary uses (subscription / OAuth) |
+| Per-call latency | ~1–2s | ~3–5s (process spawn overhead) |
+| Prompt caching | `cache_control: ephemeral` on system block | depends on the CLI's own behavior |
+| Failure isolation | Per-call retries + concurrency cap | Per-call exit code + concurrency cap |
+
+Both providers honor the same 3-concurrent-request semaphore.
+
 ## Requirements
 
 - Node 18+
-- `ANTHROPIC_API_KEY` in env (only if `--with-llm`). The mapper
-  calls the Anthropic SDK directly — it does NOT route through
-  the backend's LlmService provider factory (Ollama / Claude CLI
-  modes are not supported here). For a key-less run, use
-  `--no-with-llm` to get a fully usable structural-only map.
+- One of:
+  - `ANTHROPIC_API_KEY` for SDK mode, OR
+  - `claude` binary on PATH for CLI mode (this is the same binary
+    the backend uses in `claude_cli` provider mode).
+- For a key-less / CLI-less run, use `--no-with-llm` to get a
+  fully usable structural-only map.
