@@ -63,7 +63,7 @@ describe('renderPackageMarkdown', () => {
   it('shows summary stats including orphan count and failure count', () => {
     const out = renderPackageMarkdown(SAMPLE);
     expect(out).toContain('**2** modules');
-    expect(out).toContain('**48** source files (12 test files)');
+    expect(out).toContain('**48** source files + **12** test files');
     expect(out).toContain('**1** modules with no inbound internal deps');
     expect(out).toContain('**1** module(s) had a responsibility-synthesis failure');
   });

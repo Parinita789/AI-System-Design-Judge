@@ -58,4 +58,30 @@ describe('walkImports', () => {
     const result = walkImports(file);
     expect(result.exports).toEqual([]);
   });
+
+  it('captures `export default class Foo {}` with the class name', () => {
+    const file = tmpFile(`export default class Foo {}\n`);
+    const result = walkImports(file);
+    // ts-morph reports the class itself via getClasses() with
+    // isExported() true, so Foo appears in the export list. The
+    // default symbol path is a belt-and-braces fallback.
+    expect(result.exports).toEqual(expect.arrayContaining(['Foo']));
+  });
+
+  it('captures `export default function bar() {}` with the function name', () => {
+    const file = tmpFile(`export default function bar() {}\n`);
+    const result = walkImports(file);
+    expect(result.exports).toEqual(expect.arrayContaining(['bar']));
+  });
+
+  it('records a placeholder for an anonymous default export', () => {
+    const file = tmpFile(`const x = 1;\nexport default x;\n`);
+    const result = walkImports(file);
+    // Either the const "x" is reported (variable statement is
+    // exported via the default re-bind), or a "default" placeholder
+    // surfaces via getDefaultExportSymbol — both are valid; we
+    // require at least one of them so the file isn't reported as
+    // having zero exports.
+    expect(result.exports.length).toBeGreaterThan(0);
+  });
 });

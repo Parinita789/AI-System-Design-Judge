@@ -17,14 +17,22 @@ const SOURCE_EXT = /\.(?:tsx?|mts|cts)$/;
 const TEST_NAME = /\.(?:test|spec)\.(?:tsx?)$/;
 
 export function discoverModules(pkg: PackageDescriptor, repoRoot: string): DiscoveredModule[] {
-  switch (pkg.moduleStrategy) {
-    case 'nest':
-      return discoverNestModules(pkg, repoRoot);
-    case 'frontend':
-      return discoverFrontendModules(pkg, repoRoot);
-    case 'cli-flat':
-      return discoverCliFlatModules(pkg, repoRoot);
-  }
+  const raw = (() => {
+    switch (pkg.moduleStrategy) {
+      case 'nest':
+        return discoverNestModules(pkg, repoRoot);
+      case 'frontend':
+        return discoverFrontendModules(pkg, repoRoot);
+      case 'cli-flat':
+        return discoverCliFlatModules(pkg, repoRoot);
+    }
+  })();
+  // Drop modules with zero non-test source files. Empty directories
+  // (e.g. frontend/src/features/dashboard/ that exists but hasn't
+  // been populated yet) shouldn't pollute the map or inflate the
+  // orphan count. If/when the dir gets source files, the next
+  // mapper run picks it up automatically.
+  return raw.filter((m) => m.files.some((f) => !f.isTest));
 }
 
 // -------------------- NEST (backend) -------------------- //
@@ -110,17 +118,28 @@ function discoverFrontendModules(pkg: PackageDescriptor, repoRoot: string): Disc
 
   // services/<name>.service.ts — one module per file. Each is a
   // self-contained API client; treat the file as the module unit.
+  // Co-located .test.ts files belong to the same module as their
+  // target (foo.test.ts → services/foo), not separate modules.
   const servicesDir = path.join(srcDir, 'services');
   if (fs.existsSync(servicesDir)) {
-    for (const f of listFiles(servicesDir).sort()) {
-      if (!SOURCE_EXT.test(f)) continue;
+    const allFiles = listFiles(servicesDir).sort();
+    const sources = allFiles.filter((f) => SOURCE_EXT.test(f) && !TEST_NAME.test(f));
+    const tests = allFiles.filter((f) => TEST_NAME.test(f));
+    for (const f of sources) {
       const filePath = path.join(servicesDir, f);
       if (!fs.statSync(filePath).isFile()) continue;
-      const id = `services/${f.replace(/\.service\.tsx?$/, '').replace(/\.tsx?$/, '')}`;
+      const sourceStem = f.replace(/\.service\.tsx?$/, '').replace(/\.tsx?$/, '');
+      const id = `services/${sourceStem}`;
+      const myTests = tests
+        .filter((t) => {
+          const testStem = t.replace(/\.(?:test|spec)\.tsx?$/, '').replace(/\.service$/, '');
+          return testStem === sourceStem;
+        })
+        .map((t) => fileEntry(path.join(servicesDir, t), repoRoot));
       modules.push({
         id,
         path: relFromRepo(repoRoot, filePath),
-        files: [fileEntry(filePath, repoRoot)],
+        files: [fileEntry(filePath, repoRoot), ...myTests],
       });
     }
   }

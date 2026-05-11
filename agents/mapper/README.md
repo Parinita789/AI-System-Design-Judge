@@ -42,7 +42,7 @@ codebase-mapper [--package=backend|frontend|cli|all]
   structural-only run during dev.
 - `--json=false` — emit the per-package JSON sidecar only on
   request.
-- `--model=claude-sonnet-4-5` — override via `LLM_MODEL` env or
+- `--model=claude-sonnet-4-6` — override via `LLM_MODEL` env or
   `--model=...`. Sonnet is plenty for the descriptive synthesis;
   the structural map is what matters.
 
@@ -67,7 +67,7 @@ cites at least one supplied file by name.
 
 ## Cost
 
-Roughly **$0.12** per full run at `claude-sonnet-4-5` list pricing
+Roughly **$0.12** per full run at `claude-sonnet-4-6` list pricing
 (~54 modules × ~3k input tokens with prompt caching + ~120 output
 tokens each). Re-runs are cheaper because the system prompt cache
 hits.

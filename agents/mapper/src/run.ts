@@ -179,27 +179,27 @@ async function enrichWithLlm(
   client: MapperAnthropicClient,
   model: string,
 ): Promise<PackageMap> {
-  const enriched: ModuleSummary[] = [];
-  for (const summary of map.modules) {
-    const mod = moduleIndex.get(summary.id);
-    if (!mod) {
-      enriched.push(summary);
-      continue;
-    }
-    // Skip modules with no non-test files — the prompt's
-    // "Insufficient signal" gate would fire anyway, save the
-    // round trip.
-    if (selectKeyFiles(mod).length === 0) {
-      enriched.push(summary);
-      continue;
-    }
-    const result = await synthesizeOne(client, model, { module: mod, summary });
-    enriched.push({
-      ...summary,
-      ...(result.responsibility !== undefined ? { responsibility: result.responsibility } : {}),
-      ...(result.unverifiedCitation ? { unverifiedCitation: true } : {}),
-      ...(result.synthesisError !== undefined ? { synthesisError: result.synthesisError } : {}),
-    });
-  }
+  // Fan out all modules in parallel. The MapperAnthropicClient's
+  // internal semaphore (default 3) is what actually caps in-flight
+  // requests; without Promise.all the loop awaited each call
+  // sequentially and the semaphore never gated anything. Module
+  // order is preserved because Promise.all preserves position.
+  const enriched = await Promise.all(
+    map.modules.map(async (summary): Promise<ModuleSummary> => {
+      const mod = moduleIndex.get(summary.id);
+      if (!mod) return summary;
+      // Skip modules with no non-test files — the prompt's
+      // "Insufficient signal" gate would fire anyway, save the
+      // round trip.
+      if (selectKeyFiles(mod).length === 0) return summary;
+      const result = await synthesizeOne(client, model, { module: mod, summary });
+      return {
+        ...summary,
+        ...(result.responsibility !== undefined ? { responsibility: result.responsibility } : {}),
+        ...(result.unverifiedCitation ? { unverifiedCitation: true } : {}),
+        ...(result.synthesisError !== undefined ? { synthesisError: result.synthesisError } : {}),
+      };
+    }),
+  );
   return { ...map, modules: enriched };
 }

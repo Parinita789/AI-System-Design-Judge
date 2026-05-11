@@ -26,7 +26,7 @@ function renderSummary(map: PackageMap): string {
   lines.push('## Summary');
   lines.push('');
   lines.push(`- **${map.modules.length}** modules`);
-  lines.push(`- **${totalFiles}** source files (${totalTests} test files)`);
+  lines.push(`- **${totalFiles}** source files + **${totalTests}** test files`);
   lines.push(`- **${orphans}** modules with no inbound internal deps (entry points / leaves)`);
   if (synthFails > 0) {
     lines.push(`- **${synthFails}** module(s) had a responsibility-synthesis failure`);

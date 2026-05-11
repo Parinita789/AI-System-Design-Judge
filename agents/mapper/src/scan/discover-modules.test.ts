@@ -66,6 +66,30 @@ describe('discoverModules — nest strategy', () => {
 });
 
 describe('discoverModules — frontend strategy', () => {
+  it('attaches co-located service test files to their target module (not as separate modules)', () => {
+    const { repoRoot, cleanup } = mkRepo({
+      'frontend/src/services/sessions.service.ts': '',
+      'frontend/src/services/sessions.service.test.ts': '',
+    });
+    try {
+      const pkg: PackageDescriptor = {
+        name: 'frontend',
+        root: path.join(repoRoot, 'frontend'),
+        moduleStrategy: 'frontend',
+      };
+      const modules = discoverModules(pkg, repoRoot);
+      const services = modules.filter((m) => m.id.startsWith('services/'));
+      expect(services.map((m) => m.id)).toEqual(['services/sessions']);
+      const m = services[0];
+      expect(m.files.length).toBe(2);
+      expect(m.files.find((f) => f.isTest)?.repoPath).toBe(
+        'frontend/src/services/sessions.service.test.ts',
+      );
+    } finally {
+      cleanup();
+    }
+  });
+
   it('mixes feature dirs, page dirs, per-file services, and single-dir support modules', () => {
     const { repoRoot, cleanup } = mkRepo({
       'frontend/src/features/dashboard/index.tsx': '',
@@ -97,6 +121,53 @@ describe('discoverModules — frontend strategy', () => {
         'store',
         'types',
       ]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
+describe('discoverModules — empty-directory filter', () => {
+  it('drops feature dirs that exist but have no source files', () => {
+    const { repoRoot, cleanup } = mkRepo({
+      'frontend/src/features/dashboard/index.tsx': '',
+      'frontend/src/features/sessions/.keep': '', // empty dir with a placeholder
+    });
+    try {
+      // Manually create an empty dir (no .ts/.tsx files) — the
+      // placeholder above isn't a source file.
+      fs.mkdirSync(path.join(repoRoot, 'frontend/src/features/empty-anticipated'), {
+        recursive: true,
+      });
+      const pkg: PackageDescriptor = {
+        name: 'frontend',
+        root: path.join(repoRoot, 'frontend'),
+        moduleStrategy: 'frontend',
+      };
+      const modules = discoverModules(pkg, repoRoot);
+      const featureIds = modules.filter((m) => m.id.startsWith('features/')).map((m) => m.id);
+      expect(featureIds).toEqual(['features/dashboard']); // sessions + empty-anticipated dropped
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('keeps modules whose only files are tests off the map (no non-test source = no module)', () => {
+    const { repoRoot, cleanup } = mkRepo({
+      'cli/src/index.ts': '',
+      'cli/src/orphan.test.ts': '', // a test with no source target
+    });
+    try {
+      const pkg: PackageDescriptor = {
+        name: 'cli',
+        root: path.join(repoRoot, 'cli'),
+        moduleStrategy: 'cli-flat',
+      };
+      const modules = discoverModules(pkg, repoRoot);
+      // orphan.test.ts is excluded by the cli-flat strategy (only
+      // non-test files become module roots), so no "orphan" module
+      // appears at all.
+      expect(modules.map((m) => m.id)).toEqual(['index']);
     } finally {
       cleanup();
     }

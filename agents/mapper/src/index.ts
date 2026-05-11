@@ -3,7 +3,7 @@ import { Command } from 'commander';
 import * as path from 'node:path';
 import { runMapper } from './run';
 
-const DEFAULT_MODEL = 'claude-sonnet-4-5';
+const DEFAULT_MODEL = 'claude-sonnet-4-6';
 
 async function main(): Promise<void> {
   const program = new Command();
