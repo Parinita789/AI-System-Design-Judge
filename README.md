@@ -48,8 +48,8 @@
 | **Frontend** | React 18 · Vite · TypeScript · Tailwind · Monaco · TanStack Query · Recharts · Mermaid |
 | **CLI watcher** | TypeScript · commander · chokidar · axios · local SQLite buffer |
 | **Eval harness** | ts-node CLI runs real `PlanAgent` + `BuildAgent` against versioned fixtures |
-| **Tooling agents** | `agents/mapper/` (LLM module summaries) · `agents/graphify/` (knowledge graphs) · `agents/api-flow/` (static API call-tree extractor) |
-| **DB** | 11 models, ~14 relations — see `agents/schema/SCHEMA_DIAGRAM.html` |
+| **Tooling agents** | `agents/packages/mapper/` (LLM module summaries) · `agents/tools/graphify/` (knowledge graphs) · `agents/packages/api-flow/` (static API call-tree extractor) |
+| **DB** | 11 models, ~14 relations — see `agents/data/schema/SCHEMA_DIAGRAM.html` |
 
 ---
 
@@ -59,7 +59,7 @@ A single user journey crosses every component in the system. The
 sequence diagram below maps it end-to-end; the component map shows
 where each box lives.
 
-<!-- TODO: embed two images exported from agents/architecture/ARCHITECTURE.html
+<!-- TODO: embed two images exported from agents/data/architecture/ARCHITECTURE.html
      (component map + lifecycle sequence). Easiest: open each tab, screenshot,
      save as docs/media/architecture-system.png and architecture-lifecycle.png.
 
@@ -68,7 +68,7 @@ where each box lives.
 -->
 
 The interactive version is at
-`agents/architecture/ARCHITECTURE.html` — two tabs, pan/zoom on
+`agents/data/architecture/ARCHITECTURE.html` — two tabs, pan/zoom on
 each diagram. Open the unified hub at `agents/HUB.html` to flip
 between the architecture, schema, API explorer, and per-module
 knowledge graphs.
@@ -165,13 +165,22 @@ backend/      NestJS app — 12 modules, rubric YAMLs, eval harness
 frontend/    React + Vite + Monaco editor
 cli/          mentor watch — chokidar + axios + SQLite buffer
 agents/      static-analysis tooling
-  mapper/        LLM-driven module summaries
-  graphify/      knowledge graphs + Mermaid module diagrams
-  api-flow/      static API call-tree extractor
-  architecture/  hand-curated system + lifecycle diagrams
-  schema/        Prisma → ER diagram
-  codebase-map/  LLM-enriched markdown per package
-  HUB.html       single-page hub linking every view
+  HUB.html             single-page hub linking every view
+  packages/            runnable agents (TypeScript)
+    mapper/              LLM-driven module summaries
+    critic/              LLM-driven code review with cross-run tracking
+    api-flow/            static API call-tree extractor
+  tools/               build scripts (Python + shell)
+    build-architecture.py
+    build-schema-diagram.py
+    build-hub.py
+    graphify/            graphify wrappers + flatten + map-module.sh
+  data/                everything generated
+    architecture/        system + lifecycle Mermaid diagrams
+    schema/              Prisma ER diagram
+    codebase-map/        mapper output + api-flow JSON
+    knowledge-graphs/    graphify outputs (per-module + per-package)
+    critic-out/          critic reviews (gitignored)
 ```
 
 A full directory tree is in [`decisions.md`](decisions.md).
@@ -197,10 +206,10 @@ re-run the regression suite.
 
 | Question | Where |
 |---|---|
-| What does each backend module do? | `agents/codebase-map/backend.md` |
-| Show me the live architecture diagrams | `agents/HUB.html` (or `agents/architecture/ARCHITECTURE.html`) |
-| What's the schema? | `agents/schema/SCHEMA_DIAGRAM.html` or `backend/prisma/SCHEMA.md` |
-| Browse all 32 backend endpoints with call-flow | `agents/graphify/backend-api-flow/API_EXPLORER.html` |
+| What does each backend module do? | `agents/data/codebase-map/backend.md` |
+| Show me the live architecture diagrams | `agents/HUB.html` (or `agents/data/architecture/ARCHITECTURE.html`) |
+| What's the schema? | `agents/data/schema/SCHEMA_DIAGRAM.html` or `backend/prisma/SCHEMA.md` |
+| Browse all 32 backend endpoints with call-flow | `agents/data/knowledge-graphs/backend-api-flow/API_EXPLORER.html` |
 | Why was X decided that way? | [`decisions.md`](decisions.md) |
 | What's the next structural work? | [`architectural-followups.md`](architectural-followups.md) |
 | How is the rubric versioned? | `backend/rubrics/v3.0/` |

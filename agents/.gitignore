@@ -2,67 +2,62 @@
 # agents/.gitignore
 #
 # Anything under agents/ that's regenerable from the scripts here.
-# Paths in this file are relative to agents/.
+# Paths in this file are relative to agents/. The layout is:
+#
+#   agents/HUB.html              entry-point (generated)
+#   agents/packages/             agent code (mapper, critic, api-flow)
+#   agents/tools/                build scripts (python + shell)
+#   agents/data/                 every generated artifact
 # ---------------------------------------------------------------------------
 
-# ---------- agents/graphify/ ----------
+# ---------- agents/HUB.html ----------
 #
-# Tracked under graphify/:
-#   *.py *.sh README.md .gitignore               (tooling)
-#   <package>-module-level/MODULE_RELATIONSHIPS*.md   (text Mermaid for diff/PR)
-#
-# Everything else is regenerable. Strategy: ignore every subdirectory
-# of graphify/ by default, then re-include the *-module-level/ ones
-# so the committed .md files inside are tracked.
+# Always regenerate from tools/build-hub.py; never commit.
 
-graphify/*/
-!graphify/*-module-level/
+HUB.html
+
+# ---------- agents/packages/ ----------
+#
+# TypeScript build outputs + npm artifacts for each agent package.
+
+packages/*/dist/
+packages/*/node_modules/
+packages/*/*.tsbuildinfo
+
+# ---------- agents/data/knowledge-graphs/ ----------
+#
+# Tracked:
+#   <package>-module-level/MODULE_RELATIONSHIPS*.md (text Mermaid for diff/PR)
+#
+# Everything else is regenerable. Ignore every subdirectory by default,
+# then re-include the *-module-level/ ones so the committed .md files
+# inside are tracked.
+
+data/knowledge-graphs/*/
+!data/knowledge-graphs/*-module-level/
 
 # Within those re-included dirs, ignore the generated HTML + per-run
 # graphify-out/ subdir.
-graphify/*-module-level/*.html
-graphify/*-module-level/graphify-out/
+data/knowledge-graphs/*-module-level/*.html
+data/knowledge-graphs/*-module-level/graphify-out/
 
-# ---------- agents/codebase-map/ ----------
+# ---------- agents/data/codebase-map/ ----------
 #
 # *.md files are LLM-enriched narratives — tracked.
 # *.json sidecars are regenerable from the mapper — ignored.
 
-codebase-map/*.json
+data/codebase-map/*.json
 
-# ---------- agents/api-flow/ ----------
-#
-# TypeScript build outputs + npm artifacts.
-
-api-flow/dist/
-api-flow/node_modules/
-api-flow/*.tsbuildinfo
-
-# ---------- agents/schema/ ----------
+# ---------- agents/data/schema/ ----------
 #
 # Schema diagram is regenerated from backend/prisma/schema.prisma by
-# the build script. No content here is hand-written.
+# tools/build-schema-diagram.py. No content here is hand-written.
 
-schema/
+data/schema/
 
-# ---------- agents/HUB.html ----------
-#
-# The unified hub is generated from whatever views are currently
-# available. Always regenerate; never commit.
-
-HUB.html
-
-# ---------- agents/critic/ ----------
-#
-# TypeScript build outputs + npm artifacts for the critic package.
-
-critic/dist/
-critic/node_modules/
-critic/*.tsbuildinfo
-
-# ---------- agents/critic-out/ ----------
+# ---------- agents/data/critic-out/ ----------
 #
 # Per-run review artifacts (per-module markdown, synthesis, raw JSON
 # sidecars, and the cross-run issue tracker). All regenerable.
 
-critic-out/
+data/critic-out/

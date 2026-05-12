@@ -3,8 +3,8 @@
 #
 # Truly repo-wide rules only. Per-area generated artifacts are handled
 # closer to where they're produced:
-#   - agents/.gitignore         everything generated under agents/
-#   - agents/mapper/.gitignore  node_modules + dist for the mapper pkg
+#   - agents/.gitignore         everything generated under agents/data/
+#                                and dist/node_modules for agents/packages/*
 #   - backend/.gitignore        node_modules + dist + prisma + graphify-out
 #   - frontend/.gitignore       node_modules + dist
 #   - cli/.gitignore            node_modules + dist
