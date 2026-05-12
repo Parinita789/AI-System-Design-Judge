@@ -1,0 +1,53 @@
+# ---------------------------------------------------------------------------
+# agents/.gitignore
+#
+# Anything under agents/ that's regenerable from the scripts here.
+# Paths in this file are relative to agents/.
+# ---------------------------------------------------------------------------
+
+# ---------- agents/graphify/ ----------
+#
+# Tracked under graphify/:
+#   *.py *.sh README.md .gitignore               (tooling)
+#   <package>-module-level/MODULE_RELATIONSHIPS*.md   (text Mermaid for diff/PR)
+#
+# Everything else is regenerable. Strategy: ignore every subdirectory
+# of graphify/ by default, then re-include the *-module-level/ ones
+# so the committed .md files inside are tracked.
+
+graphify/*/
+!graphify/*-module-level/
+
+# Within those re-included dirs, ignore the generated HTML + per-run
+# graphify-out/ subdir.
+graphify/*-module-level/*.html
+graphify/*-module-level/graphify-out/
+
+# ---------- agents/codebase-map/ ----------
+#
+# *.md files are LLM-enriched narratives — tracked.
+# *.json sidecars are regenerable from the mapper — ignored.
+
+codebase-map/*.json
+
+# ---------- agents/api-flow/ ----------
+#
+# TypeScript build outputs + npm artifacts.
+
+api-flow/dist/
+api-flow/node_modules/
+api-flow/*.tsbuildinfo
+
+# ---------- agents/schema/ ----------
+#
+# Schema diagram is regenerated from backend/prisma/schema.prisma by
+# the build script. No content here is hand-written.
+
+schema/
+
+# ---------- agents/HUB.html ----------
+#
+# The unified hub is generated from whatever views are currently
+# available. Always regenerate; never commit.
+
+HUB.html

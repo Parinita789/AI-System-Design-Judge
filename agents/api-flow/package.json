@@ -1,0 +1,22 @@
+{
+  "name": "@interview-assistant/api-flow",
+  "version": "0.1.0",
+  "description": "Static API call-flow extractor. Walks NestJS controllers and traces this.X.Y(...) DI calls down to Prisma / external boundaries.",
+  "private": true,
+  "main": "./dist/extract.js",
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "extract": "ts-node src/extract.ts",
+    "start": "node dist/extract.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "ts-morph": "^24.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

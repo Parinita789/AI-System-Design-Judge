@@ -1,9 +1,13 @@
 # ---------------------------------------------------------------------------
 # Root .gitignore
 #
-# Per-package node_modules, dist, etc. are handled by per-package .gitignores
-# under backend/, frontend/, cli/, agents/mapper/. This file handles the
-# repo-wide generated artifacts under agents/ that aren't checked in.
+# Truly repo-wide rules only. Per-area generated artifacts are handled
+# closer to where they're produced:
+#   - agents/.gitignore         everything generated under agents/
+#   - agents/mapper/.gitignore  node_modules + dist for the mapper pkg
+#   - backend/.gitignore        node_modules + dist + prisma + graphify-out
+#   - frontend/.gitignore       node_modules + dist
+#   - cli/.gitignore            node_modules + dist
 # ---------------------------------------------------------------------------
 
 # OS / editor noise
@@ -11,39 +15,3 @@
 *.swp
 .vscode/
 .idea/
-
-# ---------------------------------------------------------------------------
-# agents/graphify/ — generated outputs
-#
-# Tracked under agents/graphify/:
-#   *.py, *.sh, README.md, .gitignore               (tooling)
-#   <package>-module-level/MODULE_RELATIONSHIPS.md  (text Mermaid for diff/PR)
-#   <package>-module-level/MODULE_RELATIONSHIPS_features-only.md
-#
-# Everything else is regenerated from agents/codebase-map/*.json by:
-#   agents/graphify/map-module.sh
-#   agents/graphify/build-mermaid.py
-#   agents/graphify/build-neighborhoods.py
-#   agents/graphify/build-explorer.py
-#   agents/graphify/build-module-level.py
-#   agents/graphify/build-unified.py
-# ---------------------------------------------------------------------------
-
-# Ignore every subdirectory under agents/graphify/ by default.
-agents/graphify/*/
-
-# Then re-include the per-package "*-module-level" directories so the
-# MODULE_RELATIONSHIPS*.md files inside them can be tracked.
-!agents/graphify/*-module-level/
-
-# Within those re-included dirs, ignore the generated HTML and the
-# graphify-out/ subdir.
-agents/graphify/*-module-level/*.html
-agents/graphify/*-module-level/graphify-out/
-
-# ---------------------------------------------------------------------------
-# agents/codebase-map/ — mapper JSON sidecars are regenerable, large,
-# not human-diffable. The .md files there are LLM-enriched narratives
-# and worth committing.
-# ---------------------------------------------------------------------------
-agents/codebase-map/*.json
