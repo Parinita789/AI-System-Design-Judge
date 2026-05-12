@@ -155,7 +155,23 @@ frontend/
                              buildSessions, mentor, signalMentor, rubrics)
     store/                   zustand sessionStore (active session + per-session pause state)
     types/                   shapes mirrored from the backend API
+
+agents/                      static-analysis tooling for this monorepo
+  mapper/                    LLM-driven agent: walks all 3 packages, emits
+                             markdown maps with per-module responsibility prose
+                             (agents/codebase-map/{backend,frontend,cli}.md)
+  graphify/                  graphify-based code knowledge graphs + a suite of
+                             helper scripts (flatten, build-mermaid, build-
+                             neighborhoods, build-explorer) that turn the raw
+                             graph into browsable Mermaid + D3 tree views
+  codebase-map/              committed output: LLM-enriched markdown per package
+                             plus per-package MODULE_RELATIONSHIPS.md (Mermaid)
 ```
+
+See `agents/mapper/README.md` and `agents/graphify/README.md` for
+the per-package workflows. Everything outside of those READMEs is
+regenerable from scripts; only the LLM-enriched markdown is checked
+in.
 
 ## Setup
 

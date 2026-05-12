@@ -10,3 +10,4 @@ coverage/
 .vscode/
 prisma/migrations/dev.db*
 data/
+graphify-out/
