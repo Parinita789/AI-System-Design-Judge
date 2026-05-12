@@ -58,7 +58,11 @@ export async function run(opts: RunOptions): Promise<{ moduleCount: number; file
   const maps = loadMaps(opts.repoRoot);
 
   const resolved = resolveModules(maps.byPackage, opts.pkg, opts.moduleFilter);
-  const moduleSources = enumerateAll(resolved, opts.repoRoot, opts.maxFiles);
+  // Exclusion paths come from EVERY module in each package, not just
+  // the resolved subset, so `--module=_root` still excludes its
+  // siblings rather than swallowing them.
+  const allModulesByPkg = collectAllModulePaths(maps.byPackage);
+  const moduleSources = enumerateAll(resolved, opts.repoRoot, opts.maxFiles, allModulesByPkg);
 
   const totalFiles = moduleSources.reduce((s, m) => s + m.filePaths.length, 0);
 
@@ -271,15 +275,40 @@ function resolveModules(
   return out;
 }
 
+function collectAllModulePaths(
+  byPackage: Record<CodebasePackage, MapperPackageMap>,
+): Map<string, string[]> {
+  // For each package, the (repo-relative) paths of every module —
+  // used to build the per-module exclusion list. Must include the
+  // full set even when the user is reviewing a subset, otherwise
+  // synthetic `_root`-style modules would over-enumerate when run
+  // alone.
+  const out = new Map<string, string[]>();
+  for (const [pkg, map] of Object.entries(byPackage)) {
+    out.set(
+      pkg,
+      map.modules.map((m) => m.path),
+    );
+  }
+  return out;
+}
+
 function enumerateAll(
   resolved: ResolvedModule[],
   repoRoot: string,
   maxFilesTotal: number | undefined,
+  allPathsByPkg: Map<string, string[]>,
 ): ResolvedModule[] {
   let budget = maxFilesTotal ?? Infinity;
   return resolved.map((r) => {
+    const myAbs = path.resolve(repoRoot, r.summary.path);
+    const peers = (allPathsByPkg.get(r.pkg) ?? []).map((p) =>
+      path.resolve(repoRoot, p),
+    );
+    const excludeUnderPaths = peers.filter((p) => p !== myAbs);
     const files = enumerateModuleFiles(repoRoot, r.summary, {
       maxFiles: budget === Infinity ? undefined : budget,
+      excludeUnderPaths,
     });
     budget -= files.length;
     return { ...r, filePaths: files };
