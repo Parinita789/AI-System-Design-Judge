@@ -40,6 +40,37 @@ export interface SourceMapEntry {
   lineCount: number;
 }
 
+// Normalize the file path the LLM emits so it lines up with the
+// repoPaths we sent. The LLM may return any of:
+//   "backend/src/foo.ts"      <- canonical (what we send)
+//   "./backend/src/foo.ts"    <- leading dot-slash
+//   "/absolute/.../foo.ts"    <- absolute (rare but seen)
+//   "foo.ts"                  <- basename only
+// We try the canonical form first; if it doesn't match, fall back
+// to basename matching against the known files.
+export function resolveFileRef(
+  rawFile: string,
+  fileMap: Map<string, SourceMapEntry>,
+): SourceMapEntry | undefined {
+  const direct = fileMap.get(rawFile);
+  if (direct) return direct;
+
+  const stripped = rawFile.replace(/^\.\//, '').replace(/^\/+/, '');
+  const strippedHit = fileMap.get(stripped);
+  if (strippedHit) return strippedHit;
+
+  // Match any key whose suffix matches (handles absolute -> relative
+  // and basename-only emissions). Only succeed if exactly one key
+  // matches; ambiguity returns undefined so the LLM gets a retry.
+  const matches: SourceMapEntry[] = [];
+  for (const [key, entry] of fileMap) {
+    if (key.endsWith('/' + rawFile) || key.endsWith('/' + stripped) || key.endsWith(rawFile)) {
+      matches.push(entry);
+    }
+  }
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
 // ---------- Phase 1 ----------
 
 export function validateFileIssues(
@@ -103,7 +134,7 @@ export function validateModuleIssues(
         detail: `axis "${issue.axis}" is not in ${[...AXIS_SET].join('|')}`,
       });
     }
-    const entry = fileMap.get(issue.file);
+    const entry = resolveFileRef(issue.file, fileMap);
     if (!entry) {
       faults.push({
         kind: 'unknown-file',

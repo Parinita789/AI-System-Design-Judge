@@ -90,6 +90,46 @@ describe('validateModuleIssues', () => {
     };
     expect(validateModuleIssues(fileMap, [issue])[0].kind).toBe('line-out-of-range');
   });
+
+  it('accepts a leading "./" path prefix', () => {
+    const issue: ModuleIssue = {
+      severity: 'high',
+      axis: 'correctness',
+      fingerprint: 'x',
+      file: './foo/a.ts',
+      lines: [10],
+      issue: 'x',
+    };
+    expect(validateModuleIssues(fileMap, [issue])).toEqual([]);
+  });
+
+  it('accepts a basename when it uniquely matches', () => {
+    const issue: ModuleIssue = {
+      severity: 'high',
+      axis: 'correctness',
+      fingerprint: 'x',
+      file: 'a.ts',
+      lines: [10],
+      issue: 'x',
+    };
+    expect(validateModuleIssues(fileMap, [issue])).toEqual([]);
+  });
+
+  it('rejects an ambiguous basename', () => {
+    const ambiguous = new Map([
+      ['mod1/util.ts', { repoPath: 'mod1/util.ts', lineCount: 50 }],
+      ['mod2/util.ts', { repoPath: 'mod2/util.ts', lineCount: 50 }],
+    ]);
+    const issue: ModuleIssue = {
+      severity: 'high',
+      axis: 'correctness',
+      fingerprint: 'x',
+      file: 'util.ts',
+      lines: [10],
+      issue: 'x',
+    };
+    expect(validateModuleIssues(ambiguous, [issue])[0].kind).toBe('unknown-file');
+  });
 });
 
 describe('validateSynthesis', () => {
