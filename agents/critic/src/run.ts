@@ -240,11 +240,52 @@ export async function run(opts: RunOptions): Promise<{ moduleCount: number; file
   });
   fs.writeFileSync(path.join(opts.outputDir, 'index.md'), indexMd, 'utf8');
 
+  // ------------ End-of-run summary ------------
+  const fileStats = collectStats(moduleReviews.flatMap((mr) => mr.fileReviews));
+  const moduleStats = collectStats(moduleReviews);
+  const synthStat = synthesis
+    ? {
+        ok: !synthesis.synthesisError && !synthesis.unverifiedRefs,
+        unverified: synthesis.unverifiedRefs,
+        failed: !!synthesis.synthesisError,
+      }
+    : null;
+
+  log('');
+  log('critic: end-of-run summary');
   log(
-    `critic: done. ${reconciled.newIssueIds.length} new · ${reconciled.fixedIssueIds.length} fixed · ${reconciled.stillOpenIssueIds.length} still-open`,
+    `  files:    ${fileStats.ok}/${fileStats.total} ok · ${fileStats.unverified} unverifiedRefs · ${fileStats.failed} failed`,
+  );
+  log(
+    `  modules:  ${moduleStats.ok}/${moduleStats.total} ok · ${moduleStats.unverified} unverifiedRefs · ${moduleStats.failed} failed`,
+  );
+  if (synthStat) {
+    log(
+      `  synth:    ${synthStat.ok ? 'ok' : synthStat.failed ? 'failed' : 'unverifiedRefs'}`,
+    );
+  }
+  log(
+    `  issues:   ${reconciled.newIssueIds.length} new · ${reconciled.fixedIssueIds.length} fixed · ${reconciled.stillOpenIssueIds.length} still-open · ${reconciled.carriedForwardWontfixIds.length} wontfix`,
   );
 
   return { moduleCount: moduleReviews.length, fileCount: totalFiles };
+}
+
+function collectStats(results: Array<{ unverifiedRefs: boolean; synthesisError: string | null }>): {
+  total: number;
+  ok: number;
+  unverified: number;
+  failed: number;
+} {
+  let ok = 0;
+  let unverified = 0;
+  let failed = 0;
+  for (const r of results) {
+    if (r.synthesisError) failed++;
+    else if (r.unverifiedRefs) unverified++;
+    else ok++;
+  }
+  return { total: results.length, ok, unverified, failed };
 }
 
 function resolveModules(
