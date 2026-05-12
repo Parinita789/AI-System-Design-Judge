@@ -142,7 +142,11 @@ export async function run(opts: RunOptions): Promise<{ moduleCount: number; file
   }
 
   // ------------ Reconcile issues.json ------------
-  let priorIndex = opts.track ? loadIssuesIndex(opts.outputDir) : { version: 1 as const, runs: [], issues: [] };
+  // Always load the prior index (read-only) so the markdown's Status
+  // column shows accurate new/still-open/fixed badges. Only the WRITE
+  // back to disk is gated on --track; --no-track is for "let me see
+  // status without recording this run as ground truth."
+  const priorIndex = loadIssuesIndex(opts.outputDir);
   const finishedAt = new Date().toISOString();
   const reconciled = reconcileIssues({
     prior: priorIndex,
