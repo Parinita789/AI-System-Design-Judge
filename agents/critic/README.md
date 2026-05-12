@@ -56,5 +56,19 @@ back to the `claude` CLI.
 ## Cost
 
 At Sonnet 4.6 list pricing, a full run over backend + frontend + cli
-costs roughly **$4.20**. Re-runs hit warm prompt caches and drop to
-about **$2.50**. The `diff` subcommand makes no LLM calls.
+(~186 files / 50 modules / 1 synthesis call) costs roughly **$4–5
+on a cold run**. Re-runs hit warm prompt caches and drop to about
+**$2.50–3**. The `diff` and `status` subcommands make no LLM calls.
+
+Verify the resolved counts before paying for a run:
+
+```
+codebase-critic review --dry-run
+```
+
+Smoke tests are cheap:
+
+```
+codebase-critic review --package=cli --skip-synthesis              # ~$0.40
+codebase-critic review --module=hints --max-files=3 --skip-synthesis  # ~$0.07
+```
