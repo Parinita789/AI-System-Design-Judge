@@ -51,3 +51,18 @@ schema/
 # available. Always regenerate; never commit.
 
 HUB.html
+
+# ---------- agents/critic/ ----------
+#
+# TypeScript build outputs + npm artifacts for the critic package.
+
+critic/dist/
+critic/node_modules/
+critic/*.tsbuildinfo
+
+# ---------- agents/critic-out/ ----------
+#
+# Per-run review artifacts (per-module markdown, synthesis, raw JSON
+# sidecars, and the cross-run issue tracker). All regenerable.
+
+critic-out/

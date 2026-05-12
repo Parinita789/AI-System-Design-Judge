@@ -1,0 +1,43 @@
+{
+  "name": "@interview-assistant/critic",
+  "version": "0.1.0",
+  "description": "LLM-driven code-review agent. Consumes the mapper output + architecture / schema / api-flow artifacts and emits per-module reviews plus a synthesis report. Three-tier pipeline (file → module → global) with stable issue ids tracked across runs.",
+  "private": true,
+  "bin": {
+    "codebase-critic": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "README.md",
+    "rubric.md",
+    "personas"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest --silent"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.0.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testRegex": ".*\\.test\\.ts$",
+    "rootDir": "src"
+  }
+}
