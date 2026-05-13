@@ -55,6 +55,7 @@ async function main(): Promise<void> {
     .option('--max-files <N>', 'debug: cap total file reviews', (v) => parseInt(v, 10))
     .option('--skip-synthesis', 'skip phase 3 (no synthesis.md)', false)
     .option('--no-track', "do not update issues.json this run")
+    .option('--resume', 'reuse any existing raw/module/*.json instead of re-reviewing', false)
     .option('--repo-root <dir>', 'override repo root detection')
     .option('--dry-run', 'log plan + counts, do not call LLM', false)
     .action(async (rawOpts: Record<string, unknown>) => {
@@ -88,6 +89,7 @@ async function main(): Promise<void> {
           maxFiles: rawOpts.maxFiles as number | undefined,
           skipSynthesis: Boolean(rawOpts.skipSynthesis),
           track,
+          resume: Boolean(rawOpts.resume),
           dryRun: Boolean(rawOpts.dryRun),
         });
       } catch (err) {

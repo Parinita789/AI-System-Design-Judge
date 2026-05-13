@@ -48,6 +48,10 @@ export interface RunOptions {
   skipSynthesis: boolean;
   track: boolean;
   dryRun: boolean;
+  // When true, modules whose raw/module/<id>.json already exists on
+  // disk are loaded from there instead of re-reviewed. Lets a killed
+  // long run pick up where it died.
+  resume: boolean;
   // Test seam.
   clientFactory?: () => { client: CriticLlmClient; chosenProvider: string };
 }
@@ -76,15 +80,46 @@ export async function run(opts: RunOptions): Promise<{ moduleCount: number; file
     return { moduleCount: resolved.length, fileCount: totalFiles };
   }
 
-  const { client, chosenProvider } = (opts.clientFactory ?? defaultClientFactory(opts.provider))();
-  log(`critic: chosen provider = ${chosenProvider}`);
-
   const runId = new Date().toISOString();
   const startedAt = runId;
 
-  // ------------ Phase 1: per-file ------------
+  // ------------ Resume: load any module rollup JSONs that already exist ------------
   const moduleReviews: PersistedModuleReview[] = [];
-  for (const resolvedMod of moduleSources) {
+  const toReview: typeof moduleSources = [];
+  if (opts.resume) {
+    let resumed = 0;
+    for (const rm of moduleSources) {
+      const rollupPath = path.join(
+        opts.outputDir,
+        'raw',
+        'module',
+        `${safeFilename(rm.pkg)}__${safeFilename(rm.summary.id)}.json`,
+      );
+      if (fs.existsSync(rollupPath)) {
+        try {
+          const cached = JSON.parse(fs.readFileSync(rollupPath, 'utf8')) as PersistedModuleReview;
+          moduleReviews.push(cached);
+          resumed++;
+          continue;
+        } catch {
+          // Bad JSON — fall through and re-review.
+        }
+      }
+      toReview.push(rm);
+    }
+    log(`critic: --resume loaded ${resumed} prior module rollup(s); reviewing ${toReview.length} remaining`);
+  } else {
+    toReview.push(...moduleSources);
+  }
+
+  const { client, chosenProvider } =
+    toReview.length > 0
+      ? (opts.clientFactory ?? defaultClientFactory(opts.provider))()
+      : { client: null as unknown as CriticLlmClient, chosenProvider: 'none' };
+  if (toReview.length > 0) log(`critic: chosen provider = ${chosenProvider}`);
+
+  // ------------ Phase 1: per-file ------------
+  for (const resolvedMod of toReview) {
     if (resolvedMod.filePaths.length === 0) {
       log(`  ${resolvedMod.pkg}/${resolvedMod.summary.id}: no files; skipping`);
       continue;
@@ -139,6 +174,29 @@ export async function run(opts: RunOptions): Promise<{ moduleCount: number; file
       `${safeFilename(resolvedMod.pkg)}__${safeFilename(resolvedMod.summary.id)}.json`,
     );
     writeJsonSidecar(moduleRawPath, moduleReview);
+
+    // Render the per-module markdown immediately so progress is
+    // visible without waiting for the whole run + synthesis to
+    // finish. Status badges are populated from prior issues.json
+    // only — the run's own reconciliation hasn't happened yet, so
+    // brand-new issues will render with no badge. The end-of-run
+    // pass below re-renders these files with full status info.
+    const perModuleDirEarly = path.join(opts.outputDir, 'per-module');
+    fs.mkdirSync(perModuleDirEarly, { recursive: true });
+    const earlyStatusMap = new Map<string, IndexedIssue>();
+    if (opts.track) {
+      const priorIdx = loadIssuesIndex(opts.outputDir);
+      for (const i of priorIdx.issues) earlyStatusMap.set(i.id, i);
+    }
+    const earlyMd = renderModuleMarkdown({
+      result: moduleReview,
+      persona: opts.lens,
+      model: opts.model,
+      statusByIssueId: earlyStatusMap,
+      fixedThisRun: [],
+    });
+    const earlyFilename = `${safeFilename(resolvedMod.pkg)}__${safeFilename(resolvedMod.summary.id)}.md`;
+    fs.writeFileSync(path.join(perModuleDirEarly, earlyFilename), earlyMd, 'utf8');
   }
 
   // ------------ Reconcile issues.json ------------
