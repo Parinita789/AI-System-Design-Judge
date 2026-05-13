@@ -1,4 +1,11 @@
-import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
@@ -65,10 +72,18 @@ export class MentorService {
       result = await this.mentorAgent.generate(input);
     } catch (err) {
       const message = (err as Error).message ?? String(err);
-      this.logger.warn(
+      // Throw, don't swallow. Returning null here used to surface
+      // as HTTP 200 + null body — callers polling for an artifact
+      // could not distinguish "still pending" from "agent crashed,"
+      // and every LLM API error / schema validation failure / token
+      // limit breach was invisible to monitoring.
+      this.logger.error(
+        `Mentor generation failed for evaluation ${evaluationId}: ${message}`,
+        (err as Error).stack,
+      );
+      throw new InternalServerErrorException(
         `Mentor generation failed for evaluation ${evaluationId}: ${message}`,
       );
-      return null;
     }
 
     const row = await this.mentorRepo.upsertByEvaluationId(evaluationId, result);
