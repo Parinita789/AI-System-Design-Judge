@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
+import { safeJoinUnderBase, PathTraversalError } from '../../../common/paths/safe-join';
 import { Phase } from '../../phase-tagger/types/phase.types';
 import {
   QuestionKind,
@@ -118,9 +119,33 @@ export class RubricLoaderService {
 
     const rubricDir = this.config.get<string>('rubric.dir') ?? './rubrics';
 
+    // `version`, `phase`, and `kind` originate as URL params and reach
+    // this method through the HTTP layer. Use safeJoinUnderBase so a
+    // value like `../../../etc` returns NotFoundException via the
+    // PathTraversalError catch below instead of silently reading the
+    // arbitrary file path resolves to.
+    let sharedPath: string;
+    let variantPath: string;
+    let filePath: string;
+    try {
+      filePath = safeJoinUnderBase(rubricDir, version, `${phase}.yaml`);
+      if (kind) {
+        sharedPath = safeJoinUnderBase(rubricDir, version, `${phase}.shared.yaml`);
+        variantPath = safeJoinUnderBase(rubricDir, version, `${phase}.${kind}.yaml`);
+      } else {
+        sharedPath = '';
+        variantPath = '';
+      }
+    } catch (err) {
+      if (err instanceof PathTraversalError) {
+        throw new NotFoundException(
+          `Rubric not found (rejected path traversal: ${err.attempted})`,
+        );
+      }
+      throw err;
+    }
+
     if (kind) {
-      const sharedPath = path.resolve(rubricDir, version, `${phase}.shared.yaml`);
-      const variantPath = path.resolve(rubricDir, version, `${phase}.${kind}.yaml`);
       if (await fileExists(sharedPath)) {
         const shared = parseYaml<RawSharedRubric>(
           await fs.readFile(sharedPath, 'utf-8'),
@@ -140,7 +165,6 @@ export class RubricLoaderService {
       // Fall through to legacy path when no shared file exists for this version.
     }
 
-    const filePath = path.resolve(rubricDir, version, `${phase}.yaml`);
     let raw: string;
     try {
       raw = await fs.readFile(filePath, 'utf-8');

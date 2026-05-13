@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nest
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
+import { safeJoinUnderBase } from '../../../common/paths/safe-join';
 import { EvaluationsRepository } from '../../evaluations/repositories/evaluations.repository';
 import { SessionsService } from '../../sessions/services/sessions.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
@@ -98,12 +99,15 @@ export class MentorService {
   ): Promise<void> {
     const baseDir =
       this.config.get<string>('MENTOR_ARTIFACT_DIR') ?? './data/mentor-artifacts';
-    const sessionDir = path.resolve(baseDir, sessionId);
+    // sessionId comes from the DB but `writeToDisk` is reachable from
+    // any caller path; defend at the call site rather than assume the
+    // upstream validated.
+    const sessionDir = safeJoinUnderBase(baseDir, sessionId);
     await fs.mkdir(sessionDir, { recursive: true });
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const promptPath = path.join(sessionDir, `${evaluationId}.${stamp}.prompt.txt`);
-    const responsePath = path.join(sessionDir, `${evaluationId}.${stamp}.response.md`);
+    const promptPath = safeJoinUnderBase(sessionDir, `${evaluationId}.${stamp}.prompt.txt`);
+    const responsePath = safeJoinUnderBase(sessionDir, `${evaluationId}.${stamp}.response.md`);
 
     await Promise.all([
       fs.writeFile(promptPath, result.renderedPrompt, 'utf-8'),
