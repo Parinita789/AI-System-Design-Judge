@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { questionsService } from '@/services/questions.service';
 import { useSessionStore } from '@/store/sessionStore';
+import { extractApiError } from '@/lib/error';
 import {
   QUESTION_KIND_LABELS,
   QUESTION_KINDS,
@@ -122,7 +123,7 @@ export function SessionStartPage() {
 
         {mutation.isError && (
           <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Failed to start session: {(mutation.error as Error).message}
+            Failed to start session: {extractApiError(mutation.error)}
           </div>
         )}
       </form>

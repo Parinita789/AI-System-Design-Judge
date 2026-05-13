@@ -8,6 +8,7 @@ import { snapshotsService } from '@/services/snapshots.service';
 import { useSessionStore, computeElapsedMs } from '@/store/sessionStore';
 import { HintChatPanel } from '@/components/HintChatPanel';
 import { MermaidBlock } from '@/components/MermaidBlock';
+import { extractApiError } from '@/lib/error';
 
 type ViewMode = 'edit' | 'split' | 'preview';
 
@@ -318,7 +319,7 @@ export function ActiveSessionPage() {
 
       {endMutation.isError && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-1.5 text-sm text-red-700 shrink-0">
-          Failed to end session: {(endMutation.error as Error).message}
+          Failed to end session: {extractApiError(endMutation.error)}
         </div>
       )}
 
@@ -416,7 +417,7 @@ export function ActiveSessionPage() {
         </div>
         {saveMutation.isError && (
           <div className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700 shrink-0">
-            Save failed: {(saveMutation.error as Error).message}
+            Save failed: {extractApiError(saveMutation.error)}
           </div>
         )}
       </section>

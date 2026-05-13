@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from 'react';
+import { extractApiError } from '@/lib/error';
 
 export function MermaidBlock({ source }: { source: string }) {
   const id = useId();
@@ -17,7 +18,7 @@ export function MermaidBlock({ source }: { source: string }) {
         const result = await mermaid.render(renderId, source);
         if (!cancelled) setSvg(result.svg);
       } catch (err) {
-        if (!cancelled) setError((err as Error).message ?? 'unknown render error');
+        if (!cancelled) setError(extractApiError(err) || 'unknown render error');
       }
     })();
     return () => {

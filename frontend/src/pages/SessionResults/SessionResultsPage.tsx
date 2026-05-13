@@ -209,7 +209,7 @@ export function SessionResultsPage() {
   if (sessionQuery.isError) {
     return (
       <div className="text-red-600">
-        Failed to load session: {(sessionQuery.error as Error).message}
+        Failed to load session: {extractApiError(sessionQuery.error)}
       </div>
     );
   }
@@ -249,13 +249,13 @@ export function SessionResultsPage() {
 
       {retryMutation.isError && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Couldn't start a new attempt: {(retryMutation.error as Error).message}
+          Couldn't start a new attempt: {extractApiError(retryMutation.error)}
         </div>
       )}
 
       {reEvalMutation.isError && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Re-evaluation failed: {(reEvalMutation.error as Error).message}
+          Re-evaluation failed: {extractApiError(reEvalMutation.error)}
         </div>
       )}
 
@@ -293,7 +293,7 @@ export function SessionResultsPage() {
 
       {reEvalMutation.isError && (
         <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Re-evaluation failed: {(reEvalMutation.error as Error).message}
+          Re-evaluation failed: {extractApiError(reEvalMutation.error)}
         </div>
       )}
 
@@ -1307,7 +1307,7 @@ function AuditTrailModal({
         )}
         {query.isError && (
           <div className="px-5 py-8 text-sm text-red-700">
-            Failed to load audit: {(query.error as Error).message}
+            Failed to load audit: {extractApiError(query.error)}
           </div>
         )}
         {query.data && (
@@ -1765,7 +1765,7 @@ function DeepDiveDisclosure({
 
       {generateMutation.isError && !wasCancelled && (
         <div className="mt-2 rounded border border-red-300 bg-red-50 px-3 py-2 text-sm text-red-700">
-          Mentor generation failed: {(generateMutation.error as Error).message}
+          Mentor generation failed: {extractApiError(generateMutation.error)}
         </div>
       )}
 

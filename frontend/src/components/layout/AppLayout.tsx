@@ -198,7 +198,7 @@ export function AppLayout() {
               })}
               {questionsQuery.isError && (
                 <div className="text-xs text-red-600 px-2 py-1">
-                  Failed to load questions: {(questionsQuery.error as Error).message}
+                  Failed to load questions: {extractApiError(questionsQuery.error)}
                 </div>
               )}
             </div>
