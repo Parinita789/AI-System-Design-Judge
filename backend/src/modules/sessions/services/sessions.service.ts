@@ -74,17 +74,27 @@ export class SessionsService {
   }
 
   async cleanupArtifacts(sessionId: string): Promise<void> {
-    const dirs = [
-      path.resolve(
-        this.config.get<string>('MENTOR_ARTIFACT_DIR') ?? './data/mentor-artifacts',
-        sessionId,
-      ),
-      path.resolve(
-        this.config.get<string>('SIGNAL_MENTOR_ARTIFACT_DIR') ?? './data/signal-mentor-artifacts',
-        sessionId,
-      ),
+    // The method is `public`, so we can't rely on the findById guard
+    // in deleteSession. Validate the id format here and assert each
+    // resolved path is a real child of its base before rm. Without
+    // these, a sessionId like '../../../etc' would escape the base
+    // and fs.rm({ recursive: true, force: true }) would delete it.
+    if (!UUID_REGEX.test(sessionId)) {
+      this.logger.warn(`Refusing cleanupArtifacts for non-UUID sessionId: ${sessionId}`);
+      return;
+    }
+
+    const bases = [
+      this.config.get<string>('MENTOR_ARTIFACT_DIR') ?? './data/mentor-artifacts',
+      this.config.get<string>('SIGNAL_MENTOR_ARTIFACT_DIR') ?? './data/signal-mentor-artifacts',
     ];
-    for (const dir of dirs) {
+    for (const base of bases) {
+      const baseResolved = path.resolve(base);
+      const dir = path.resolve(baseResolved, sessionId);
+      if (dir !== baseResolved && !dir.startsWith(baseResolved + path.sep)) {
+        this.logger.warn(`Refusing to rm ${dir} — escapes base ${baseResolved}`);
+        continue;
+      }
       try {
         await fs.rm(dir, { recursive: true, force: true });
         this.logger.log(`Removed artifact dir ${dir}`);
@@ -96,3 +106,5 @@ export class SessionsService {
     }
   }
 }
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
