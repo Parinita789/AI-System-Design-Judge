@@ -1,6 +1,11 @@
 import { Rubric } from '../types/rubric.types';
 import { SystemBlock } from '../../llm/types/llm.types';
 import { PhaseEvalInput } from '../types/evaluation.types';
+import {
+  BOUNDARY_NOTICE,
+  USER_CONTENT_TAGS,
+  wrapUserContent,
+} from '../../../common/prompts/wrap-user-content';
 
 export interface BuiltBuildPrompt {
   systemBlocks: SystemBlock[];
@@ -19,7 +24,10 @@ export function buildBuildPrompt(
   return {
     systemBlocks: [
       { text: renderRubricSystemPrompt(rubric, opts.useTools === true), cacheable: true },
-      { text: `## Session question\n${input.session.prompt}`, cacheable: true },
+      {
+        text: `## Session question\n${wrapUserContent(input.session.prompt, USER_CONTENT_TAGS.sessionQuestion)}`,
+        cacheable: true,
+      },
       { text: renderPlanCrossReference(input.planMd), cacheable: true },
     ],
     userMessage: renderUserPayload(input),
@@ -88,6 +96,8 @@ Open the \`feedback\` field by acknowledging the seniority.`
   return `You are an evaluator for the ${rubric.phaseName} phase of a system-design practice session.
 
 Read the captured artifacts the user will provide (file events, AI conversation turns, the reconstructed final tree, and the candidate's plan.md) and return a structured evaluation matching the schema at the bottom. Be specific and cite evidence verbatim from the artifacts. Do not invent content that isn't there.
+
+${BOUNDARY_NOTICE}
 
 ${kindOpener}
 
@@ -220,7 +230,7 @@ judge_notes: ${s.judgeNotes}${s.evidenceHint ? `\nevidence_hint: ${s.evidenceHin
 
 function renderPlanCrossReference(planMd: string | null): string {
   const body = planMd && planMd.trim().length > 0 ? planMd : '(no plan.md captured)';
-  return `## plan.md (the contract this build is being judged against)\n${body}`;
+  return `## plan.md (the contract this build is being judged against)\n${wrapUserContent(body, USER_CONTENT_TAGS.planMd)}`;
 }
 
 function renderUserPayload(input: PhaseEvalInput): string {
@@ -267,7 +277,7 @@ Captured: ${eventCount} file event(s) across ${treeSize} surviving file(s); ${ai
     sections.push('## Key file snippets\n(no high-churn files to highlight)');
   } else {
     const blocks = ctx.keyFileSnippets.map(
-      (s) => `### ${s.path}\n\`\`\`\n${s.content}\n\`\`\``,
+      (s) => `### ${s.path}\n${wrapUserContent(s.content, USER_CONTENT_TAGS.fileContent)}`,
     );
     sections.push(`## Key file snippets (top high-churn files, capped per file)\n${blocks.join('\n\n')}`);
   }
@@ -319,12 +329,14 @@ function aggregatePerFile(events: NonNullable<PhaseEvalInput['buildContext']>['e
 function formatAiTurn(
   t: NonNullable<PhaseEvalInput['buildContext']>['aiTurns'][number],
 ): string {
-  const parts = [`[${t.occurredAt.toISOString()}] (${t.externalSessionId.slice(0, 8)} #${t.turnIndex}) ${t.role}`];
-  if (t.text && t.text.trim().length > 0) parts.push(t.text);
+  const header = `[${t.occurredAt.toISOString()}] (${t.externalSessionId.slice(0, 8)} #${t.turnIndex}) ${t.role}`;
+  const bodyParts: string[] = [];
+  if (t.text && t.text.trim().length > 0) bodyParts.push(t.text);
   if (t.toolName) {
     const inp = t.toolInputSummary ? ` input=${t.toolInputSummary}` : '';
     const res = t.toolResultSummary ? ` result=${t.toolResultSummary}` : '';
-    parts.push(`tool: ${t.toolName}${inp}${res}`);
+    bodyParts.push(`tool: ${t.toolName}${inp}${res}`);
   }
-  return parts.join('\n');
+  if (bodyParts.length === 0) return header;
+  return `${header}\n${wrapUserContent(bodyParts.join('\n'), USER_CONTENT_TAGS.aiTurn)}`;
 }

@@ -1,6 +1,11 @@
 import { SystemBlock, ToolDefinition } from '../../llm/types/llm.types';
 import { Phase } from '../../phase-tagger/types/phase.types';
 import { SignalMentorInput } from '../types/signal-mentor.types';
+import {
+  BOUNDARY_NOTICE,
+  USER_CONTENT_TAGS,
+  wrapUserContent,
+} from '../../../common/prompts/wrap-user-content';
 
 export const SUBMIT_ANNOTATIONS_TOOL_NAME = 'submit_signal_annotations';
 
@@ -14,7 +19,10 @@ export function buildSignalMentorPrompt(input: SignalMentorInput): BuiltSignalMe
   return {
     systemBlocks: [
       { text: renderPersonaSystemBlock(seniorityLabel, input.phase), cacheable: true },
-      { text: `## Session question\n${input.question}`, cacheable: true },
+      {
+        text: `## Session question\n${wrapUserContent(input.question, USER_CONTENT_TAGS.sessionQuestion)}`,
+        cacheable: true,
+      },
     ],
     userMessage: renderUserPayload(input),
   };
@@ -77,6 +85,8 @@ already scored against a rubric and produced per-signal verdicts. Your
 job is to write SHORT, CONCRETE coaching for each "gap" signal —
 signals where the candidate fell short:
 
+${BOUNDARY_NOTICE}
+
 - **Missed good signals**: good-polarity signals scored \`miss\` or \`partial\`.
 - **Fired bad signals**: bad-polarity signals scored \`hit\` or \`partial\`.
 
@@ -128,7 +138,8 @@ anchored to the question.`;
 function renderUserPayload(input: SignalMentorInput): string {
   const parts: string[] = [];
 
-  parts.push(`## Candidate's plan.md\n${input.planMd && input.planMd.trim() ? input.planMd : '(empty)'}`);
+  const planBody = input.planMd && input.planMd.trim() ? input.planMd : '(empty)';
+  parts.push(`## Candidate's plan.md\n${wrapUserContent(planBody, USER_CONTENT_TAGS.planMd)}`);
 
   if (input.phase === 'build' && input.buildContext) {
     parts.push(renderBuildArtifactsBlock(input.buildContext));
@@ -137,7 +148,9 @@ function renderUserPayload(input: SignalMentorInput): string {
   parts.push(`## Evaluator's score: ${input.score.toFixed(2)} / 5 (${input.phase} phase)`);
 
   if (input.feedbackText) {
-    parts.push(`## Evaluator's overall feedback\n${input.feedbackText}`);
+    parts.push(
+      `## Evaluator's overall feedback\n${wrapUserContent(input.feedbackText, USER_CONTENT_TAGS.feedbackText)}`,
+    );
   }
 
   const gapBlocks = input.gaps.map((g) => {
@@ -175,7 +188,7 @@ function renderBuildArtifactsBlock(ctx: NonNullable<SignalMentorInput['buildCont
     ctx.keyFileSnippets.length === 0
       ? '(none)'
       : ctx.keyFileSnippets
-          .map((s) => `### ${s.path}\n\`\`\`\n${s.content}\n\`\`\``)
+          .map((s) => `### ${s.path}\n${wrapUserContent(s.content, USER_CONTENT_TAGS.fileContent)}`)
           .join('\n\n');
   const aiBlock =
     ctx.aiTurns.length === 0
@@ -191,7 +204,7 @@ function renderBuildArtifactsBlock(ctx: NonNullable<SignalMentorInput['buildCont
                     (t.toolInputSummary ? ` input=${t.toolInputSummary}` : '') +
                     (t.toolResultSummary ? ` result=${t.toolResultSummary}` : '')
                   : '(empty turn)';
-            return `${head}\n${body}`;
+            return `${head}\n${wrapUserContent(body, USER_CONTENT_TAGS.aiTurn)}`;
           })
           .join('\n\n');
   return `## Build phase artifacts (anchor concrete versions to these)

@@ -1,6 +1,11 @@
 import { SystemBlock } from '../../llm/types/llm.types';
 import { Phase } from '../../phase-tagger/types/phase.types';
 import { MentorInput } from '../types/mentor.types';
+import {
+  BOUNDARY_NOTICE,
+  USER_CONTENT_TAGS,
+  wrapUserContent,
+} from '../../../common/prompts/wrap-user-content';
 
 export interface BuiltMentorPrompt {
   systemBlocks: SystemBlock[];
@@ -12,7 +17,10 @@ export function buildMentorPrompt(input: MentorInput): BuiltMentorPrompt {
   return {
     systemBlocks: [
       { text: renderPersonaSystemBlock(seniorityLabel, input.phase), cacheable: true },
-      { text: `## Session question\n${input.question}`, cacheable: true },
+      {
+        text: `## Session question\n${wrapUserContent(input.question, USER_CONTENT_TAGS.sessionQuestion)}`,
+        cacheable: true,
+      },
     ],
     userMessage: renderUserPayload(input),
   };
@@ -42,6 +50,8 @@ Your job is **not to re-evaluate**. Your job is to translate the
 evaluation into teaching that builds the junior's intuition for next
 time. You explain principles, name alternatives, and ground every claim
 in something they actually wrote.
+
+${BOUNDARY_NOTICE}
 
 # Core constraints
 
@@ -180,8 +190,9 @@ Read the inputs carefully. Ground every claim you make in either the candidate's
 function renderUserPayload(input: MentorInput): string {
   const parts: string[] = [];
 
+  const planBody = input.planMd && input.planMd.trim() ? input.planMd : '(empty)';
   parts.push(
-    `## Candidate's plan.md\n${input.planMd && input.planMd.trim() ? input.planMd : '(empty)'}`,
+    `## Candidate's plan.md\n${wrapUserContent(planBody, USER_CONTENT_TAGS.planMd)}`,
   );
 
   if (input.phase === 'build' && input.buildContext) {
@@ -204,7 +215,9 @@ function renderUserPayload(input: MentorInput): string {
   }
 
   if (input.feedbackText) {
-    parts.push(`## Evaluator's feedback prose\n${input.feedbackText}`);
+    parts.push(
+      `## Evaluator's feedback prose\n${wrapUserContent(input.feedbackText, USER_CONTENT_TAGS.feedbackText)}`,
+    );
   }
 
   if (input.topActionableItems.length > 0) {
@@ -244,7 +257,7 @@ function renderBuildArtifactsBlock(ctx: NonNullable<MentorInput['buildContext']>
     ctx.keyFileSnippets.length === 0
       ? '(none)'
       : ctx.keyFileSnippets
-          .map((s) => `### ${s.path}\n\`\`\`\n${s.content}\n\`\`\``)
+          .map((s) => `### ${s.path}\n${wrapUserContent(s.content, USER_CONTENT_TAGS.fileContent)}`)
           .join('\n\n');
 
   const aiBlock =
@@ -261,7 +274,7 @@ function renderBuildArtifactsBlock(ctx: NonNullable<MentorInput['buildContext']>
                     (t.toolInputSummary ? ` input=${t.toolInputSummary}` : '') +
                     (t.toolResultSummary ? ` result=${t.toolResultSummary}` : '')
                   : '(empty turn)';
-            return `${head}\n${body}`;
+            return `${head}\n${wrapUserContent(body, USER_CONTENT_TAGS.aiTurn)}`;
           })
           .join('\n\n');
 
@@ -285,7 +298,9 @@ function renderCrossPhaseBlock(cross: NonNullable<MentorInput['crossPhase']>): s
     `Score: ${cross.score.toFixed(2)} / 5`,
   ];
   if (cross.feedbackText) {
-    lines.push(`Evaluator's feedback prose:\n${cross.feedbackText}`);
+    lines.push(
+      `Evaluator's feedback prose:\n${wrapUserContent(cross.feedbackText, USER_CONTENT_TAGS.feedbackText)}`,
+    );
   }
   if (cross.topSignalsFired.length > 0) {
     const sigLines = cross.topSignalsFired

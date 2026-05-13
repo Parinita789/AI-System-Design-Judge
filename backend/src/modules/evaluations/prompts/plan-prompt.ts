@@ -2,6 +2,11 @@ import { Rubric } from '../types/rubric.types';
 import { SystemBlock } from '../../llm/types/llm.types';
 import { PhaseEvalInput } from '../types/evaluation.types';
 import { dedupePlanMd } from '../helpers/dedupe-plan-md';
+import {
+  BOUNDARY_NOTICE,
+  USER_CONTENT_TAGS,
+  wrapUserContent,
+} from '../../../common/prompts/wrap-user-content';
 
 export interface BuiltPrompt {
   systemBlocks: SystemBlock[];
@@ -25,7 +30,10 @@ export function buildPlanPrompt(
   return {
     systemBlocks: [
       { text: renderRubricSystemPrompt(rubric, opts.useTools === true), cacheable: true },
-      { text: `## Session question\n${input.session.prompt}`, cacheable: true },
+      {
+        text: `## Session question\n${wrapUserContent(input.session.prompt, USER_CONTENT_TAGS.sessionQuestion)}`,
+        cacheable: true,
+      },
     ],
     userMessage: renderUserPayload(inputForRender),
     preprocessing: {
@@ -119,6 +127,8 @@ Open the \`feedback\` field by acknowledging the seniority, e.g.
   return `You are an evaluator for the ${rubric.phaseName} phase of a system-design practice session.
 
 Read the artifacts the user will provide and return a structured JSON evaluation matching the schema at the bottom of this prompt. Be specific and cite evidence from the artifacts. Do not invent content that isn't in the artifacts.
+
+${BOUNDARY_NOTICE}
 
 ${kindOpener}
 
@@ -272,8 +282,9 @@ judge_notes: ${s.judgeNotes}${s.evidenceHint ? `\nevidence_hint: ${s.evidenceHin
 function renderUserPayload(input: PhaseEvalInput): string {
   const sections: string[] = [];
 
+  const planBody = input.planMd && input.planMd.trim().length > 0 ? input.planMd : '(empty)';
   sections.push(
-    `## plan.md (final state)\n${input.planMd && input.planMd.trim().length > 0 ? input.planMd : '(empty)'}`,
+    `## plan.md (final state)\n${wrapUserContent(planBody, USER_CONTENT_TAGS.planMd)}`,
   );
 
   if (input.snapshots.length === 0) {
@@ -298,13 +309,15 @@ function renderUserPayload(input: PhaseEvalInput): string {
   if (input.hints.length === 0) {
     sections.push(`## AI hint usage\nNo hint chat used during this session.`);
   } else {
-    const lines = [`${input.hints.length} hint exchange(s) during the session.`];
-    for (const h of input.hints) {
-      lines.push(
-        `- [${h.elapsedMinutes}m elapsed] User: ${JSON.stringify(h.prompt)}\n  Bot: ${JSON.stringify(h.response)}`,
-      );
-    }
-    sections.push(`## AI hint usage\n${lines.join('\n')}`);
+    const exchanges = input.hints
+      .map(
+        (h) =>
+          `[${h.elapsedMinutes}m elapsed] User: ${h.prompt}\nBot: ${h.response}`,
+      )
+      .join('\n\n');
+    sections.push(
+      `## AI hint usage (${input.hints.length} exchange(s))\n${wrapUserContent(exchanges, USER_CONTENT_TAGS.hintExchange)}`,
+    );
   }
 
   const activeMinutes =
