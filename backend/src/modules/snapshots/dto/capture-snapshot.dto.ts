@@ -1,9 +1,18 @@
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import {
+  IsInt,
+  IsObject,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 
 class SnapshotArtifactsDto {
   @IsOptional()
   @IsString()
+  @MaxLength(200_000)
   planMd?: string;
 }
 
@@ -13,6 +22,7 @@ export class CaptureSnapshotDto {
   elapsedMinutes!: number;
 
   @IsOptional()
+  @IsObject()
   @ValidateNested()
   @Type(() => SnapshotArtifactsDto)
   artifacts?: SnapshotArtifactsDto;

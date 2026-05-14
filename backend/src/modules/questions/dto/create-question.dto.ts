@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
 import {
   QUESTION_KINDS,
   QuestionKind,
@@ -9,6 +9,7 @@ import {
 export class CreateQuestionDto {
   @IsString()
   @MinLength(10)
+  @MaxLength(50_000)
   prompt!: string;
 
   @IsOptional()
