@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { SnapshotsService } from '../services/snapshots.service';
 import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
@@ -15,7 +15,7 @@ export class SnapshotsController {
     description:
       'Inserts a new snapshot row. Called on autosave, manual save, end-of-session flush, and beforeunload (sendBeacon).',
   })
-  capture(@Param('sessionId') sessionId: string, @Body() dto: CaptureSnapshotDto) {
+  capture(@Param('sessionId', ParseUUIDPipe) sessionId: string, @Body() dto: CaptureSnapshotDto) {
     return this.snapshotsService.capture(sessionId, dto);
   }
 
@@ -24,7 +24,7 @@ export class SnapshotsController {
     summary: 'Get the most recent snapshot for a session',
     description: 'Used by the active session page to seed Monaco on mount and by retry-inheritance to copy plan.md to a new session.',
   })
-  latest(@Param('sessionId') sessionId: string) {
+  latest(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
     return this.snapshotsService.latest(sessionId);
   }
 
@@ -36,7 +36,7 @@ export class SnapshotsController {
   @ApiQuery({ name: 'page', type: Number, required: false })
   @ApiQuery({ name: 'limit', type: Number, required: false })
   list(
-    @Param('sessionId') sessionId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Query() pagination: PaginationQueryDto,
   ) {
     return this.snapshotsService.list(sessionId, toPrismaPagination(pagination));

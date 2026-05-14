@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from '../services/questions.service';
 import { CreateQuestionDto, StartAttemptDto } from '../dto/create-question.dto';
@@ -32,7 +32,7 @@ export class QuestionsController {
 
   @Get(':id')
   @ApiOperation({ summary: 'Get one question by id (includes its sessions)' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.questionsService.get(id);
   }
 
@@ -42,7 +42,7 @@ export class QuestionsController {
     description:
       'Inherits the most recent plan.md across prior sessions for this question. Optional seniority override; otherwise inherits the most recent prior session\'s seniority.',
   })
-  startAttempt(@Param('id') id: string, @Body() body?: StartAttemptDto) {
+  startAttempt(@Param('id', ParseUUIDPipe) id: string, @Body() body?: StartAttemptDto) {
     return this.questionsService.startAttempt(id, body?.seniority);
   }
 
@@ -53,7 +53,7 @@ export class QuestionsController {
     description:
       'Removes the question row and all its sessions in a single transaction. Each session cascades through snapshots, hints, build events, captured AI turns, plan + build evaluations and their downstream mentor / signal-mentor artifacts. On-disk per-session prompt+response files are cleaned up fire-and-forget. Returns { ok: true, deletedSessions: N }.',
   })
-  delete(@Param('id') id: string) {
+  delete(@Param('id', ParseUUIDPipe) id: string) {
     return this.questionsService.deleteQuestion(id);
   }
 }

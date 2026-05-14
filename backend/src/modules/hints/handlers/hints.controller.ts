@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { HintsService } from '../services/hints.service';
 import { SendHintDto } from '../dto/send-hint.dto';
@@ -14,13 +14,13 @@ export class HintsController {
     description:
       'The bot replies with a hint, never a full solution. Persists prompt + response on the session\'s ai_interactions log.',
   })
-  send(@Param('sessionId') sessionId: string, @Body() dto: SendHintDto) {
+  send(@Param('sessionId', ParseUUIDPipe) sessionId: string, @Body() dto: SendHintDto) {
     return this.hintsService.send(sessionId, dto.message);
   }
 
   @Get()
   @ApiOperation({ summary: 'List the hint chat history for a session' })
-  list(@Param('sessionId') sessionId: string) {
+  list(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
     return this.hintsService.list(sessionId);
   }
 }

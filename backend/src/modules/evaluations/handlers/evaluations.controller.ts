@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EvaluationsService } from '../services/evaluations.service';
 import { RunEvaluationDto } from '../dto/run-evaluation.dto';
@@ -15,7 +15,7 @@ export class EvaluationsController {
       'Loads the rubric, evaluates plan.md via the LLM with tool-use forcing, validates evidence, computes a deterministic score, persists a new evaluation row + audit, and fires deep-dive + per-signal mentor in the background. Optional model override.',
   })
   runForSession(
-    @Param('sessionId') sessionId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Body() body?: RunEvaluationDto,
   ) {
     return this.evaluationsService.runForSession(sessionId, body?.model);
@@ -26,7 +26,7 @@ export class EvaluationsController {
     summary: 'List every evaluation for a session, newest first',
     description: 'Each Re-evaluate inserts a new row; history is preserved.',
   })
-  listForSession(@Param('sessionId') sessionId: string) {
+  listForSession(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
     return this.evaluationsService.getBySession(sessionId);
   }
 
@@ -38,7 +38,7 @@ export class EvaluationsController {
 
   @Get('evaluations/:id')
   @ApiOperation({ summary: 'Get a single evaluation by id' })
-  get(@Param('id') id: string) {
+  get(@Param('id', ParseUUIDPipe) id: string) {
     return this.evaluationsService.getById(id);
   }
 
@@ -48,7 +48,7 @@ export class EvaluationsController {
     description:
       'Returns the rendered prompt, raw LLM response, model used, token counts, cache hit/miss tokens, and latency. The bytes the parser ate, not summary metadata.',
   })
-  getAudit(@Param('id') id: string) {
+  getAudit(@Param('id', ParseUUIDPipe) id: string) {
     return this.evaluationsService.getAudit(id);
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MentorService } from '../services/mentor.service';
 import { GenerateMentorDto } from '../dto/generate-mentor.dto';
@@ -14,7 +14,7 @@ export class MentorController {
     description:
       'Returns the 6-section Markdown teaching artifact. 404 until the background generation lands; the frontend polls every 5s.',
   })
-  get(@Param('evaluationId') evaluationId: string) {
+  get(@Param('evaluationId', ParseUUIDPipe) evaluationId: string) {
     return this.mentorService.getByEvaluation(evaluationId);
   }
 
@@ -25,7 +25,7 @@ export class MentorController {
       'Runs the LLM teaching pass. Upserts by phaseEvaluationId so a second call overwrites. Optional model override.',
   })
   generate(
-    @Param('evaluationId') evaluationId: string,
+    @Param('evaluationId', ParseUUIDPipe) evaluationId: string,
     @Body() body?: GenerateMentorDto,
   ) {
     return this.mentorService.generate(evaluationId, body?.model);
