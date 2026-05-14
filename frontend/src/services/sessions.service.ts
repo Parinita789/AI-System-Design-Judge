@@ -11,16 +11,16 @@ export interface EndSessionResult {
 export const sessionsService = {
   end(id: string, status: 'completed' | 'abandoned' = 'completed') {
     return api
-      .post<EndSessionResult>(`/sessions/${id}/end`, { status })
+      .post<EndSessionResult>(`/sessions/${encodeURIComponent(id)}/end`, { status })
       .then((r) => r.data);
   },
   get(id: string) {
-    return api.get<SessionWithQuestion>(`/sessions/${id}`).then((r) => r.data);
+    return api.get<SessionWithQuestion>(`/sessions/${encodeURIComponent(id)}`).then((r) => r.data);
   },
   list() {
     return api.get<SessionSummary[]>('/sessions').then((r) => r.data);
   },
   delete(id: string) {
-    return api.delete<{ ok: true }>(`/sessions/${id}`).then((r) => r.data);
+    return api.delete<{ ok: true }>(`/sessions/${encodeURIComponent(id)}`).then((r) => r.data);
   },
 };

@@ -12,17 +12,17 @@ export const questionsService = {
     return api.get<QuestionWithSessions[]>('/questions').then((r) => r.data);
   },
   get(id: string) {
-    return api.get<QuestionWithSessions>(`/questions/${id}`).then((r) => r.data);
+    return api.get<QuestionWithSessions>(`/questions/${encodeURIComponent(id)}`).then((r) => r.data);
   },
   startAttempt(id: string, seniority?: Seniority) {
     const body = seniority ? { seniority } : {};
     return api
-      .post<Session>(`/questions/${id}/attempts`, body)
+      .post<Session>(`/questions/${encodeURIComponent(id)}/attempts`, body)
       .then((r) => r.data);
   },
   delete(id: string) {
     return api
-      .delete<{ ok: true; deletedSessions: number }>(`/questions/${id}`)
+      .delete<{ ok: true; deletedSessions: number }>(`/questions/${encodeURIComponent(id)}`)
       .then((r) => r.data);
   },
 };

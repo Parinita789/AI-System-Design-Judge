@@ -19,15 +19,15 @@ export interface Snapshot {
 export const snapshotsService = {
   capture(sessionId: string, elapsedMinutes: number, artifacts?: { planMd?: string }) {
     return api
-      .post<Snapshot>(`/sessions/${sessionId}/snapshots`, { elapsedMinutes, artifacts })
+      .post<Snapshot>(`/sessions/${encodeURIComponent(sessionId)}/snapshots`, { elapsedMinutes, artifacts })
       .then((r) => r.data);
   },
   latest(sessionId: string) {
     return api
-      .get<Snapshot | null>(`/sessions/${sessionId}/snapshots/latest`)
+      .get<Snapshot | null>(`/sessions/${encodeURIComponent(sessionId)}/snapshots/latest`)
       .then((r) => r.data);
   },
   list(sessionId: string) {
-    return api.get<Snapshot[]>(`/sessions/${sessionId}/snapshots`).then((r) => r.data);
+    return api.get<Snapshot[]>(`/sessions/${encodeURIComponent(sessionId)}/snapshots`).then((r) => r.data);
   },
 };

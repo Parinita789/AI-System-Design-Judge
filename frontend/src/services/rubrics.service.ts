@@ -8,7 +8,7 @@ export const rubricsService = {
     if (kind) params.kind = kind;
     if (seniority) params.seniority = seniority;
     return api
-      .get<Rubric>(`/rubrics/${version}/${phase}`, { params })
+      .get<Rubric>(`/rubrics/${encodeURIComponent(version)}/${encodeURIComponent(phase)}`, { params })
       .then((r) => r.data);
   },
 };
