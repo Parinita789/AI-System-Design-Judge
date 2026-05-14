@@ -205,11 +205,16 @@ function renderUserPayload(input: MentorInput): string {
 
   const signalEntries = Object.entries(input.signalResults);
   if (signalEntries.length > 0) {
+    // Evidence quotes are excerpted from candidate-controlled content
+    // (plan.md, AI turns, captured files); wrap with the evaluatorEvidence
+    // tag so the model knows quoted text is data, not directives.
     const block = signalEntries
-      .map(
-        ([id, r]) =>
-          `- ${id}: ${r.result}${r.evidence ? ` — "${r.evidence.slice(0, 240)}"` : ''}`,
-      )
+      .map(([id, r]) => {
+        const head = `- ${id}: ${r.result}`;
+        if (!r.evidence) return head;
+        const evidence = wrapUserContent(r.evidence.slice(0, 240), USER_CONTENT_TAGS.evaluatorEvidence);
+        return `${head}\n  ${evidence.replace(/\n/g, '\n  ')}`;
+      })
       .join('\n');
     parts.push(`## Evaluator's per-signal judgments (authoritative)\n${block}`);
   }
@@ -304,10 +309,12 @@ function renderCrossPhaseBlock(cross: NonNullable<MentorInput['crossPhase']>): s
   }
   if (cross.topSignalsFired.length > 0) {
     const sigLines = cross.topSignalsFired
-      .map(
-        (s) =>
-          `- ${s.id} (${s.polarity}, ${s.result})${s.evidence ? ` — "${s.evidence.slice(0, 200)}"` : ''}`,
-      )
+      .map((s) => {
+        const head = `- ${s.id} (${s.polarity}, ${s.result})`;
+        if (!s.evidence) return head;
+        const evidence = wrapUserContent(s.evidence.slice(0, 200), USER_CONTENT_TAGS.evaluatorEvidence);
+        return `${head}\n  ${evidence.replace(/\n/g, '\n  ')}`;
+      })
       .join('\n');
     lines.push(`Top fired signals from the ${cross.phase} phase:\n${sigLines}`);
   }
