@@ -16,6 +16,9 @@
 .vscode/
 .idea/
 
+# Claude Code project state (scheduled_tasks.lock and friends)
+.claude/
+
 # Local working planning docs — edit freely, not for version control.
 production-hardening.md
 gaps.md
