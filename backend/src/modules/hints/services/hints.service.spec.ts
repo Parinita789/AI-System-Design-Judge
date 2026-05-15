@@ -1,6 +1,6 @@
 import { HintsService } from './hints.service';
 import { ChatRole } from '../../llm/constants';
-import { HINT_REPLY_MAX_TOKENS } from '../constants';
+import { AGENTS_CONFIG } from '../../../config/llm-tunables.config';
 
 describe('HintsService', () => {
   let service: HintsService;
@@ -73,7 +73,7 @@ describe('HintsService', () => {
       await service.send('sid-1', 'Hi');
 
       const opts = llmService.call.mock.calls[0][1];
-      expect(opts.maxTokens).toBe(HINT_REPLY_MAX_TOKENS);
+      expect(opts.maxTokens).toBe(AGENTS_CONFIG.hints.maxTokens);
       expect(Array.isArray(opts.system)).toBe(true);
       expect(opts.system[0].cacheable).toBe(true);
       expect(opts.system[1].text).toContain('Design a URL shortener');

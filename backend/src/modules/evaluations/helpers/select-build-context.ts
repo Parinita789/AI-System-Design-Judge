@@ -1,5 +1,5 @@
 import { BuildContext } from '../types/evaluation.types';
-import { AGENTS_CONFIG } from '../agents/agents.config';
+import { AGENTS_CONFIG } from '../../../config/llm-tunables.config';
 
 const TOP_KEY_FILES = AGENTS_CONFIG.buildContext.topKeyFiles;
 const KEY_FILE_MAX_CHARS = AGENTS_CONFIG.buildContext.keyFileMaxChars;

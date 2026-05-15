@@ -15,7 +15,7 @@ function makeLlm(opts: {
   const calls = jest.fn().mockResolvedValue({
     text: opts.text ?? '',
     toolUse: opts.toolUse,
-    modelUsed: 'fake-model',
+    modelUsed: 'claude-opus-4-7',
     tokensIn: 10,
     tokensOut: 20,
     cacheCreationTokens: 0,

@@ -1,8 +1,8 @@
-import { DEFAULT_PLAN_MD_CAP, truncatePlanMd } from './truncate-plan-md';
+import { truncatePlanMd } from './truncate-plan-md';
 
 describe('truncatePlanMd', () => {
   it('returns empty result for null input', () => {
-    expect(truncatePlanMd(null)).toEqual({
+    expect(truncatePlanMd(null, 50_000)).toEqual({
       text: '',
       originalLength: 0,
       droppedChars: 0,
@@ -48,10 +48,14 @@ describe('truncatePlanMd', () => {
     expect(omissionIdx).toBeGreaterThan(out.text.length - tailStart);
   });
 
-  it('uses 50,000 as the default cap', () => {
+  it('requires an explicit cap (no static default)', () => {
+    // Compile-time enforcement: the second argument is required. This
+    // test documents the contract change — callers must derive their
+    // cap from the model via planMdCapFor() rather than rely on a
+    // 50K fallback that silently truncates Haiku at 25% of context.
     const planMd = 'a'.repeat(60_000);
-    const out = truncatePlanMd(planMd);
-    expect(out.text.length).toBeLessThanOrEqual(DEFAULT_PLAN_MD_CAP);
-    expect(out.droppedChars).toBe(60_000 - DEFAULT_PLAN_MD_CAP);
+    const out = truncatePlanMd(planMd, 10_000);
+    expect(out.text.length).toBeLessThanOrEqual(10_000);
+    expect(out.droppedChars).toBe(60_000 - 10_000);
   });
 });

@@ -12,9 +12,11 @@ import { validateEvalToolArgs } from '../validators/validate-eval-tool-args';
 import { validateEvidence } from '../validators/evidence-validator';
 import { computeScore } from '../services/score-computer';
 import { truncatePlanMd } from '../helpers/truncate-plan-md';
-import { AGENTS_CONFIG } from './agents.config';
-
-const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
+import {
+  AGENTS_CONFIG,
+  inputTokenWarnThresholdFor,
+  planMdCapFor,
+} from '../../../config/llm-tunables.config';
 
 @Injectable()
 export class BuildAgent extends BasePhaseAgent {
@@ -42,7 +44,11 @@ export class BuildAgent extends BasePhaseAgent {
         `aiTurns=${ctx?.aiTurns.length ?? 0}, useTools=${useTools})`,
     );
 
-    const truncated = truncatePlanMd(input.planMd);
+    const intendedModel = input.model ?? AGENTS_CONFIG.buildAgent.defaultModel;
+    const truncated = truncatePlanMd(
+      input.planMd,
+      planMdCapFor(intendedModel, 'PLAN_MD_TRUNCATION_CAP'),
+    );
     if (truncated.droppedChars > 0) {
       this.logger.warn(
         `plan.md truncated for build eval: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
@@ -66,7 +72,7 @@ export class BuildAgent extends BasePhaseAgent {
               toolChoice: { type: 'tool', name: SUBMIT_BUILD_EVAL_TOOL_NAME },
             }
           : {}),
-        model: input.model ?? AGENTS_CONFIG.buildAgent.defaultModel,
+        model: intendedModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);
@@ -79,11 +85,16 @@ export class BuildAgent extends BasePhaseAgent {
 
     const totalInputTokens =
       llm.tokensIn + llm.cacheCreationTokens + llm.cacheReadTokens;
-    if (totalInputTokens > INPUT_TOKEN_WARN_THRESHOLD) {
+    const warnThreshold = inputTokenWarnThresholdFor(
+      llm.modelUsed,
+      'BUILD_AGENT_INPUT_TOKEN_WARN',
+    );
+    if (totalInputTokens > warnThreshold) {
       this.logger.warn(
         `Input tokens ${totalInputTokens.toLocaleString()} exceed ` +
-          `${INPUT_TOKEN_WARN_THRESHOLD.toLocaleString()} threshold ` +
-          '- at risk of overflow on smaller-context models. Consider tightening selectBuildContext caps.',
+          `${warnThreshold.toLocaleString()} threshold ` +
+          `for model ${llm.modelUsed} — consider tightening selectBuildContext caps ` +
+          `or selecting a larger-context model.`,
       );
     }
 

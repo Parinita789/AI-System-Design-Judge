@@ -4,9 +4,11 @@ import { LlmService } from '../../llm/services/llm.service';
 import { truncatePlanMd } from '../../evaluations/helpers/truncate-plan-md';
 import { buildMentorPrompt, flattenForAudit } from '../prompts/mentor-prompt';
 import { MentorInput, MentorResult } from '../types/mentor.types';
-import { AGENTS_CONFIG } from '../../evaluations/agents/agents.config';
-
-const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
+import {
+  AGENTS_CONFIG,
+  inputTokenWarnThresholdFor,
+  planMdCapFor,
+} from '../../../config/llm-tunables.config';
 
 @Injectable()
 export class MentorAgent {
@@ -15,7 +17,11 @@ export class MentorAgent {
   constructor(private readonly llm: LlmService) {}
 
   async generate(input: MentorInput): Promise<MentorResult> {
-    const truncated = truncatePlanMd(input.planMd);
+    const intendedModel = input.model ?? AGENTS_CONFIG.mentorAgent.defaultModel;
+    const truncated = truncatePlanMd(
+      input.planMd,
+      planMdCapFor(intendedModel, 'PLAN_MD_TRUNCATION_CAP'),
+    );
     if (truncated.droppedChars > 0) {
       this.logger.warn(
         `plan.md truncated for mentor: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
@@ -40,7 +46,7 @@ export class MentorAgent {
         system: built.systemBlocks,
         maxTokens: AGENTS_CONFIG.mentorAgent.maxTokens,
         temperature: 0,
-        model: input.model ?? AGENTS_CONFIG.mentorAgent.defaultModel,
+        model: intendedModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);
@@ -54,11 +60,15 @@ export class MentorAgent {
 
     const totalInputTokens =
       response.tokensIn + response.cacheCreationTokens + response.cacheReadTokens;
-    if (totalInputTokens > INPUT_TOKEN_WARN_THRESHOLD) {
+    const warnThreshold = inputTokenWarnThresholdFor(
+      response.modelUsed,
+      'MENTOR_AGENT_INPUT_TOKEN_WARN',
+    );
+    if (totalInputTokens > warnThreshold) {
       this.logger.warn(
         `Mentor input tokens ${totalInputTokens.toLocaleString()} exceed ` +
-          `${INPUT_TOKEN_WARN_THRESHOLD.toLocaleString()} threshold ` +
-          `— at risk of overflow on smaller-context models.`,
+          `${warnThreshold.toLocaleString()} threshold ` +
+          `for model ${response.modelUsed}.`,
       );
     }
 

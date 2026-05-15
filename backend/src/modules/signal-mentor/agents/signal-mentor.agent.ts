@@ -9,9 +9,11 @@ import {
   SUBMIT_ANNOTATIONS_TOOL_NAME,
 } from '../prompts/signal-mentor-prompt';
 import { SignalMentorInput, SignalMentorResult } from '../types/signal-mentor.types';
-import { AGENTS_CONFIG } from '../../evaluations/agents/agents.config';
-
-const INPUT_TOKEN_WARN_THRESHOLD = 150_000;
+import {
+  AGENTS_CONFIG,
+  inputTokenWarnThresholdFor,
+  planMdCapFor,
+} from '../../../config/llm-tunables.config';
 
 @Injectable()
 export class SignalMentorAgent {
@@ -20,7 +22,11 @@ export class SignalMentorAgent {
   constructor(private readonly llm: LlmService) {}
 
   async generate(input: SignalMentorInput): Promise<SignalMentorResult> {
-    const truncated = truncatePlanMd(input.planMd);
+    const intendedModel = input.model ?? AGENTS_CONFIG.signalMentorAgent.defaultModel;
+    const truncated = truncatePlanMd(
+      input.planMd,
+      planMdCapFor(intendedModel, 'PLAN_MD_TRUNCATION_CAP'),
+    );
     if (truncated.droppedChars > 0) {
       this.logger.warn(
         `plan.md truncated for signal-mentor: ${truncated.droppedChars.toLocaleString()} chars omitted ` +
@@ -51,7 +57,7 @@ export class SignalMentorAgent {
         ...(tool
           ? { tools: [tool], toolChoice: { type: 'tool', name: SUBMIT_ANNOTATIONS_TOOL_NAME } }
           : {}),
-        model: input.model ?? AGENTS_CONFIG.signalMentorAgent.defaultModel,
+        model: intendedModel,
       },
     );
     const latencyMs = Math.round(performance.now() - llmStart);
@@ -65,11 +71,15 @@ export class SignalMentorAgent {
 
     const totalInputTokens =
       response.tokensIn + response.cacheCreationTokens + response.cacheReadTokens;
-    if (totalInputTokens > INPUT_TOKEN_WARN_THRESHOLD) {
+    const warnThreshold = inputTokenWarnThresholdFor(
+      response.modelUsed,
+      'SIGNAL_MENTOR_AGENT_INPUT_TOKEN_WARN',
+    );
+    if (totalInputTokens > warnThreshold) {
       this.logger.warn(
         `Signal-mentor input tokens ${totalInputTokens.toLocaleString()} exceed ` +
-          `${INPUT_TOKEN_WARN_THRESHOLD.toLocaleString()} threshold ` +
-          `— at risk of overflow on smaller-context models.`,
+          `${warnThreshold.toLocaleString()} threshold ` +
+          `for model ${response.modelUsed}.`,
       );
     }
 

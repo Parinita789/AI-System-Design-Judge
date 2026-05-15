@@ -1,18 +1,16 @@
-
-import { AGENTS_CONFIG } from '../agents/agents.config';
-
-export const DEFAULT_PLAN_MD_CAP = AGENTS_CONFIG.truncation.planMdCapChars;
-
 export interface TruncationResult {
   text: string;
   originalLength: number;
   droppedChars: number;
 }
 
-export function truncatePlanMd(
-  input: string | null,
-  cap: number = DEFAULT_PLAN_MD_CAP,
-): TruncationResult {
+// Truncate plan.md to `cap` characters, head-and-tail style, with a
+// marker showing how many chars were dropped. Callers compute `cap`
+// from the model in use via `planMdCapFor(model)` in
+// `backend/src/config/llm-tunables.config.ts` — no static default
+// lives here so a forgotten cap is a TS error, not a silent
+// 50K-char-on-Haiku footgun.
+export function truncatePlanMd(input: string | null, cap: number): TruncationResult {
   if (input === null) {
     return { text: '', originalLength: 0, droppedChars: 0 };
   }

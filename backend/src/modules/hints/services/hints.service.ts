@@ -6,7 +6,7 @@ import { LlmService } from '../../llm/services/llm.service';
 import { ChatMessage } from '../../llm/types/llm.types';
 import { ChatRole } from '../../llm/constants';
 import { AIInteractionsRepository } from '../repositories/ai-interactions.repository';
-import { HINT_REPLY_MAX_TOKENS } from '../constants';
+import { AGENTS_CONFIG } from '../../../config/llm-tunables.config';
 import { HINT_SYSTEM_PROMPT } from '../prompts/hint-system-prompt';
 
 @Injectable()
@@ -40,7 +40,7 @@ export class HintsService {
         { text: HINT_SYSTEM_PROMPT, cacheable: true },
         { text: `## Session question\n${session.question.prompt}`, cacheable: true },
       ],
-      maxTokens: HINT_REPLY_MAX_TOKENS,
+      maxTokens: AGENTS_CONFIG.hints.maxTokens,
     });
 
     const elapsedMinutes = Math.floor(
