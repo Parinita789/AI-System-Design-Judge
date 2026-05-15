@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hintsService } from '@/services/hints.service';
-import { extractApiError } from '@/lib/error';
+import { describeError } from '@/lib/error';
 
 interface HintChatPanelProps {
   sessionId: string;
@@ -153,7 +153,7 @@ export function HintChatPanel({
 
             {sendMutation.isError && (
               <div className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">
-                Failed to get hint: {extractApiError(sendMutation.error)}
+                Failed to get hint: {describeError(sendMutation.error)}
               </div>
             )}
           </div>

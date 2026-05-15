@@ -1657,7 +1657,14 @@ function DeepDiveDisclosure({
     query.error && typeof query.error === 'object' && 'response' in query.error
       ? (query.error as { response?: { status?: number } }).response?.status === 404
       : false;
-  const backgroundLikelyRunning = has404 && !artifact && !generateMutation.isPending;
+  // backgroundLikelyRunning covers cold-start only: the eval orchestrator
+  // fires the mentor as a background task, so on first page load
+  // "no artifact + nothing pending here" implies the background task is
+  // still working. Once an explicit user-triggered mutation has errored,
+  // we know nothing is running — clear the flag so the spinner doesn't
+  // mask the error banner.
+  const backgroundLikelyRunning =
+    has404 && !artifact && !generateMutation.isPending && !generateMutation.isError;
 
   const deepDiveRef = useRef<HTMLDivElement>(null);
   const handleClick = () => {
