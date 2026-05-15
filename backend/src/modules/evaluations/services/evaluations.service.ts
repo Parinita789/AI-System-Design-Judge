@@ -1,20 +1,19 @@
-import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { Phase } from '../../phase-tagger/types/phase.types';
 import { OrchestratorService } from './orchestrator.service';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
-import { SessionsService } from '../../sessions/services/sessions.service';
+import { SessionReadService } from '../../session-read/services/session-read.service';
 
 @Injectable()
 export class EvaluationsService {
   constructor(
     private readonly orchestrator: OrchestratorService,
     private readonly evalsRepo: EvaluationsRepository,
-    @Inject(forwardRef(() => SessionsService))
-    private readonly sessionsService: SessionsService,
+    private readonly sessionReadService: SessionReadService,
   ) {}
 
   async runForSession(sessionId: string, model?: string) {
-    const session = await this.sessionsService.getWithQuestion(sessionId);
+    const session = await this.sessionReadService.getWithQuestion(sessionId);
     const phases: Phase[] = ['plan'];
     if (session.buildEndedAt) phases.push('build');
     return this.orchestrator.run(sessionId, phases, { model });

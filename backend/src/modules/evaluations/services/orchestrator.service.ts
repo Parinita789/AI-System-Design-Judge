@@ -1,8 +1,9 @@
-import { Inject, Injectable, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PhaseEvaluation } from '@prisma/client';
 import { Phase } from '../../phase-tagger/types/phase.types';
-import { SessionsService } from '../../sessions/services/sessions.service';
+import { SessionReadService } from '../../session-read/services/session-read.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { AIInteractionsRepository } from '../../hints/repositories/ai-interactions.repository';
 import { PlanAgent } from '../agents/plan.agent';
@@ -10,30 +11,28 @@ import { BuildAgent } from '../agents/build.agent';
 import { BasePhaseAgent } from '../agents/base-phase.agent';
 import { PhaseEvalInput } from '../types/evaluation.types';
 import { EvaluationsRepository } from '../repositories/evaluations.repository';
-import { MentorService } from '../../mentor/services/mentor.service';
-import { SignalMentorService } from '../../signal-mentor/services/signal-mentor.service';
 import { BuildContextService } from './build-context.service';
 import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
+import {
+  BuildEvalRequestedEvent,
+  EvaluationCompletedEvent,
+} from '../../../common/events/evaluation-events';
 
 @Injectable()
 export class OrchestratorService {
   private readonly logger = new Logger(OrchestratorService.name);
 
   constructor(
-    @Inject(forwardRef(() => SessionsService))
-    private readonly sessionsService: SessionsService,
+    private readonly sessionReadService: SessionReadService,
     private readonly snapshotsService: SnapshotsService,
     private readonly aiInteractionsRepo: AIInteractionsRepository,
     private readonly planAgent: PlanAgent,
     private readonly buildAgent: BuildAgent,
     private readonly evalsRepo: EvaluationsRepository,
     private readonly config: ConfigService,
-    @Inject(forwardRef(() => MentorService))
-    private readonly mentorService: MentorService,
-    @Inject(forwardRef(() => SignalMentorService))
-    private readonly signalMentorService: SignalMentorService,
     private readonly buildContextSvc: BuildContextService,
     private readonly tasks: BackgroundTaskTracker,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async run(
@@ -41,7 +40,7 @@ export class OrchestratorService {
     phases: Phase[] = ['plan'],
     options?: { model?: string },
   ): Promise<PhaseEvaluation[]> {
-    const session = await this.sessionsService.getWithQuestion(sessionId);
+    const session = await this.sessionReadService.getWithQuestion(sessionId);
     const [allSnapshots, hints] = await Promise.all([
       this.snapshotsService.list(sessionId),
       this.aiInteractionsRepo.findBySession(sessionId),
@@ -98,16 +97,25 @@ export class OrchestratorService {
       await this.evalsRepo.createEvaluationAudit(persisted.id, result.audit);
       out.push(persisted);
 
-      this.tasks.track(
-        this.mentorService.generate(persisted.id, options?.model),
-        `mentor.generate(${persisted.id})`,
-      );
-      this.tasks.track(
-        this.signalMentorService.generate(persisted.id, options?.model),
-        `signalMentor.generate(${persisted.id})`,
+      this.eventEmitter.emit(
+        EvaluationCompletedEvent.eventName,
+        new EvaluationCompletedEvent(
+          persisted.id,
+          sessionId,
+          phase,
+          options?.model,
+        ),
       );
     }
     return out;
+  }
+
+  @OnEvent(BuildEvalRequestedEvent.eventName)
+  handleBuildEvalRequested(event: BuildEvalRequestedEvent): void {
+    this.tasks.track(
+      this.run(event.sessionId, ['build']),
+      `buildAgent.run(${event.sessionId})`,
+    );
   }
 
   private agentFor(phase: Phase): BasePhaseAgent | null {
@@ -115,5 +123,4 @@ export class OrchestratorService {
     if (phase === 'build') return this.buildAgent;
     return null;
   }
-
 }

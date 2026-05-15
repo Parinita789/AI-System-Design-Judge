@@ -1,6 +1,6 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { SessionsService } from '../../sessions/services/sessions.service';
+import { SessionReadService } from '../../session-read/services/session-read.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { LlmService } from '../../llm/services/llm.service';
 import { ChatMessage } from '../../llm/types/llm.types';
@@ -12,15 +12,15 @@ import { HINT_SYSTEM_PROMPT } from '../prompts/hint-system-prompt';
 @Injectable()
 export class HintsService {
   constructor(
-    @Inject(forwardRef(() => SessionsService))
-    private readonly sessionsService: SessionsService,
+    private readonly sessionReadService: SessionReadService,
     private readonly snapshotsService: SnapshotsService,
     private readonly llmService: LlmService,
     private readonly aiInteractionsRepo: AIInteractionsRepository,
   ) {}
 
   async send(sessionId: string, message: string) {
-    const session = await this.sessionsService.getWithQuestion(sessionId);    const latestSnapshot = await this.snapshotsService.latest(sessionId);
+    const session = await this.sessionReadService.getWithQuestion(sessionId);
+    const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const planMd = (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
     const history = await this.aiInteractionsRepo.findBySession(sessionId);

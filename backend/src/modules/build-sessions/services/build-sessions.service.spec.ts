@@ -27,8 +27,8 @@ function makeEvents(overrides: Partial<{ insertBatch: jest.Mock; summaryForSessi
   };
 }
 
-function makeOrchestrator() {
-  return { run: jest.fn().mockResolvedValue([]) };
+function makeEventEmitter() {
+  return { emit: jest.fn() };
 }
 
 function makeEvalsRepo(overrides: Partial<{ findBySession: jest.Mock }> = {}) {
@@ -37,10 +37,24 @@ function makeEvalsRepo(overrides: Partial<{ findBySession: jest.Mock }> = {}) {
   };
 }
 
-function makeTasks() {
-  return {
-    track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
-  };
+interface BuildDeps {
+  prisma?: ReturnType<typeof makePrisma>;
+  tokens?: unknown;
+  events?: ReturnType<typeof makeEvents>;
+  ai?: ReturnType<typeof makeAi>;
+  evalsRepo?: ReturnType<typeof makeEvalsRepo>;
+  eventEmitter?: ReturnType<typeof makeEventEmitter>;
+}
+
+function makeSvc(deps: BuildDeps = {}) {
+  return new BuildSessionsService(
+    (deps.prisma ?? makePrisma()) as never,
+    (deps.tokens ?? {}) as never,
+    (deps.events ?? makeEvents()) as never,
+    (deps.ai ?? makeAi()) as never,
+    (deps.evalsRepo ?? makeEvalsRepo()) as never,
+    (deps.eventEmitter ?? makeEventEmitter()) as never,
+  );
 }
 
 describe('BuildSessionsService.startBuildPhase', () => {
@@ -48,9 +62,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
     const prisma = makePrisma();
     prisma.session.findUnique.mockResolvedValue(null);
     const tokens = { mintForSession: jest.fn() };
-    const events = makeEvents();
-    const ai = makeAi();
-    const svc = new BuildSessionsService(prisma as never, tokens as never, events as never, ai as never, makeOrchestrator() as never, makeEvalsRepo() as never, makeTasks() as never);
+    const svc = makeSvc({ prisma, tokens });
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(NotFoundException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
@@ -63,15 +75,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       buildEndedAt: null,
     });
     const tokens = { mintForSession: jest.fn() };
-    const svc = new BuildSessionsService(
-      prisma as never,
-      tokens as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma, tokens });
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
@@ -84,15 +88,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       buildEndedAt: new Date(),
     });
     const tokens = { mintForSession: jest.fn() };
-    const svc = new BuildSessionsService(
-      prisma as never,
-      tokens as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma, tokens });
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
@@ -112,15 +108,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       buildStartedAt: new Date(),
     };
     const tokens = { mintForSession: jest.fn().mockResolvedValue(minted) };
-    const svc = new BuildSessionsService(
-      prisma as never,
-      tokens as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma, tokens });
     await expect(svc.startBuildPhase(SID)).resolves.toBe(minted);
     expect(tokens.mintForSession).toHaveBeenCalledWith(SID);
   });
@@ -134,15 +122,7 @@ describe('BuildSessionsService.startBuildPhase', () => {
       question: { kind: 'traditional_design' },
     });
     const tokens = { mintForSession: jest.fn() };
-    const svc = new BuildSessionsService(
-      prisma as never,
-      tokens as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma, tokens });
     await expect(svc.startBuildPhase(SID)).rejects.toBeInstanceOf(ConflictException);
     expect(tokens.mintForSession).not.toHaveBeenCalled();
   });
@@ -153,87 +133,59 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     const prisma = makePrisma();
     prisma.session.updateMany.mockResolvedValue({ count: 0 });
     prisma.session.findUnique.mockResolvedValue(null);
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma });
     await expect(svc.finishBuildPhase(SID)).rejects.toBeInstanceOf(NotFoundException);
     expect(prisma.session.update).not.toHaveBeenCalled();
   });
 
-  it('atomically claims buildEndedAt, dispatches the orchestrator, and returns the count on first call', async () => {
+  it('atomically claims buildEndedAt, emits BuildEvalRequestedEvent, and returns the count on first call', async () => {
     const prisma = makePrisma();
     prisma.session.updateMany.mockResolvedValue({ count: 1 });
     prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
-    const orchestrator = makeOrchestrator();
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      orchestrator as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const eventEmitter = makeEventEmitter();
+    const svc = makeSvc({ prisma, eventEmitter });
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
     expect(prisma.session.updateMany).toHaveBeenCalledTimes(1);
     const call = prisma.session.updateMany.mock.calls[0][0];
     expect(call.where).toEqual({ id: SID, buildEndedAt: null });
     expect(call.data.buildEndedAt).toBeInstanceOf(Date);
-    expect(orchestrator.run).toHaveBeenCalledWith(SID, ['build']);
+    expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+    const [name, payload] = eventEmitter.emit.mock.calls[0];
+    expect(name).toBe('build-eval.requested');
+    expect(payload).toEqual(expect.objectContaining({ sessionId: SID }));
   });
 
-  it('does NOT dispatch on a second call when a build eval exists', async () => {
+  it('does NOT emit on a second call when a build eval exists', async () => {
     const prisma = makePrisma();
     prisma.session.updateMany.mockResolvedValue({ count: 0 });
     prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
     const evalsRepo = makeEvalsRepo({
       findBySession: jest.fn().mockResolvedValue([{ phase: 'build' }]),
     });
-    const orchestrator = makeOrchestrator();
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      orchestrator as never,
-      evalsRepo as never,
-      makeTasks() as never,
-    );
+    const eventEmitter = makeEventEmitter();
+    const svc = makeSvc({ prisma, evalsRepo, eventEmitter });
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
-    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 
-  it('re-dispatches the orchestrator when buildEndedAt is set but no build eval exists (prior crash recovery)', async () => {
+  it('re-emits when buildEndedAt is set but no build eval exists (prior crash recovery)', async () => {
     const prisma = makePrisma();
     prisma.session.updateMany.mockResolvedValue({ count: 0 });
     prisma.session.findUnique.mockResolvedValue({ buildEventCount: 7 });
     const evalsRepo = makeEvalsRepo({
       findBySession: jest.fn().mockResolvedValue([{ phase: 'plan' }]),
     });
-    const orchestrator = makeOrchestrator();
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      orchestrator as never,
-      evalsRepo as never,
-      makeTasks() as never,
-    );
+    const eventEmitter = makeEventEmitter();
+    const svc = makeSvc({ prisma, evalsRepo, eventEmitter });
     const out = await svc.finishBuildPhase(SID);
     expect(out).toEqual({ ok: true, eventCount: 7 });
-    expect(orchestrator.run).toHaveBeenCalledWith(SID, ['build']);
+    expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
+    expect(eventEmitter.emit.mock.calls[0][0]).toBe('build-eval.requested');
   });
 
-  it('only one of two concurrent finish calls dispatches the orchestrator', async () => {
+  it('only one of two concurrent finish calls emits the event', async () => {
     // Simulates the race: first call claims (count=1), second call loses
     // (count=0) and finds a freshly-written build eval, so it does nothing.
     const prisma = makePrisma();
@@ -244,35 +196,19 @@ describe('BuildSessionsService.finishBuildPhase', () => {
     const evalsRepo = makeEvalsRepo({
       findBySession: jest.fn().mockResolvedValue([{ phase: 'build' }]),
     });
-    const orchestrator = makeOrchestrator();
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      orchestrator as never,
-      evalsRepo as never,
-      makeTasks() as never,
-    );
+    const eventEmitter = makeEventEmitter();
+    const svc = makeSvc({ prisma, evalsRepo, eventEmitter });
     const [a, b] = await Promise.all([svc.finishBuildPhase(SID), svc.finishBuildPhase(SID)]);
     expect(a).toEqual({ ok: true, eventCount: 7 });
     expect(b).toEqual({ ok: true, eventCount: 7 });
-    expect(orchestrator.run).toHaveBeenCalledTimes(1);
+    expect(eventEmitter.emit).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('BuildSessionsService.insertEvents', () => {
   it('delegates to BuildEventsRepository.insertBatch', async () => {
     const events = makeEvents({ insertBatch: jest.fn().mockResolvedValue(3) });
-    const svc = new BuildSessionsService(
-      makePrisma() as never,
-      {} as never,
-      events as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ events });
     const batch = [
       { filePath: 'a.ts', action: 'created' as const, occurredAt: '2026-05-07T00:00:00.000Z' },
     ];
@@ -285,15 +221,7 @@ describe('BuildSessionsService.insertEvents', () => {
 describe('BuildSessionsService.insertAiInteractions', () => {
   it('delegates to BuildAIInteractionsRepository.insertBatch', async () => {
     const ai = makeAi({ insertBatch: jest.fn().mockResolvedValue(2) });
-    const svc = new BuildSessionsService(
-      makePrisma() as never,
-      {} as never,
-      makeEvents() as never,
-      ai as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ ai });
     const batch = [
       {
         tool: 'claude-code',
@@ -314,15 +242,7 @@ describe('BuildSessionsService.eventsSummary', () => {
   it('throws NotFoundException for a missing session', async () => {
     const prisma = makePrisma();
     prisma.session.findUnique.mockResolvedValue(null);
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      makeEvents() as never,
-      makeAi() as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma });
     await expect(svc.eventsSummary(SID)).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -343,15 +263,7 @@ describe('BuildSessionsService.eventsSummary', () => {
     const ai = makeAi({
       countsForSession: jest.fn().mockResolvedValue({ total: 12, distinctSessions: 2 }),
     });
-    const svc = new BuildSessionsService(
-      prisma as never,
-      {} as never,
-      events as never,
-      ai as never,
-      makeOrchestrator() as never,
-      makeEvalsRepo() as never,
-      makeTasks() as never,
-    );
+    const svc = makeSvc({ prisma, events, ai });
     const out = await svc.eventsSummary(SID);
     expect(out).toEqual({
       buildStartedAt: startedAt,

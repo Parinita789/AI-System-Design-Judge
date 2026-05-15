@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommonModule } from './common/common.module';
 import { DatabaseModule } from './database/database.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
+import { SessionReadModule } from './modules/session-read/session-read.module';
 import { SnapshotsModule } from './modules/snapshots/snapshots.module';
 import { ArtifactsModule } from './modules/artifacts/artifacts.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
@@ -18,12 +20,14 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    EventEmitterModule.forRoot(),
     CommonModule,
     DatabaseModule,
     LlmModule,
     ArtifactsModule,
     PhaseTaggerModule,
     SnapshotsModule,
+    SessionReadModule,
     EvaluationsModule,
     SessionsModule,
     QuestionsModule,

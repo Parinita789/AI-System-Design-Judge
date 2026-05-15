@@ -1,7 +1,7 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { LlmModule } from '../llm/llm.module';
 import { EvaluationsModule } from '../evaluations/evaluations.module';
-import { SessionsModule } from '../sessions/sessions.module';
+import { SessionReadModule } from '../session-read/session-read.module';
 import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { SignalMentorController } from './handlers/signal-mentor.controller';
 import { SignalMentorService } from './services/signal-mentor.service';
@@ -11,8 +11,8 @@ import { SignalMentorRepository } from './repositories/signal-mentor.repository'
 @Module({
   imports: [
     LlmModule,
-    forwardRef(() => EvaluationsModule),
-    forwardRef(() => SessionsModule),
+    EvaluationsModule,
+    SessionReadModule,
     SnapshotsModule,
   ],
   controllers: [SignalMentorController],

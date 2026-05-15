@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, NotFoundException, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
 import * as fs from 'node:fs/promises';
@@ -22,7 +22,6 @@ export class SessionsService {
 
   constructor(
     private readonly sessionsRepository: SessionsRepository,
-    @Inject(forwardRef(() => EvaluationsService))
     private readonly evaluationsService: EvaluationsService,
     private readonly config: ConfigService,
     private readonly tasks: BackgroundTaskTracker,

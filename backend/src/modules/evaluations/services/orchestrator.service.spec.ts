@@ -66,8 +66,7 @@ function makeOrchestrator(deps: {
     createEvaluationAudit: jest.fn().mockResolvedValue(undefined),
   };
   const config = { get: jest.fn() };
-  const mentorService = { generate: jest.fn().mockResolvedValue(undefined) };
-  const signalMentorService = { generate: jest.fn().mockResolvedValue(undefined) };
+  const eventEmitter = { emit: jest.fn() };
   const buildEventsRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.events ?? []) };
   const buildAiRepo = { findAllForSession: jest.fn().mockResolvedValue(deps.aiTurns ?? []) };
   const tasks = {
@@ -117,18 +116,16 @@ function makeOrchestrator(deps: {
     buildAgent as never,
     evalsRepo as never,
     config as never,
-    mentorService as never,
-    signalMentorService as never,
     buildContextSvc as never,
     tasks as never,
+    eventEmitter as never,
   );
 
   return {
     svc,
     planAgent,
     buildAgent,
-    mentorService,
-    signalMentorService,
+    eventEmitter,
     buildEventsRepo,
     buildAiRepo,
     buildContextSvc,
@@ -157,15 +154,21 @@ describe('OrchestratorService.run dispatch', () => {
     await expect(t.svc.run(SID, ['validate'])).rejects.toThrow(/validate agent not implemented/);
   });
 
-  it('fires mentor + signal-mentor for both plan and build evals (Phase 5)', async () => {
+  it('emits EvaluationCompletedEvent for each persisted phase eval', async () => {
     const t = makeOrchestrator({});
     await t.svc.run(SID, ['build']);
-    expect(t.mentorService.generate).toHaveBeenCalledTimes(1);
-    expect(t.signalMentorService.generate).toHaveBeenCalledTimes(1);
+    expect(t.eventEmitter.emit).toHaveBeenCalledTimes(1);
+    const [name, payload] = t.eventEmitter.emit.mock.calls[0];
+    expect(name).toBe('evaluation.completed');
+    expect(payload).toEqual(
+      expect.objectContaining({ evaluationId: 'eid-build', sessionId: SID, phase: 'build' }),
+    );
 
     await t.svc.run(SID, ['plan']);
-    expect(t.mentorService.generate).toHaveBeenCalledTimes(2);
-    expect(t.signalMentorService.generate).toHaveBeenCalledTimes(2);
+    expect(t.eventEmitter.emit).toHaveBeenCalledTimes(2);
+    expect(t.eventEmitter.emit.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ evaluationId: 'eid-plan', sessionId: SID, phase: 'plan' }),
+    );
   });
 });
 

@@ -1,20 +1,21 @@
 import {
-  Inject,
   Injectable,
   InternalServerErrorException,
   Logger,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { OnEvent } from '@nestjs/event-emitter';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { safeJoinUnderBase } from '../../../common/paths/safe-join';
+import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
+import { EvaluationCompletedEvent } from '../../../common/events/evaluation-events';
 import { EvaluationsRepository } from '../../evaluations/repositories/evaluations.repository';
 import { RubricLoaderService } from '../../evaluations/services/rubric-loader.service';
 import { BuildContextService } from '../../evaluations/services/build-context.service';
 import { gapSignalIds } from '../../evaluations/helpers/gap-signals';
-import { SessionsService } from '../../sessions/services/sessions.service';
+import { SessionReadService } from '../../session-read/services/session-read.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
 import { SignalResult } from '../../evaluations/types/evaluation.types';
 import { Phase } from '../../phase-tagger/types/phase.types';
@@ -35,12 +36,20 @@ export class SignalMentorService {
     private readonly repo: SignalMentorRepository,
     private readonly evalRepo: EvaluationsRepository,
     private readonly rubricLoader: RubricLoaderService,
-    @Inject(forwardRef(() => SessionsService))
-    private readonly sessionsService: SessionsService,
+    private readonly sessionReadService: SessionReadService,
     private readonly snapshotsService: SnapshotsService,
     private readonly buildContextSvc: BuildContextService,
     private readonly config: ConfigService,
+    private readonly tasks: BackgroundTaskTracker,
   ) {}
+
+  @OnEvent(EvaluationCompletedEvent.eventName)
+  handleEvaluationCompleted(event: EvaluationCompletedEvent): void {
+    this.tasks.track(
+      this.generate(event.evaluationId, event.model),
+      `signalMentor.generate(${event.evaluationId})`,
+    );
+  }
 
   async generate(evaluationId: string, model?: string) {
     const evalRow = await this.evalRepo.findById(evaluationId);
@@ -48,7 +57,7 @@ export class SignalMentorService {
       throw new NotFoundException(`Evaluation ${evaluationId} not found`);
     }
 
-    const session = await this.sessionsService.getWithQuestion(evalRow.sessionId);
+    const session = await this.sessionReadService.getWithQuestion(evalRow.sessionId);
     const latestSnap = await this.snapshotsService.latest(evalRow.sessionId);
     const planMd =
       (latestSnap?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;

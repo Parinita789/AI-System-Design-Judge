@@ -1,20 +1,18 @@
 import {
   ConflictException,
-  Inject,
   Injectable,
   Logger,
   NotFoundException,
-  forwardRef,
 } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../../database/prisma.service';
 import { BuildEventsRepository } from '../repositories/build-events.repository';
 import { BuildAIInteractionsRepository } from '../repositories/build-ai-interactions.repository';
 import { BuildTokenService, MintedToken } from './build-token.service';
 import { IncomingBuildEvent } from '../types/build-event.types';
 import { BuildAIInteractionDto } from '../dto/build-ai-interaction.dto';
-import { OrchestratorService } from '../../evaluations/services/orchestrator.service';
 import { EvaluationsRepository } from '../../evaluations/repositories/evaluations.repository';
-import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
+import { BuildEvalRequestedEvent } from '../../../common/events/evaluation-events';
 
 @Injectable()
 export class BuildSessionsService {
@@ -25,10 +23,8 @@ export class BuildSessionsService {
     private readonly tokens: BuildTokenService,
     private readonly events: BuildEventsRepository,
     private readonly aiInteractions: BuildAIInteractionsRepository,
-    @Inject(forwardRef(() => OrchestratorService))
-    private readonly orchestrator: OrchestratorService,
     private readonly evalsRepo: EvaluationsRepository,
-    private readonly tasks: BackgroundTaskTracker,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   async startBuildPhase(sessionId: string): Promise<MintedToken> {
@@ -136,9 +132,9 @@ export class BuildSessionsService {
   }
 
   private dispatchBuildEval(sessionId: string): void {
-    this.tasks.track(
-      this.orchestrator.run(sessionId, ['build']),
-      `buildAgent.run(${sessionId})`,
+    this.eventEmitter.emit(
+      BuildEvalRequestedEvent.eventName,
+      new BuildEvalRequestedEvent(sessionId),
     );
   }
 }
