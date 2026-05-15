@@ -55,7 +55,20 @@ export class ClaudeCliClientService {
     );
 
     return new Promise((resolve, reject) => {
-      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      // Strip ANTHROPIC_API_KEY before spawning. The `claude` binary
+      // has its own logged-in auth state and prefers that when no
+      // env key is set. If we inherit a stale or invalid
+      // ANTHROPIC_API_KEY from the parent shell, the subprocess
+      // attempts to use it and dies with 401 + exit code 1. The
+      // backend's own .env tries to clear it but dotenv doesn't
+      // override existing process env vars, so the defense has to
+      // happen at the spawn site.
+      const childEnv = { ...process.env };
+      delete childEnv.ANTHROPIC_API_KEY;
+      const child = spawn(bin, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        env: childEnv,
+      });
       let stdout = '';
       let stderr = '';
       let timedOut = false;
