@@ -5,6 +5,7 @@ import { CommonModule } from './common/common.module';
 import { DatabaseModule } from './database/database.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { SessionReadModule } from './modules/session-read/session-read.module';
+import { AuthModule } from './modules/auth/auth.module';
 import { SnapshotsModule } from './modules/snapshots/snapshots.module';
 import { ArtifactsModule } from './modules/artifacts/artifacts.module';
 import { EvaluationsModule } from './modules/evaluations/evaluations.module';
@@ -22,6 +23,7 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
     ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
     CommonModule,
+    AuthModule,
     DatabaseModule,
     LlmModule,
     ArtifactsModule,
