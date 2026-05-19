@@ -41,6 +41,24 @@ enum Seniority {
   staff
 }
 
+// Authenticated user. Created in commit 1.1 (schema + nullable FKs);
+// AuthService + AuthGuard arrive in commit 1.2. The fixed-UUID
+// `00000000-0000-0000-0000-000000000000` row is the `legacy-import`
+// anchor — pre-auth rows backfill to it in commit 1.3 before the FK
+// flips to NOT NULL. Login on that account is disabled (sentinel
+// passwordHash that no bcrypt input can hash to).
+model User {
+  id           String     @id @default(uuid()) @db.Uuid
+  email        String     @unique
+  passwordHash String     @map("password_hash")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  questions Question[]
+  sessions  Session[]
+
+  @@map("users")
+}
+
 model Question {
   id            String        @id @default(uuid()) @db.Uuid
   prompt        String
@@ -48,14 +66,24 @@ model Question {
   kind          QuestionKind
   createdAt     DateTime      @default(now()) @map("created_at")
 
+  // Nullable in this commit (1.1) so existing service code still
+  // compiles. Commit 1.3 backfills remaining NULLs to the legacy
+  // user, switches the column to NOT NULL, and wires @CurrentUser()
+  // into the create path.
+  userId        String?       @map("user_id") @db.Uuid
+  user          User?         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   sessions Session[]
 
+  @@index([userId])
   @@map("questions")
 }
 
 model Session {
   id              String        @id @default(uuid()) @db.Uuid
   questionId      String        @map("question_id") @db.Uuid
+  // Nullable in this commit (1.1); commit 1.3 makes it required.
+  userId          String?       @map("user_id") @db.Uuid
   projectPath     String?       @map("project_path")
   startedAt       DateTime      @default(now()) @map("started_at")
   endedAt         DateTime?     @map("ended_at")
@@ -73,6 +101,7 @@ model Session {
   buildEventCount  Int       @default(0) @map("build_event_count")
 
   question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   snapshots           Snapshot[]
   phaseEvaluations    PhaseEvaluation[]
@@ -82,6 +111,7 @@ model Session {
   buildAiInteractions BuildAIInteraction[]
 
   @@index([questionId])
+  @@index([userId])
   @@map("sessions")
 }
 
