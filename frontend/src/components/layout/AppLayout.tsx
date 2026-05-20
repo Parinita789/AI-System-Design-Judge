@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { questionsService } from '@/services/questions.service';
 import { sessionsService } from '@/services/sessions.service';
 import { useSessionStore } from '@/store/sessionStore';
+import { useAuthStore } from '@/store/authStore';
 import { extractApiError } from '@/lib/error';
 import type { QuestionWithSessions } from '@/types/question';
 
@@ -29,6 +30,17 @@ export function AppLayout() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const forgetSession = useSessionStore((s) => s.forget);
+  const currentUser = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
+
+  const onLogout = () => {
+    // Clear the persisted token and Tan​Stack caches together — leaving
+    // the user-scoped cache around after a sign-out would briefly show
+    // the previous user's data to the next sign-in until refetch.
+    clearAuth();
+    queryClient.clear();
+    navigate('/login', { replace: true });
+  };
 
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -202,6 +214,23 @@ export function AppLayout() {
                 </div>
               )}
             </div>
+            {currentUser && (
+              <div className="border-t border-gray-200 px-3 py-2 flex items-center justify-between">
+                <span
+                  className="text-xs text-gray-600 truncate"
+                  title={currentUser.email}
+                >
+                  {currentUser.email}
+                </span>
+                <button
+                  type="button"
+                  onClick={onLogout}
+                  className="ml-2 shrink-0 text-xs text-gray-500 hover:text-gray-900 underline"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
           </>
         )}
       </aside>
