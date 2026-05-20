@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable } from '@nestjs/common';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthenticatedRequest } from '../auth/types/auth.types';
 
@@ -17,6 +17,21 @@ import { AuthenticatedRequest } from '../auth/types/auth.types';
 // runs FIRST so req.user is populated before getTracker is called.
 @Injectable()
 export class UserOrIpThrottlerGuard extends ThrottlerGuard {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Test-only bypass: e2e specs run dozens of signup/login requests
+    // back-to-back from 127.0.0.1, which would otherwise saturate the
+    // global short/medium tiers + the AUTH_BRUTE_FORCE_THROTTLE preset
+    // and turn the suite red. NestJS's overrideGuard() doesn't replace
+    // APP_GUARD-registered guards, and overriding ThrottlerStorage is
+    // gnarly — env-aware short-circuit is the cleanest exit. The two
+    // conditions in tandem keep this from ever firing in prod by
+    // accident.
+    if (process.env.NODE_ENV === 'test' && process.env.SKIP_THROTTLE === '1') {
+      return true;
+    }
+    return super.canActivate(context);
+  }
+
   protected async getTracker(req: AuthenticatedRequest): Promise<string> {
     if (req.user?.id) return `user:${req.user.id}`;
     return `ip:${req.ip ?? 'unknown'}`;
