@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sessionsService } from '@/services/sessions.service';
 import { questionsService } from '@/services/questions.service';
+import { DAILY_SPEND_QUERY_KEY } from '@components/layout/DailySpendBadge';
 import { snapshotsService } from '@/services/snapshots.service';
 import { evaluationsService } from '@/services/evaluations.service';
 import { rubricsService } from '@/services/rubrics.service';
@@ -140,6 +141,7 @@ export function SessionResultsPage() {
       setSelectedEvalId(null);      queryClient.invalidateQueries({ queryKey: ['evals', id] });
       queryClient.invalidateQueries({ queryKey: ['question', questionId] });
       queryClient.invalidateQueries({ queryKey: ['questions'] });
+      queryClient.invalidateQueries({ queryKey: DAILY_SPEND_QUERY_KEY });
     },
   });
 
@@ -1629,6 +1631,7 @@ function DeepDiveDisclosure({
     },
     onSuccess: (data) => {
       queryClient.setQueryData(['mentor', evaluationId], data);
+      queryClient.invalidateQueries({ queryKey: DAILY_SPEND_QUERY_KEY });
       setExpanded(true);
     },
   });

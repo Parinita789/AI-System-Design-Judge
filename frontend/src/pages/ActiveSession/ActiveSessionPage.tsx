@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Editor from '@monaco-editor/react';
 import { api } from '@/services/api';
 import { sessionsService } from '@/services/sessions.service';
+import { DAILY_SPEND_QUERY_KEY } from '@components/layout/DailySpendBadge';
 import { snapshotsService } from '@/services/snapshots.service';
 import { useSessionStore, computeElapsedMs } from '@/store/sessionStore';
 import { HintChatPanel } from '@/components/HintChatPanel';
@@ -167,6 +168,7 @@ export function ActiveSessionPage() {
     onSuccess: (_result, status) => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] });
       queryClient.invalidateQueries({ queryKey: ['evals', id] });
+      queryClient.invalidateQueries({ queryKey: DAILY_SPEND_QUERY_KEY });
       clearStore();
       if (status === 'completed' && id) {
         navigate(`/sessions/${id}`, { replace: true });

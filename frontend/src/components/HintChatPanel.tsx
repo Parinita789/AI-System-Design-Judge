@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { hintsService } from '@/services/hints.service';
 import { describeError } from '@/lib/error';
+import { DAILY_SPEND_QUERY_KEY } from '@components/layout/DailySpendBadge';
 
 interface HintChatPanelProps {
   sessionId: string;
@@ -35,6 +36,7 @@ export function HintChatPanel({
     mutationFn: (message: string) => hintsService.send(sessionId, message),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['hints', sessionId] });
+      queryClient.invalidateQueries({ queryKey: DAILY_SPEND_QUERY_KEY });
       setDraft('');
     },
   });

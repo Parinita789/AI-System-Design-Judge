@@ -6,6 +6,7 @@ import { sessionsService } from '@/services/sessions.service';
 import { useSessionStore } from '@/store/sessionStore';
 import { useAuthStore } from '@/store/authStore';
 import { extractApiError } from '@/lib/error';
+import { DailySpendBadge } from '@components/layout/DailySpendBadge';
 import type { QuestionWithSessions } from '@/types/question';
 
 const SIDEBAR_COLLAPSED_KEY = 'app-sidebar-collapsed';
@@ -214,6 +215,7 @@ export function AppLayout() {
                 </div>
               )}
             </div>
+            <DailySpendBadge />
             {currentUser && (
               <div className="border-t border-gray-200 px-3 py-2 flex items-center justify-between">
                 <span
