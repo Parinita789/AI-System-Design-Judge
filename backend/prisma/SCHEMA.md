@@ -1,19 +1,16 @@
 # Schema relationship diagram
 
 Reference for the data model defined in `schema.prisma`. Update this file
-when adding/removing tables or changing cardinalities. The diagram below
-is the rendered SVG export of the Mermaid source that follows it — keep
-the two in sync when you edit the schema.
+when adding/removing tables or changing cardinalities. GitHub renders the
+Mermaid block below natively — no separate export step.
 
 ## ER diagram
 
-![Interview Assistant ER diagram](./schema.svg)
-
-<details>
-<summary>Mermaid source (click to expand)</summary>
-
 ```mermaid
 erDiagram
+    User     ||--o{ Question : "Question.user_id → User.id"
+    User     ||--o{ Session : "Session.user_id → User.id"
+    User     ||--o{ LlmSpend : "LlmSpend.user_id → User.id"
     Question ||--o{ Session : "Session.question_id → Question.id"
     Session  ||--o{ Snapshot : "Snapshot.session_id → Session.id"
     Session  ||--o{ PhaseEvaluation : "PhaseEvaluation.session_id → Session.id"
@@ -25,17 +22,26 @@ erDiagram
     PhaseEvaluation ||--o| MentorArtifact : "MentorArtifact.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
     PhaseEvaluation ||--o| SignalMentorArtifact : "SignalMentorArtifact.phase_evaluation_id → PhaseEvaluation.id (UNIQUE)"
 
+    User {
+        uuid id PK
+        text email "UNIQUE"
+        text password_hash "bcrypt(rounds=12); legacy-import sentinel uses a non-bcrypt string"
+        timestamp created_at
+    }
+
     Question {
         uuid id PK
+        uuid user_id FK "owner; pre-auth rows backfilled to the legacy-import sentinel"
         text prompt
         text rubric_version
-        enum mode "build|design (NULL on v1.0 questions)"
+        enum kind "traditional_design | agentic_design | agentic_build (NULL on legacy v1.0 rows)"
         timestamp created_at
     }
 
     Session {
         uuid id PK
         uuid question_id FK
+        uuid user_id FK "owner; pre-auth rows backfilled to the legacy-import sentinel"
         text project_path
         timestamp started_at
         timestamp ended_at
@@ -68,7 +74,22 @@ erDiagram
         text feedback_text
         json top_actionable_items
         json gap_topics "[{name, coverage: missed|lightly_touched, why_expected}] from CANONICAL_TOPICS"
+        char input_fingerprint "SHA-256 of (planMd + model + buildContext); content-based cache key. Nullable on pre-cache rows."
         timestamp evaluated_at
+    }
+
+    LlmSpend {
+        uuid id PK
+        uuid user_id FK
+        timestamp occurred_at
+        text provider "anthropic | claude_cli | ollama"
+        text model
+        int tokens_in
+        int tokens_out
+        int cache_read_tokens
+        int cache_creation_tokens
+        decimal estimated_cost_usd "server-side estimate from MODEL_PRICING — not the authoritative bill"
+        text route "HTTP route that triggered the call, e.g. 'POST /sessions/:id/hints'"
     }
 
     EvaluationAudit {
@@ -163,8 +184,6 @@ erDiagram
     }
 ```
 
-</details>
-
 ## Relationships
 
 Each row reads "child.foreign_key → parent.primary_key" — that's the column
@@ -172,6 +191,9 @@ linkage Postgres uses to enforce the relationship.
 
 | Edge | Cardinality | Join (child FK → parent PK) | onDelete | Why |
 | --- | --- | --- | --- | --- |
+| User → Question | 1 : N | `questions.user_id` → `users.id` | `Cascade` | Question is user-scoped; ownership checks read this column. Deleting a user removes all their questions (and transitively, sessions). |
+| User → Session | 1 : N | `sessions.user_id` → `users.id` | `Cascade` | Same shape as Question→Session; the user can also delete sessions independently. |
+| User → LlmSpend | 1 : N | `llm_spend.user_id` → `users.id` | `Cascade` | Per-user cost ledger; user deletion drops their spend rows. Session deletion does NOT — spend history outlives artifact deletes by design. |
 | Question → Session | 1 : N | `sessions.question_id` → `questions.id` | `Restrict` | Deleting a question goes through `QuestionsService.deleteQuestion` which `deleteMany`'s the child sessions first (in a single transaction) and then deletes the question — Restrict prevents accidental orphaning if the service is bypassed. |
 | Session → Snapshot | 1 : N | `snapshots.session_id` → `sessions.id` | `Cascade` | Snapshots are session-scoped logs. |
 | Session → PhaseEvaluation | 1 : N | `phase_evaluations.session_id` → `sessions.id` | `Cascade` | Re-evaluate creates a new row; history retained per session. |
@@ -185,6 +207,24 @@ linkage Postgres uses to enforce the relationship.
 
 ## Design highlights
 
+- **User owns everything top-level.** `users` is the auth root. Questions
+  and Sessions carry `user_id` FKs (added in production-hardening phase 1);
+  pre-auth rows were backfilled to a fixed-UUID `legacy-import` sentinel
+  user before the column was switched to NOT NULL. Every controller-facing
+  service does ownership checks via `OwnershipService` so user A can't
+  read or mutate user B's resources. The legacy-import user has a
+  non-bcrypt `password_hash` sentinel so no real login can ever resolve
+  to it.
+- **`LlmSpend` is the cost-cap ledger, not an audit replacement.**
+  `evaluation_audits`, `mentor_artifacts`, `signal_mentor_artifacts`, and
+  `ai_interactions` all record token counts for their respective LLM
+  calls — but each is 1:1 with its parent entity and reached via 2+
+  joins to user. `llm_spend` is denormalized: one row per LLM call,
+  direct FK to user, includes an `estimated_cost_usd` column. The hot
+  path `CostCapService.assertWithinCap` is a single index-seek-and-range
+  scan against `(user_id, occurred_at)`; doing the same via UNION across
+  4 audit tables would be 5–20 ms per LLM call. Storage cost is
+  negligible (~80–150 bytes per row × ~20 calls per session).
 - **Question vs Session split**: Question = the problem
   (prompt + rubric version), Session = one attempt. A Question owns N
   attempts; the most recent `plan.md` is copied forward into a new attempt
@@ -196,6 +236,15 @@ linkage Postgres uses to enforce the relationship.
 - **No upsert on PhaseEvaluation.** Each Re-evaluate inserts a new row.
   The `(session_id, phase, evaluated_at DESC)` index makes "latest plan
   eval for session X" a single seek; nothing is ever overwritten.
+- **Content-based caching via `input_fingerprint`.** Before kicking off
+  a fresh LLM run, `OrchestratorService.run` computes a SHA-256 of the
+  inputs that materially determine eval output (plan.md content +
+  resolved model + build artifacts for build phase) and looks it up via
+  the partial unique index on `(session_id, phase, input_fingerprint)`.
+  Identical inputs return the existing row without paying for another
+  LLM call; the partial unique constraint also catches concurrent
+  re-evals with the same fingerprint (P2002 → re-query → return
+  winner). Pre-cache rows have NULL fingerprints and never match.
 - **JSON columns vs relational rows.** `signal_results`, `artifacts`,
   and `gap_topics` are JSON because their shape is rubric-driven /
   vocabulary-driven and varies across versions. Anything queried
