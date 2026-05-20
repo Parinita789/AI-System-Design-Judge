@@ -2,11 +2,17 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/commo
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { EvaluationsService } from '../services/evaluations.service';
 import { RunEvaluationDto } from '../dto/run-evaluation.dto';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../../auth/types/auth.types';
+import { OwnershipService } from '../../auth/services/ownership.service';
 
 @ApiTags('evaluations')
 @Controller()
 export class EvaluationsController {
-  constructor(private readonly evaluationsService: EvaluationsService) {}
+  constructor(
+    private readonly evaluationsService: EvaluationsService,
+    private readonly ownership: OwnershipService,
+  ) {}
 
   @Post('sessions/:sessionId/evaluate')
   @ApiOperation({
@@ -14,10 +20,12 @@ export class EvaluationsController {
     description:
       'Loads the rubric, evaluates plan.md via the LLM with tool-use forcing, validates evidence, computes a deterministic score, persists a new evaluation row + audit, and fires deep-dive + per-signal mentor in the background. Optional model override.',
   })
-  runForSession(
+  async runForSession(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() body?: RunEvaluationDto,
   ) {
+    await this.ownership.assertOwnsSession(sessionId, user.id);
     return this.evaluationsService.runForSession(sessionId, body?.model);
   }
 
@@ -26,19 +34,31 @@ export class EvaluationsController {
     summary: 'List every evaluation for a session, newest first',
     description: 'Each Re-evaluate inserts a new row; history is preserved.',
   })
-  listForSession(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
+  async listForSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsSession(sessionId, user.id);
     return this.evaluationsService.getBySession(sessionId);
   }
 
   @Get('evaluations/:id/status')
   @ApiOperation({ summary: 'Evaluation status (always complete in the synchronous flow)' })
-  status() {
+  async status(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsEvaluation(id, user.id);
     return { state: 'complete' as const };
   }
 
   @Get('evaluations/:id')
   @ApiOperation({ summary: 'Get a single evaluation by id' })
-  get(@Param('id', ParseUUIDPipe) id: string) {
+  async get(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsEvaluation(id, user.id);
     return this.evaluationsService.getById(id);
   }
 
@@ -48,7 +68,11 @@ export class EvaluationsController {
     description:
       'Returns the rendered prompt, raw LLM response, model used, token counts, cache hit/miss tokens, and latency. The bytes the parser ate, not summary metadata.',
   })
-  getAudit(@Param('id', ParseUUIDPipe) id: string) {
+  async getAudit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsEvaluation(id, user.id);
     return this.evaluationsService.getAudit(id);
   }
 }

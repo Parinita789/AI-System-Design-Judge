@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Question, Session } from '@prisma/client';
 import { QuestionsRepository } from '../repositories/questions.repository';
@@ -9,6 +9,7 @@ import { CreateQuestionDto } from '../dto/create-question.dto';
 import { classifyKind } from '../../evaluations/helpers/kind-classifier';
 import { Seniority as PrismaSeniority } from '@prisma/client';
 import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
+import { OwnershipService } from '../../auth/services/ownership.service';
 
 @Injectable()
 export class QuestionsService {
@@ -21,9 +22,13 @@ export class QuestionsService {
     private readonly snapshotsService: SnapshotsService,
     private readonly config: ConfigService,
     private readonly tasks: BackgroundTaskTracker,
+    private readonly ownership: OwnershipService,
   ) {}
 
-  async create(dto: CreateQuestionDto): Promise<{ question: Question; session: Session }> {
+  async create(
+    dto: CreateQuestionDto,
+    userId: string,
+  ): Promise<{ question: Question; session: Session }> {
     const rubricVersion = this.config.get<string>('RUBRIC_VERSION') ?? 'v3.0';
     const kind = dto.kind ?? classifyKind(dto.prompt);
     const seniority: PrismaSeniority = dto.seniority ?? 'senior';
@@ -31,26 +36,40 @@ export class QuestionsService {
       prompt: dto.prompt,
       rubricVersion,
       kind,
+      userId,
     });
     const session = await this.sessionsRepository.create({
       questionId: question.id,
       seniority,
+      userId,
     });
     return { question, session };
   }
 
-  list(pagination?: { take?: number; skip?: number }) {
-    return this.questionsRepository.findAll(pagination);
+  list(userId: string, pagination?: { take?: number; skip?: number }) {
+    return this.questionsRepository.findAll(userId, pagination);
   }
 
-  async get(questionId: string) {
+  // Inline ownership check: one query for the full row, compare userId
+  // after fetch. Half the DB roundtrips of the assertOwnsQuestion +
+  // findById pattern.
+  async get(questionId: string, userId: string) {
     const question = await this.questionsRepository.findById(questionId);
     if (!question) throw new NotFoundException(`Question ${questionId} not found`);
+    if (question.userId !== userId) {
+      throw new ForbiddenException(
+        `Question ${questionId} is not owned by the current user`,
+      );
+    }
     return question;
   }
 
-  async startAttempt(questionId: string, seniorityOverride?: PrismaSeniority): Promise<Session> {
-    const question = await this.get(questionId);
+  async startAttempt(
+    questionId: string,
+    userId: string,
+    seniorityOverride?: PrismaSeniority,
+  ): Promise<Session> {
+    const question = await this.get(questionId, userId);
 
     let inheritedPlanMd: string | null = null;
     let mostRecent: Date | null = null;
@@ -75,6 +94,7 @@ export class QuestionsService {
     const session = await this.sessionsRepository.create({
       questionId,
       seniority,
+      userId,
     });
 
     if (inheritedPlanMd && inheritedPlanMd.trim().length > 0) {
@@ -93,9 +113,9 @@ export class QuestionsService {
 
   async deleteQuestion(
     questionId: string,
+    userId: string,
   ): Promise<{ ok: true; deletedSessions: number }> {
-    const question = await this.questionsRepository.findById(questionId);
-    if (!question) throw new NotFoundException(`Question ${questionId} not found`);
+    await this.ownership.assertOwnsQuestion(questionId, userId);
     const deletedIds = await this.questionsRepository.deleteByIdCascading(questionId);
     this.logger.log(
       `Question ${questionId} deleted (${deletedIds.length} attempt(s) cascaded). ` +

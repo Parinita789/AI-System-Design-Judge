@@ -17,6 +17,7 @@ import { SessionReadModule } from '../session-read/session-read.module';
 import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { HintsModule } from '../hints/hints.module';
 import { BuildSessionsDataModule } from '../build-sessions-data/build-sessions-data.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { BuildSessionsDataModule } from '../build-sessions-data/build-sessions-d
     HintsModule,
     SessionReadModule,
     BuildSessionsDataModule,
+    AuthModule,
   ],
   controllers: [EvaluationsController, RubricsController],
   providers: [

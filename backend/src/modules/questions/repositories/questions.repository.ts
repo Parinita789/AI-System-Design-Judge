@@ -6,12 +6,18 @@ import { PrismaService } from '../../../database/prisma.service';
 export class QuestionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { prompt: string; rubricVersion: string; kind: PrismaQuestionKind }) {
+  create(data: {
+    prompt: string;
+    rubricVersion: string;
+    kind: PrismaQuestionKind;
+    userId: string;
+  }) {
     return this.prisma.question.create({ data });
   }
 
-  async findAll(opts: { take?: number; skip?: number } = {}) {
+  async findAll(userId: string, opts: { take?: number; skip?: number } = {}) {
     const rows = await this.prisma.question.findMany({
+      where: { userId },
       orderBy: { createdAt: 'desc' },
       take: opts.take,
       skip: opts.skip,

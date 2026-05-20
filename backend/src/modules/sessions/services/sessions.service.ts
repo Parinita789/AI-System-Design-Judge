@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PhaseEvaluation, Session, SessionStatus } from '@prisma/client';
 import * as fs from 'node:fs/promises';
@@ -7,6 +7,7 @@ import { SessionsRepository } from '../repositories/sessions.repository';
 import { EndSessionDto } from '../dto/end-session.dto';
 import { EvaluationsService } from '../../evaluations/services/evaluations.service';
 import { BackgroundTaskTracker } from '../../../common/background-task-tracker.service';
+import { OwnershipService } from '../../auth/services/ownership.service';
 
 export type RedactedSession = Omit<Session, 'buildTokenHash'>;
 
@@ -25,27 +26,44 @@ export class SessionsService {
     private readonly evaluationsService: EvaluationsService,
     private readonly config: ConfigService,
     private readonly tasks: BackgroundTaskTracker,
+    private readonly ownership: OwnershipService,
   ) {}
 
-  async get(sessionId: string) {
+  // Inline ownership check on read paths: one query for the full row,
+  // compare userId after fetch. Halves the DB roundtrips vs. calling
+  // ownership.assertOwnsSession + findById separately. The 404 vs 403
+  // distinction is preserved.
+  async get(sessionId: string, userId: string) {
     const session = await this.sessionsRepository.findById(sessionId);
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+    if (session.userId !== userId) {
+      throw new ForbiddenException(`Session ${sessionId} is not owned by the current user`);
+    }
     return session;
   }
 
-  async getWithQuestion(sessionId: string) {
+  async getWithQuestion(sessionId: string, userId: string) {
     const session = await this.sessionsRepository.findByIdWithQuestion(sessionId);
     if (!session) throw new NotFoundException(`Session ${sessionId} not found`);
+    if (session.userId !== userId) {
+      throw new ForbiddenException(`Session ${sessionId} is not owned by the current user`);
+    }
     return session;
   }
 
-  list(pagination?: { take?: number; skip?: number }) {
-    return this.sessionsRepository.findAll(pagination);
+  list(userId: string, pagination?: { take?: number; skip?: number }) {
+    return this.sessionsRepository.findAll(userId, pagination);
   }
 
-  async end(sessionId: string, dto: EndSessionDto): Promise<EndSessionResult> {
+  async end(sessionId: string, userId: string, dto: EndSessionDto): Promise<EndSessionResult> {
+    // Read-and-check, then write. Avoids a separate ownership.assertOwns
+    // query — but we still need to verify the session exists + belongs
+    // to this user before markEnded touches it.
     const existing = await this.sessionsRepository.findById(sessionId);
     if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
+    if (existing.userId !== userId) {
+      throw new ForbiddenException(`Session ${sessionId} is not owned by the current user`);
+    }
     const status = dto.status ?? SessionStatus.completed;
     const ended = await this.sessionsRepository.markEnded(sessionId, status);
 
@@ -63,9 +81,8 @@ export class SessionsService {
     }
   }
 
-  async deleteSession(sessionId: string): Promise<{ ok: true }> {
-    const existing = await this.sessionsRepository.findById(sessionId);
-    if (!existing) throw new NotFoundException(`Session ${sessionId} not found`);
+  async deleteSession(sessionId: string, userId: string): Promise<{ ok: true }> {
+    await this.ownership.assertOwnsSession(sessionId, userId);
     await this.sessionsRepository.deleteById(sessionId);
     this.logger.log(`Session ${sessionId} deleted (DB row + cascades). Scheduling disk cleanup.`);
     this.tasks.track(this.cleanupArtifacts(sessionId), `cleanupArtifacts(${sessionId})`);

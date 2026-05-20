@@ -2,11 +2,17 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/commo
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { MentorService } from '../services/mentor.service';
 import { GenerateMentorDto } from '../dto/generate-mentor.dto';
+import { OwnershipService } from '../../auth/services/ownership.service';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../../auth/types/auth.types';
 
 @ApiTags('mentor')
 @Controller('mentor')
 export class MentorController {
-  constructor(private readonly mentorService: MentorService) {}
+  constructor(
+    private readonly mentorService: MentorService,
+    private readonly ownership: OwnershipService,
+  ) {}
 
   @Get(':evaluationId')
   @ApiOperation({
@@ -14,7 +20,11 @@ export class MentorController {
     description:
       'Returns the 6-section Markdown teaching artifact. 404 until the background generation lands; the frontend polls every 5s.',
   })
-  get(@Param('evaluationId', ParseUUIDPipe) evaluationId: string) {
+  async get(
+    @Param('evaluationId', ParseUUIDPipe) evaluationId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsEvaluation(evaluationId, user.id);
     return this.mentorService.getByEvaluation(evaluationId);
   }
 
@@ -24,10 +34,12 @@ export class MentorController {
     description:
       'Runs the LLM teaching pass. Upserts by phaseEvaluationId so a second call overwrites. Optional model override.',
   })
-  generate(
+  async generate(
     @Param('evaluationId', ParseUUIDPipe) evaluationId: string,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() body?: GenerateMentorDto,
   ) {
+    await this.ownership.assertOwnsEvaluation(evaluationId, user.id);
     return this.mentorService.generate(evaluationId, body?.model);
   }
 }

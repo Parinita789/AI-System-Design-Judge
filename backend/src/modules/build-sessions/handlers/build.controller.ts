@@ -4,9 +4,16 @@ import { BuildEventBatchDto } from '../dto/build-event.dto';
 import { BuildAIInteractionBatchDto } from '../dto/build-ai-interaction.dto';
 import { AuthedRequest, BuildSessionGuard, resolvedBuildSessionId } from '../guards/build-session.guard';
 import { BuildSessionsService } from '../services/build-sessions.service';
+import { CliAuthenticated } from '../../auth/decorators/cli-authenticated.decorator';
 
+// CLI-facing controller. Auth'd via the CLI bearer token issued by
+// /start-build and validated by BuildSessionGuard — not by JWT.
+// @CliAuthenticated() tells the global AuthGuard to skip JWT
+// verification (the route is auth'd, but by a sibling guard). DO NOT
+// replace with @Public() — that would imply no auth at all.
 @ApiTags('build-sessions')
 @ApiBearerAuth('bearer')
+@CliAuthenticated()
 @UseGuards(BuildSessionGuard)
 @Controller('build')
 export class BuildController {

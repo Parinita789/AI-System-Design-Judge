@@ -6,9 +6,10 @@ import { SessionReadModule } from '../session-read/session-read.module';
 import { SnapshotsModule } from '../snapshots/snapshots.module';
 import { LlmModule } from '../llm/llm.module';
 import { GuardrailsModule } from '../guardrails/guardrails.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [SessionReadModule, SnapshotsModule, LlmModule, GuardrailsModule],
+  imports: [SessionReadModule, SnapshotsModule, LlmModule, GuardrailsModule, AuthModule],
   controllers: [HintsController],
   providers: [HintsService, AIInteractionsRepository],
   exports: [AIInteractionsRepository],

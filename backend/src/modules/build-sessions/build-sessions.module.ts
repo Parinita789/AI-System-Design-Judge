@@ -6,9 +6,10 @@ import { BuildTokenService } from './services/build-token.service';
 import { BuildSessionGuard } from './guards/build-session.guard';
 import { EvaluationsModule } from '../evaluations/evaluations.module';
 import { BuildSessionsDataModule } from '../build-sessions-data/build-sessions-data.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [EvaluationsModule, BuildSessionsDataModule],
+  imports: [EvaluationsModule, BuildSessionsDataModule, AuthModule],
   controllers: [StartBuildController, BuildController],
   providers: [BuildSessionsService, BuildTokenService, BuildSessionGuard],
   exports: [BuildSessionsService, BuildSessionsDataModule],

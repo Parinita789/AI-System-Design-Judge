@@ -26,21 +26,37 @@ function makeContext(opts: {
   return { ctx, req };
 }
 
-function makeGuard(opts: { handlerPublic?: boolean; classPublic?: boolean } = {}) {
+function makeGuard(
+  opts: { isPublic?: boolean; isCliAuthenticated?: boolean } = {},
+) {
   const jwt = new JwtService({ secret: TEST_SECRET, signOptions: { expiresIn: '1h' } });
   const users = { findByEmail: jest.fn(), findById: jest.fn(), create: jest.fn() };
   const auth = new AuthService(users as never, new PasswordService(), jwt);
   const reflector = {
-    getAllAndOverride: jest.fn().mockImplementation(() => opts.handlerPublic ?? opts.classPublic ?? false),
+    getAllAndOverride: jest.fn().mockImplementation((key: string) => {
+      if (key === 'auth:is-public') return opts.isPublic ?? false;
+      if (key === 'auth:cli-authenticated') return opts.isCliAuthenticated ?? false;
+      return false;
+    }),
   } as unknown as Reflector;
   return { guard: new AuthGuard(auth, reflector), jwt, reflector };
 }
 
 describe('AuthGuard', () => {
   it('lets @Public() routes through without a token', async () => {
-    const { guard } = makeGuard({ handlerPublic: true });
+    const { guard } = makeGuard({ isPublic: true });
     const { ctx, req } = makeContext({});
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    expect(req.user).toBeUndefined();
+  });
+
+  it('lets @CliAuthenticated() routes through without a JWT (sibling guard does the check)', async () => {
+    const { guard } = makeGuard({ isCliAuthenticated: true });
+    const { ctx, req } = makeContext({});
+    await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    // Critically, no req.user is attached — the sibling guard (e.g.
+    // BuildSessionGuard) is responsible for whatever identity-shape
+    // it wants on the request.
     expect(req.user).toBeUndefined();
   });
 

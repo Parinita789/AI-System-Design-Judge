@@ -14,10 +14,15 @@ function stripHash<T extends { buildTokenHash?: string | null } | null>(
 export class SessionsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  create(data: { questionId: string; seniority?: PrismaSeniority | null }) {
+  create(data: {
+    questionId: string;
+    userId: string;
+    seniority?: PrismaSeniority | null;
+  }) {
     return this.prisma.session.create({
       data: {
         questionId: data.questionId,
+        userId: data.userId,
         seniority: data.seniority ?? null,
       },
     });
@@ -36,8 +41,9 @@ export class SessionsRepository {
     return stripHash(row);
   }
 
-  async findAll(opts: { take?: number; skip?: number } = {}) {
+  async findAll(userId: string, opts: { take?: number; skip?: number } = {}) {
     const rows = await this.prisma.session.findMany({
+      where: { userId },
       orderBy: { startedAt: 'desc' },
       take: opts.take,
       skip: opts.skip,

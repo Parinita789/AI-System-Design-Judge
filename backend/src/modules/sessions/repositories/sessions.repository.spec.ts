@@ -16,12 +16,12 @@ describe('SessionsRepository', () => {
   });
 
   describe('create', () => {
-    it('inserts a session row keyed by questionId', async () => {
+    it('inserts a session row keyed by questionId + userId', async () => {
       session.create.mockResolvedValue({ id: 'sid-1' });
-      const result = await repo.create({ questionId: 'qid-1' });
+      const result = await repo.create({ questionId: 'qid-1', userId: 'uid-1' });
 
       expect(session.create).toHaveBeenCalledWith({
-        data: { questionId: 'qid-1', seniority: null },
+        data: { questionId: 'qid-1', userId: 'uid-1', seniority: null },
       });
       expect(result).toEqual({ id: 'sid-1' });
     });
@@ -54,11 +54,14 @@ describe('SessionsRepository', () => {
   });
 
   describe('findAll', () => {
-    it('orders by startedAt desc', async () => {
+    it('filters by userId and orders by startedAt desc', async () => {
       session.findMany.mockResolvedValue([]);
-      await repo.findAll();
+      await repo.findAll('uid-1');
 
-      expect(session.findMany).toHaveBeenCalledWith({ orderBy: { startedAt: 'desc' } });
+      expect(session.findMany).toHaveBeenCalledWith({
+        where: { userId: 'uid-1' },
+        orderBy: { startedAt: 'desc' },
+      });
     });
   });
 
@@ -113,7 +116,7 @@ describe('SessionsRepository', () => {
 
     it('strips buildTokenHash from each row of findAll', async () => {
       session.findMany.mockResolvedValue([dbRow, { ...dbRow, id: 'sid-2' }]);
-      const rows = await repo.findAll();
+      const rows = await repo.findAll('uid-1');
       for (const r of rows) {
         expect((r as Record<string, unknown>).buildTokenHash).toBeUndefined();
       }

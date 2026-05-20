@@ -1,6 +1,9 @@
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { HintsService } from './hints.service';
 import { ChatRole } from '../../llm/constants';
 import { AGENTS_CONFIG } from '../../../config/llm-tunables.config';
+
+const UID = 'uid-1';
 
 describe('HintsService', () => {
   let service: HintsService;
@@ -13,19 +16,33 @@ describe('HintsService', () => {
     create: jest.fn(),
   };
 
+  // OwnershipService is mocked at the service-level since its real
+  // implementation does Prisma lookups. assertOwnsSession resolves
+  // by default (= owned); tests override per case for not-found / 403.
+  const ownership = {
+    assertOwnsSession: jest.fn().mockResolvedValue(undefined),
+    assertOwnsQuestion: jest.fn().mockResolvedValue(undefined),
+    assertOwnsEvaluation: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    ownership.assertOwnsSession.mockResolvedValue(undefined);
+    ownership.assertOwnsQuestion.mockResolvedValue(undefined);
+    ownership.assertOwnsEvaluation.mockResolvedValue(undefined);
     service = new HintsService(
       sessionsService as never,
       snapshotsService as never,
       llmService as never,
       aiInteractionsRepo as never,
+      ownership as never,
     );
   });
 
   describe('send', () => {
     const session = {
       id: 'sid-1',
+      userId: UID,
       question: { id: 'qid-1', prompt: 'Design a URL shortener' },
       startedAt: new Date(Date.now() - 7 * 60_000).toISOString(), // 7 min ago
     };
@@ -37,6 +54,19 @@ describe('HintsService', () => {
       cacheCreationTokens: 0,
       cacheReadTokens: 0,
     };
+
+    it('reads the session via SessionReadService without consulting OwnershipService', async () => {
+      sessionsService.getWithQuestion.mockResolvedValue(session);
+      snapshotsService.latest.mockResolvedValue(null);
+      aiInteractionsRepo.findBySession.mockResolvedValue([]);
+      llmService.call.mockResolvedValue(llmReply);
+      aiInteractionsRepo.create.mockResolvedValue({});
+
+      await service.send('sid-1', 'Hi', UID);
+
+      expect(sessionsService.getWithQuestion).toHaveBeenCalledWith('sid-1');
+      expect(ownership.assertOwnsSession).not.toHaveBeenCalled();
+    });
 
     it('builds a chat-history messages array, then appends the new user message with plan.md context', async () => {
       sessionsService.getWithQuestion.mockResolvedValue(session);
@@ -50,7 +80,7 @@ describe('HintsService', () => {
       llmService.call.mockResolvedValue(llmReply);
       aiInteractionsRepo.create.mockResolvedValue({ id: 'ai-new' });
 
-      await service.send('sid-1', 'What about caching?');
+      await service.send('sid-1', 'What about caching?', UID);
 
       const messages = llmService.call.mock.calls[0][0];
       expect(messages).toHaveLength(5);
@@ -70,7 +100,7 @@ describe('HintsService', () => {
       llmService.call.mockResolvedValue(llmReply);
       aiInteractionsRepo.create.mockResolvedValue({});
 
-      await service.send('sid-1', 'Hi');
+      await service.send('sid-1', 'Hi', UID);
 
       const opts = llmService.call.mock.calls[0][1];
       expect(opts.maxTokens).toBe(AGENTS_CONFIG.hints.maxTokens);
@@ -87,7 +117,7 @@ describe('HintsService', () => {
       llmService.call.mockResolvedValue(llmReply);
       aiInteractionsRepo.create.mockResolvedValue({});
 
-      await service.send('sid-1', 'Where do I start?');
+      await service.send('sid-1', 'Where do I start?', UID);
 
       const lastMsg = llmService.call.mock.calls[0][0].at(-1);
       expect(lastMsg.content).toContain('[plan.md is empty]');
@@ -101,7 +131,7 @@ describe('HintsService', () => {
       llmService.call.mockResolvedValue(llmReply);
       aiInteractionsRepo.create.mockResolvedValue({ id: 'ai-new' });
 
-      const result = await service.send('sid-1', 'caching?');
+      const result = await service.send('sid-1', 'caching?', UID);
 
       expect(aiInteractionsRepo.create).toHaveBeenCalledTimes(1);
       const persisted = aiInteractionsRepo.create.mock.calls[0][0];
@@ -119,16 +149,36 @@ describe('HintsService', () => {
 
     it('propagates session-not-found from SessionsService', async () => {
       sessionsService.getWithQuestion.mockRejectedValue(new Error('Session missing not found'));
-      await expect(service.send('missing', 'hi')).rejects.toThrow(/not found/);
+      await expect(service.send('missing', 'hi', UID)).rejects.toThrow(/not found/);
+      expect(llmService.call).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when the session belongs to another user', async () => {
+      sessionsService.getWithQuestion.mockResolvedValue({ ...session, userId: 'uid-other' });
+      await expect(service.send('sid-1', 'hi', UID)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(ownership.assertOwnsSession).not.toHaveBeenCalled();
       expect(llmService.call).not.toHaveBeenCalled();
     });
   });
 
   describe('list', () => {
-    it('delegates to the repo', async () => {
+    it('asserts ownership then delegates to the repo', async () => {
       aiInteractionsRepo.findBySession.mockResolvedValue([{ id: 'ai-1' }]);
-      expect(await service.list('sid-1')).toEqual([{ id: 'ai-1' }]);
+      expect(await service.list('sid-1', UID)).toEqual([{ id: 'ai-1' }]);
+      expect(ownership.assertOwnsSession).toHaveBeenCalledWith('sid-1', UID);
       expect(aiInteractionsRepo.findBySession).toHaveBeenCalledWith('sid-1');
+    });
+
+    it('propagates NotFoundException from the ownership check', async () => {
+      ownership.assertOwnsSession.mockRejectedValue(new NotFoundException('missing'));
+      await expect(service.list('missing', UID)).rejects.toBeInstanceOf(NotFoundException);
+      expect(aiInteractionsRepo.findBySession).not.toHaveBeenCalled();
+    });
+
+    it('propagates ForbiddenException from the ownership check', async () => {
+      ownership.assertOwnsSession.mockRejectedValue(new ForbiddenException('not yours'));
+      await expect(service.list('sid-1', UID)).rejects.toBeInstanceOf(ForbiddenException);
+      expect(aiInteractionsRepo.findBySession).not.toHaveBeenCalled();
     });
   });
 });

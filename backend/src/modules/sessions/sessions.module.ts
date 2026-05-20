@@ -3,9 +3,10 @@ import { SessionsController } from './handlers/sessions.controller';
 import { SessionsService } from './services/sessions.service';
 import { SessionsRepository } from './repositories/sessions.repository';
 import { EvaluationsModule } from '../evaluations/evaluations.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [EvaluationsModule],
+  imports: [EvaluationsModule, AuthModule],
   controllers: [SessionsController],
   providers: [SessionsService, SessionsRepository],
   exports: [SessionsService, SessionsRepository],

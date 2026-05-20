@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { SessionReadService } from '../../session-read/services/session-read.service';
 import { SnapshotsService } from '../../snapshots/services/snapshots.service';
@@ -8,6 +8,7 @@ import { ChatRole } from '../../llm/constants';
 import { AIInteractionsRepository } from '../repositories/ai-interactions.repository';
 import { AGENTS_CONFIG } from '../../../config/llm-tunables.config';
 import { HINT_SYSTEM_PROMPT } from '../prompts/hint-system-prompt';
+import { OwnershipService } from '../../auth/services/ownership.service';
 
 @Injectable()
 export class HintsService {
@@ -16,10 +17,18 @@ export class HintsService {
     private readonly snapshotsService: SnapshotsService,
     private readonly llmService: LlmService,
     private readonly aiInteractionsRepo: AIInteractionsRepository,
+    private readonly ownership: OwnershipService,
   ) {}
 
-  async send(sessionId: string, message: string) {
+  async send(sessionId: string, message: string, userId: string) {
+    // Single sessions-table fetch covers both ownership check + the
+    // session+question read we need anyway. SessionReadService throws
+    // NotFoundException if the row is missing; we inline-check userId
+    // before doing anything else.
     const session = await this.sessionReadService.getWithQuestion(sessionId);
+    if (session.userId !== userId) {
+      throw new ForbiddenException(`Session ${sessionId} is not owned by the current user`);
+    }
     const latestSnapshot = await this.snapshotsService.latest(sessionId);
     const planMd = (latestSnapshot?.artifacts as { planMd?: string | null } | null)?.planMd ?? null;
 
@@ -61,7 +70,8 @@ export class HintsService {
     });
   }
 
-  list(sessionId: string) {
+  async list(sessionId: string, userId: string) {
+    await this.ownership.assertOwnsSession(sessionId, userId);
     return this.aiInteractionsRepo.findBySession(sessionId);
   }
 }

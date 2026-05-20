@@ -1,5 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { QuestionsService } from './questions.service';
+
+const UID = 'uid-1';
 
 describe('QuestionsService', () => {
   let service: QuestionsService;
@@ -27,9 +29,21 @@ describe('QuestionsService', () => {
     track: jest.fn((p: Promise<unknown>) => p.catch(() => undefined)),
   };
 
+  // OwnershipService is mocked at the service-level since its real
+  // implementation does Prisma lookups. assertOwnsQuestion resolves
+  // by default (= owned); tests override per case for not-found / 403.
+  const ownership = {
+    assertOwnsSession: jest.fn().mockResolvedValue(undefined),
+    assertOwnsQuestion: jest.fn().mockResolvedValue(undefined),
+    assertOwnsEvaluation: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     for (const k of Object.keys(env)) delete env[k];
+    ownership.assertOwnsSession.mockResolvedValue(undefined);
+    ownership.assertOwnsQuestion.mockResolvedValue(undefined);
+    ownership.assertOwnsEvaluation.mockResolvedValue(undefined);
     service = new QuestionsService(
       questionsRepo as never,
       sessionsRepo as never,
@@ -37,25 +51,28 @@ describe('QuestionsService', () => {
       snapshots as never,
       config as never,
       tasks as never,
+      ownership as never,
     );
   });
 
   describe('create', () => {
-    it('creates a Question + first Session in one shot, defaulting kind to traditional_design', async () => {
+    it('creates a Question + first Session in one shot, threading userId through', async () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'qid-1', prompt: 'X', rubricVersion: 'v2.0' });
       sessionsRepo.create.mockResolvedValue({ id: 'sid-1', questionId: 'qid-1' });
 
-      const result = await service.create({ prompt: 'A short prompt.' });
+      const result = await service.create({ prompt: 'A short prompt.' }, UID);
 
       expect(questionsRepo.create).toHaveBeenCalledWith({
         prompt: 'A short prompt.',
         rubricVersion: 'v2.0',
         kind: 'traditional_design',
+        userId: UID,
       });
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
         seniority: 'senior',
+        userId: UID,
       });
       expect(result.question.id).toBe('qid-1');
       expect(result.session.id).toBe('sid-1');
@@ -65,7 +82,7 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'Design a chat app with an LLM-based moderation layer.' });
+      await service.create({ prompt: 'Design a chat app with an LLM-based moderation layer.' }, UID);
       expect(questionsRepo.create.mock.calls[0][0].kind).toBe('agentic_design');
     });
 
@@ -73,7 +90,7 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'Design a URL shortener for 10K req/s.' });
+      await service.create({ prompt: 'Design a URL shortener for 10K req/s.' }, UID);
       expect(questionsRepo.create.mock.calls[0][0].kind).toBe('traditional_design');
     });
 
@@ -81,10 +98,10 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({
-        prompt: 'Design a URL shortener for 10K req/s.',
-        kind: 'agentic_build',
-      });
+      await service.create(
+        { prompt: 'Design a URL shortener for 10K req/s.', kind: 'agentic_build' },
+        UID,
+      );
       expect(questionsRepo.create.mock.calls[0][0].kind).toBe('agentic_build');
     });
 
@@ -92,7 +109,7 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({ prompt: 'Design a simple URL shortener.' });
+      await service.create({ prompt: 'Design a simple URL shortener.' }, UID);
       expect(sessionsRepo.create.mock.calls[0][0].seniority).toBe('senior');
     });
 
@@ -100,36 +117,41 @@ describe('QuestionsService', () => {
       env.RUBRIC_VERSION = 'v2.0';
       questionsRepo.create.mockResolvedValue({ id: 'q' });
       sessionsRepo.create.mockResolvedValue({ id: 's' });
-      await service.create({
-        prompt: 'Design a simple URL shortener.',
-        seniority: 'junior',
-      });
+      await service.create({ prompt: 'Design a simple URL shortener.', seniority: 'junior' }, UID);
       expect(sessionsRepo.create.mock.calls[0][0].seniority).toBe('junior');
     });
   });
 
   describe('list', () => {
-    it('delegates to repo.findAll', async () => {
+    it('delegates to repo.findAll scoped to userId', async () => {
       questionsRepo.findAll.mockResolvedValue([{ id: 'a' }]);
-      expect(await service.list()).toEqual([{ id: 'a' }]);
+      expect(await service.list(UID)).toEqual([{ id: 'a' }]);
+      expect(questionsRepo.findAll).toHaveBeenCalledWith(UID, undefined);
     });
   });
 
   describe('get', () => {
-    it('returns the question when it exists', async () => {
-      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', sessions: [] });
-      expect((await service.get('qid-1')).id).toBe('qid-1');
+    it('returns the question for its owner', async () => {
+      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', userId: UID, sessions: [] });
+      expect((await service.get('qid-1', UID)).id).toBe('qid-1');
+      expect(ownership.assertOwnsQuestion).not.toHaveBeenCalled();
     });
 
-    it('throws NotFoundException when missing', async () => {
+    it('throws NotFoundException when the question is missing', async () => {
       questionsRepo.findById.mockResolvedValue(null);
-      await expect(service.get('missing')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.get('missing', UID)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws ForbiddenException when the question belongs to another user', async () => {
+      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', userId: 'uid-other', sessions: [] });
+      await expect(service.get('qid-1', UID)).rejects.toBeInstanceOf(ForbiddenException);
     });
   });
 
   describe('startAttempt', () => {
     const question = {
       id: 'qid-1',
+      userId: UID,
       prompt: 'X',
       sessions: [
         { id: 'sid-old-a', startedAt: new Date('2026-04-01T00:00:00Z'), seniority: null },
@@ -150,11 +172,12 @@ describe('QuestionsService', () => {
         });
       sessionsRepo.create.mockResolvedValue({ id: 'sid-new' });
 
-      const result = await service.startAttempt('qid-1');
+      const result = await service.startAttempt('qid-1', UID);
 
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
         seniority: null,
+        userId: UID,
       });
       expect(snapshots.capture).toHaveBeenCalledWith('sid-new', {
         elapsedMinutes: 0,
@@ -167,21 +190,20 @@ describe('QuestionsService', () => {
       questionsRepo.findById.mockResolvedValue(question);
       snapshots.latest.mockResolvedValue(null);
       sessionsRepo.create.mockResolvedValue({ id: 'sid-new' });
-
-      await service.startAttempt('qid-1');
-
+      await service.startAttempt('qid-1', UID);
       expect(snapshots.capture).not.toHaveBeenCalled();
     });
 
-    it('throws NotFound when the question does not exist', async () => {
+    it('propagates NotFoundException when the question is missing', async () => {
       questionsRepo.findById.mockResolvedValue(null);
-      await expect(service.startAttempt('missing')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.startAttempt('missing', UID)).rejects.toBeInstanceOf(NotFoundException);
       expect(sessionsRepo.create).not.toHaveBeenCalled();
     });
 
     it('inherits seniority from the most recent prior session by default', async () => {
       questionsRepo.findById.mockResolvedValue({
         id: 'qid-1',
+        userId: UID,
         prompt: 'X',
         sessions: [
           { id: 'old-1', startedAt: new Date('2026-04-01T00:00:00Z'), seniority: 'junior' },
@@ -191,17 +213,19 @@ describe('QuestionsService', () => {
       snapshots.latest.mockResolvedValue(null);
       sessionsRepo.create.mockResolvedValue({ id: 'sid-new' });
 
-      await service.startAttempt('qid-1');
+      await service.startAttempt('qid-1', UID);
 
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
         seniority: 'staff',
+        userId: UID,
       });
     });
 
     it('honors an explicit seniority override on retry', async () => {
       questionsRepo.findById.mockResolvedValue({
         id: 'qid-1',
+        userId: UID,
         prompt: 'X',
         sessions: [
           { id: 'old', startedAt: new Date('2026-04-30T00:00:00Z'), seniority: 'staff' },
@@ -210,28 +234,29 @@ describe('QuestionsService', () => {
       snapshots.latest.mockResolvedValue(null);
       sessionsRepo.create.mockResolvedValue({ id: 'sid-new' });
 
-      await service.startAttempt('qid-1', 'junior');
+      await service.startAttempt('qid-1', UID, 'junior');
 
       expect(sessionsRepo.create).toHaveBeenCalledWith({
         questionId: 'qid-1',
         seniority: 'junior',
+        userId: UID,
       });
     });
   });
 
   describe('deleteQuestion', () => {
-    it('throws NotFound when the question is missing', async () => {
-      questionsRepo.findById.mockResolvedValue(null);
-      await expect(service.deleteQuestion('missing')).rejects.toBeInstanceOf(NotFoundException);
+    it('propagates NotFoundException from the ownership check', async () => {
+      ownership.assertOwnsQuestion.mockRejectedValue(new NotFoundException('missing'));
+      await expect(service.deleteQuestion('missing', UID)).rejects.toBeInstanceOf(NotFoundException);
       expect(questionsRepo.deleteByIdCascading).not.toHaveBeenCalled();
     });
 
     it('cascades through every session and schedules disk cleanup per session', async () => {
-      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', sessions: [] });
       questionsRepo.deleteByIdCascading.mockResolvedValue(['sid-a', 'sid-b', 'sid-c']);
 
-      const out = await service.deleteQuestion('qid-1');
+      const out = await service.deleteQuestion('qid-1', UID);
 
+      expect(ownership.assertOwnsQuestion).toHaveBeenCalledWith('qid-1', UID);
       expect(out).toEqual({ ok: true, deletedSessions: 3 });
       expect(questionsRepo.deleteByIdCascading).toHaveBeenCalledWith('qid-1');
       expect(sessionsService.cleanupArtifacts).toHaveBeenCalledTimes(3);
@@ -241,9 +266,8 @@ describe('QuestionsService', () => {
     });
 
     it('handles a question with zero sessions cleanly', async () => {
-      questionsRepo.findById.mockResolvedValue({ id: 'qid-1', sessions: [] });
       questionsRepo.deleteByIdCascading.mockResolvedValue([]);
-      const out = await service.deleteQuestion('qid-1');
+      const out = await service.deleteQuestion('qid-1', UID);
       expect(out).toEqual({ ok: true, deletedSessions: 0 });
       expect(sessionsService.cleanupArtifacts).not.toHaveBeenCalled();
     });

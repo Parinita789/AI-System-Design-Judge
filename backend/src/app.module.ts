@@ -1,7 +1,9 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { CommonModule } from './common/common.module';
+import { AuthGuard } from './modules/auth/guards/auth.guard';
 import { DatabaseModule } from './database/database.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { SessionReadModule } from './modules/session-read/session-read.module';
@@ -38,6 +40,9 @@ import { BuildSessionsModule } from './modules/build-sessions/build-sessions.mod
     MentorModule,
     SignalMentorModule,
     BuildSessionsModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
 export class AppModule {}

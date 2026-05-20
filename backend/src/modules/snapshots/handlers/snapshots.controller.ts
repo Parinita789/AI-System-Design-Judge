@@ -5,6 +5,9 @@ import { CaptureSnapshotDto } from '../dto/capture-snapshot.dto';
 import { PaginationQueryDto, toPrismaPagination } from '../../../common/pagination/pagination';
 import { GuardrailsService } from '../../guardrails/services/guardrails.service';
 import { GUARDRAIL_PRESETS } from '../../guardrails/presets';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator';
+import { AuthenticatedUser } from '../../auth/types/auth.types';
+import { OwnershipService } from '../../auth/services/ownership.service';
 
 @ApiTags('snapshots')
 @Controller('sessions/:sessionId/snapshots')
@@ -12,6 +15,7 @@ export class SnapshotsController {
   constructor(
     private readonly snapshotsService: SnapshotsService,
     private readonly guardrails: GuardrailsService,
+    private readonly ownership: OwnershipService,
   ) {}
 
   @Post()
@@ -20,7 +24,12 @@ export class SnapshotsController {
     description:
       'Inserts a new snapshot row. Called on autosave, manual save, end-of-session flush, and beforeunload (sendBeacon).',
   })
-  capture(@Param('sessionId', ParseUUIDPipe) sessionId: string, @Body() dto: CaptureSnapshotDto) {
+  async capture(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: CaptureSnapshotDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsSession(sessionId, user.id);
     // Only guard when planMd is actually supplied. Null/undefined
     // (no plan content this snapshot) flows through unchanged so
     // empty-state snapshots from autosave still persist. Internal
@@ -42,7 +51,11 @@ export class SnapshotsController {
     summary: 'Get the most recent snapshot for a session',
     description: 'Used by the active session page to seed Monaco on mount and by retry-inheritance to copy plan.md to a new session.',
   })
-  latest(@Param('sessionId', ParseUUIDPipe) sessionId: string) {
+  async latest(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    await this.ownership.assertOwnsSession(sessionId, user.id);
     return this.snapshotsService.latest(sessionId);
   }
 
@@ -53,10 +66,12 @@ export class SnapshotsController {
   })
   @ApiQuery({ name: 'page', type: Number, required: false })
   @ApiQuery({ name: 'limit', type: Number, required: false })
-  list(
+  async list(
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
     @Query() pagination: PaginationQueryDto,
+    @CurrentUser() user: AuthenticatedUser,
   ) {
+    await this.ownership.assertOwnsSession(sessionId, user.id);
     return this.snapshotsService.list(sessionId, toPrismaPagination(pagination));
   }
 }
